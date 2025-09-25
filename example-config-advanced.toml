@@ -1,0 +1,60 @@
+# Advanced example configuration for Actual-MoneyMoney
+# This demonstrates optional settings beyond the basic example.
+
+[payeeTransformation]
+# Enable OpenAI-backed payee normalisation.
+enabled = true
+openAiApiKey = "<openAiKey>"
+openAiModel = "gpt-4o-mini"
+
+[import]
+# Import unchecked transactions and synchronise cleared status.
+importUncheckedTransactions = true
+synchronizeClearedStatus = true
+
+[import.ignorePatterns]
+# Ignore patterns use simple case-sensitive substring matching, not glob expressions.
+commentPatterns = ["test", "ignore"]
+payeePatterns = ["spam", "unwanted"]
+purposePatterns = ["internal", "transfer"]
+
+[[actualServers]]
+serverUrl = "http://localhost:5006"
+serverPassword = "<password>"
+
+[[actualServers.budgets]]
+syncId = "<syncId>"
+earliestImportDate = "2024-01-01"
+
+[actualServers.budgets.e2eEncryption]
+enabled = true
+password = "<budgetPassword>"
+
+[actualServers.budgets.accountMapping]
+"Main Account" = "Checking"
+"DE02 1234 5678 9012 3456 78" = "Savings"
+"Credit Card" = "Visa"
+
+[[actualServers.budgets]]
+syncId = "<anotherSyncId>"
+
+[actualServers.budgets.e2eEncryption]
+enabled = false
+
+[actualServers.budgets.accountMapping]
+"Brokerage" = "Investments"
+
+[[actualServers]]
+serverUrl = "https://actual.example.com"
+serverPassword = "<anotherPassword>"
+
+[[actualServers.budgets]]
+syncId = "<remoteSyncId>"
+earliestImportDate = "2023-06-01"
+
+[actualServers.budgets.e2eEncryption]
+enabled = false
+
+[actualServers.budgets.accountMapping]
+"Loan" = "Mortgage"
+"Savings" = "Emergency Fund"

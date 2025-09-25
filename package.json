@@ -38,7 +38,9 @@
         "yargs": "^18.0.0",
         "zod": "^3.23.8"
     },
-    "node": ">=16",
+    "engines": {
+        "node": ">=20.9.0"
+    },
     "devDependencies": {
         "@commitlint/cli": "^19.8.1",
         "@commitlint/config-conventional": "^19.8.1",

@@ -81,10 +81,8 @@ class PayeeTransformer {
             availableModels = PayeeTransformer.availableModels;
         } else {
             this.logger.debug('Listing available models...');
-            const modelsIterator = await this.openai.models.list();
-            availableModels = (await Array.fromAsync(modelsIterator)).map(
-                (m) => m.id
-            );
+            const response = await this.openai.models.list();
+            availableModels = response.data.map((model) => model.id);
             PayeeTransformer.availableModels = availableModels;
         }
 

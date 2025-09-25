@@ -14,7 +14,7 @@ A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney<
 Install with NPM:
 
 ```bash
-$ npm i -g actual-moneymoney
+$ npm i -g actual-monmon
 ```
 
 The application will be accessible as a CLI tool with the name `actual-monmon`.
