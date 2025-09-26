@@ -9,371 +9,44 @@
   - `src/utils/`: shared helpers for API access, logging, importing, configuration, etc.
   - `src/types/`: shared TypeScript type declarations.
 
-## Coding Conventions
+## Documentation Structure
 
-### TypeScript Standards
+This project uses a distributed documentation approach with specific guidelines for different areas:
 
-- Use modern TypeScript with ECMAScript modules (`import ... from './module.js'`)
-- Indent using **4 spaces** (not tabs) - match existing code style
-- **Line Length**: Maximum 80 characters (Prettier enforced)
-- **Semicolons**: Always use semicolons
-- **Quotes**: Single quotes for strings
-- **Trailing Commas**: ES5 style (objects and arrays)
-- Prefer explicit types for function parameters/returns when not inferred from obvious context
-- Use `PascalCase` for classes, `camelCase` for variables and functions
-- Follow existing naming patterns (`*.command.ts` for CLI commands)
+### 📁 [src/AGENTS.md](src/AGENTS.md) - Source Code Guidelines
 
-### Import/Export Patterns
+- **Command Module Patterns**: CLI command implementation with yargs integration
+- **Configuration Patterns**: TOML configuration management with Zod validation
+- **Utility Class Patterns**: Logger, API clients, data transformation utilities
+- **API Integration Patterns**: Actual Budget, MoneyMoney, and OpenAI integration
+- **Source Code Standards**: TypeScript conventions, import/export patterns, error handling
 
-- Use ES modules with `.js` extensions in imports (TypeScript requirement)
-- Group imports: external packages first, then internal modules
-- Use named exports when possible, default exports for main classes
+### 🧪 [tests/AGENTS.md](tests/AGENTS.md) - Testing Guidelines
 
-### Error Handling
+- **Testing Patterns**: Vitest framework usage, test organization, mocking
+- **Test Structure**: File naming, organization, and coverage requirements
+- **Pre-commit Checks**: Quality assurance workflow
+- **Test Maintenance**: Keeping tests in sync with source changes
 
-- Use the `Logger` utility instead of `console.log` directly
-- Provide meaningful error messages with context
-- Handle async operations with proper try/catch blocks
-- Use Zod for runtime validation with descriptive error messages
+## Quick Start
 
-### Configuration Updates
+### For Source Code Development
 
-- When adding new configuration options or command-line flags, update:
-  - TOML schema/validation in `src/utils/config.ts`
-  - Generated default config in `src/utils/shared.ts`
-  - Documentation (README.md, example-config-advanced.toml)
+See [src/AGENTS.md](src/AGENTS.md) for:
 
-## Testing & Tooling
+- Command implementation patterns
+- Configuration management
+- API integration guidelines
+- TypeScript coding standards
 
-### Pre-commit Checks
+### For Testing
 
-Run the following commands before committing changes so local development matches CI:
+See [tests/AGENTS.md](tests/AGENTS.md) for:
 
-1. `npm run lint:eslint`
-1. `npm run lint:prettier`
-1. `npm run typecheck`
-1. `npm run build`
-1. `npm test`
-
-These checks ensure code quality, formatting, type safety, build output, and automated tests remain healthy.
-
-### Testing Patterns
-
-Tests are located in [tests/](mdc:tests/) directory using Vitest framework.
-
-#### Test Structure
-
-- **Test Files**: `*.test.ts` (e.g., `ActualApi.test.ts`)
-- **Organization**: Test files mirror source structure
-- **Naming**: Use descriptive test file names matching the module being tested
-
-#### Test Organization
-
-```typescript
-import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-
-describe('ModuleName', () => {
-    beforeEach(() => {
-        // Setup
-    });
-
-    afterEach(() => {
-        // Cleanup
-    });
-
-    it('should do something specific', () => {
-        // Test implementation
-    });
-});
-```
-
-#### Mocking Patterns
-
-- Use `vi.mock()` for module mocking
-- Create mock implementations for external dependencies
-- Reset mocks in `beforeEach` hooks
-- Use `vi.fn()` for function mocks
-
-#### Test Utilities
-
-- Create helper functions for common test setup
-- Use factory functions for creating test data
-- Mock the `Logger` class for consistent testing
-- Use `vi.fn()` for mock implementations
-
-#### Assertion Patterns
-
-- Use `expect()` for assertions
-- Test both success and error cases
-- Verify mock calls with `toHaveBeenCalledWith()`
-- Test async operations with proper await handling
-
-#### Coverage Requirements
-
-- Aim for high test coverage on critical business logic
-- Test error handling paths
-- Include integration tests for API interactions
-- Test configuration validation thoroughly
-
-### Test Maintenance
-
-Whenever a source file is modified, review and update the relevant automated tests to cover the change. If a bug is fixed, add a regression test when feasible to prevent the issue from reoccurring.
-
-## Command Module Patterns
-
-All commands follow this pattern in [src/commands/](mdc:src/commands/):
-
-### Available Commands
-
-- `import`: Import transactions from MoneyMoney to Actual Budget
-- `validate`: Validate and create configuration files
-
-### Command Structure
-
-```typescript
-import { ArgumentsCamelCase, CommandModule } from 'yargs';
-
-const handleCommand = async (argv: ArgumentsCamelCase) => {
-    // Command implementation
-};
-
-export default {
-    command: 'command-name',
-    describe: 'Command description',
-    builder: (yargs) => {
-        // yargs options configuration
-    },
-    handler: (argv) => handleCommand(argv),
-} as CommandModule;
-```
-
-### Command Implementation Guidelines
-
-- **Async Handlers**: All command handlers should be async functions
-- **Configuration Loading**: Use `getConfig(argv)` to load and validate configuration
-- **Logging**: Create logger instance with `new Logger(logLevel)`
-- **Error Handling**: Provide meaningful error messages with context
-- **Validation**: Validate command arguments before processing
-
-### Yargs Integration
-
-- Use `ArgumentsCamelCase` type for argv parameter
-- Configure options in the `builder` function
-- Use descriptive option names and descriptions
-- Support both kebab-case and camelCase for options (e.g., `--dry-run` and `--dryRun`)
-
-### Common Patterns
-
-- **Date Parsing**: Use `parse()` from date-fns with [DATE_FORMAT](mdc:src/utils/shared.ts)
-- **Array Handling**: Support both single values and arrays for filters
-- **Server/Budget Filtering**: Validate against configured servers and budgets
-- **Dry Run Support**: Implement `--dry-run` flag for safe testing
-
-### Error Messages
-
-- Use consistent error message format
-- Include relevant context (server URLs, budget IDs, etc.)
-- Provide actionable guidance for fixing issues
-
-## Configuration Patterns
-
-The application uses TOML configuration files with Zod validation.
-
-### Configuration Schema
-
-- **Location**: [src/utils/config.ts](mdc:src/utils/config.ts)
-- **Default Path**: `~/.actually/config.toml`
-- **Validation**: Zod schemas with descriptive error messages
-- **Types**: Exported TypeScript types from Zod schemas
-
-### Configuration Structure
-
-```typescript
-// Schema definition
-export const configSchema = z.object({
-    payeeTransformation: payeeTransformationSchema,
-    import: importConfigSchema,
-    actualServers: z.array(actualServerSchema).min(1),
-});
-
-// Type inference
-export type Config = z.infer<typeof configSchema>;
-```
-
-### Configuration Loading
-
-- Use `getConfig(argv)` to load configuration
-- Handle missing config files gracefully
-- Provide clear error messages for validation failures
-- Support custom config paths via `--config` option
-
-### Validation Patterns
-
-- Use Zod for runtime validation
-- Provide custom error messages for better UX
-- Validate cross-field dependencies with `superRefine()`
-- Handle TOML parsing errors with line/column information
-
-### Default Configuration
-
-- Generate default config in [src/utils/shared.ts](mdc:src/utils/shared.ts)
-- Keep example configs in sync with schema changes
-- Update documentation when adding new options
-
-### Configuration Error Handling
-
-- Distinguish between TOML parsing errors and validation errors
-- Provide actionable error messages
-- Include file path and line numbers for parsing errors
-- Format Zod validation errors clearly
-
-## Utility Class Patterns
-
-### Logger Utility
-
-The [Logger](mdc:src/utils/Logger.ts) class provides consistent logging across the application.
-
-#### Usage Patterns
-
-```typescript
-import Logger, { LogLevel } from './Logger.js';
-
-const logger = new Logger(LogLevel.INFO);
-logger.info('Message', ['hint1', 'hint2']);
-logger.error('Error message');
-logger.debug('Debug information');
-```
-
-#### Log Levels
-
-- `ERROR` (0): Critical errors
-- `WARN` (1): Warnings
-- `INFO` (2): General information
-- `DEBUG` (3): Detailed debugging
-
-### API Client Patterns
-
-#### ActualApi Class
-
-- Initialize with server configuration and logger
-- Handle connection lifecycle (init, loadBudget, shutdown)
-- Implement proper error handling and timeouts
-- Use console state management for testing
-
-#### PayeeTransformer Class
-
-- AI-powered payee name transformation
-- OpenAI integration with configurable models
-- Caching and error handling
-- Log redaction for sensitive data
-
-### Data Transformation
-
-#### AccountMap Class
-
-- Maps MoneyMoney accounts to Actual accounts
-- Handles account creation and synchronization
-- Provides account lookup functionality
-
-#### Importer Class
-
-- Core import logic for transactions
-- Handles date filtering and account mapping
-- Supports dry-run mode for testing
-- Integrates with PayeeTransformer
-
-### Configuration Utilities
-
-#### Config Loading
-
-- TOML parsing with error handling
-- Zod validation with descriptive errors
-- Support for custom config paths
-- Default configuration generation
-
-#### Shared Constants
-
-- Date formats and application directories
-- Default timeouts and configuration values
-- Example configuration templates
-
-### Error Handling Patterns
-
-- Use try/catch blocks for async operations
-- Provide context in error messages
-- Log errors with appropriate levels
-- Handle external API failures gracefully
-
-## API Integration Patterns
-
-### Actual Budget API
-
-#### Connection Management
-
-- Use [ActualApi](mdc:src/utils/ActualApi.ts) class for all Actual Budget interactions
-- Initialize with server configuration and logger
-- Handle connection lifecycle: `init()` → `loadBudget()` → operations → `shutdown()`
-- Implement proper timeout handling and error recovery
-
-#### Budget Operations
-
-```typescript
-const actualApi = new ActualApi(serverConfig, logger);
-await actualApi.init();
-await actualApi.loadBudget(budgetSyncId);
-// Perform operations
-await actualApi.shutdown();
-```
-
-#### Transaction Import
-
-- Use `importTransactions()` for bulk transaction imports
-- Handle duplicate detection and conflict resolution
-- Support dry-run mode for testing
-- Implement proper error handling for API failures
-
-### MoneyMoney Integration
-
-#### Database Access
-
-- Use `checkDatabaseUnlocked()` to verify MoneyMoney accessibility
-- Handle locked database scenarios gracefully
-- Provide clear error messages for access issues
-
-#### Data Extraction
-
-- Extract accounts and transactions from MoneyMoney database
-- Handle different account types and transaction formats
-- Support date range filtering for imports
-
-### OpenAI Integration
-
-#### Payee Transformation
-
-- Use [PayeeTransformer](mdc:src/utils/PayeeTransformer.ts) for AI-powered payee name cleaning
-- Implement caching to reduce API calls
-- Handle API failures gracefully with fallback to original names
-- Mask sensitive data in logs when configured
-
-#### Configuration
-
-- Support configurable OpenAI models and parameters
-- Implement timeout handling for API calls
-- Provide custom prompt support for specialized use cases
-
-### API Error Handling
-
-#### Network Errors
-
-- Implement retry logic for transient failures
-- Handle timeout scenarios appropriately
-- Provide user-friendly error messages
-
-#### Data Validation
-
-- Validate data before API calls
-- Handle malformed responses gracefully
-- Log errors with appropriate detail levels
+- Test organization and structure
+- Mocking patterns
+- Coverage requirements
+- Test maintenance practices
 
 ## Commit Messages
 
