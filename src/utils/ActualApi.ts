@@ -346,12 +346,26 @@ class ActualApi {
 
         const budgetHints = [`Budget sync ID: ${budgetConfig.syncId}`];
 
-        const budgetDataDir = await this.resolveBudgetDataDir(
-            budgetConfig.syncId
-        );
-        const budgetRootDir = path.dirname(budgetDataDir);
+        const budgetRootDir = this.currentDataDir ?? DEFAULT_DATA_DIR;
 
         await this.ensureInitialization(budgetRootDir);
+
+        const missingBudgetMessagePrefix =
+            `No Actual budget directory found for syncId '${budgetConfig.syncId}'.`;
+
+        try {
+            await this.resolveBudgetDataDir(
+                budgetConfig.syncId,
+                budgetRootDir
+            );
+        } catch (error) {
+            if (
+                !(error instanceof Error) ||
+                !error.message.startsWith(missingBudgetMessagePrefix)
+            ) {
+                throw error;
+            }
+        }
 
         this.logger.debug(
             `Downloading budget with syncId '${budgetConfig.syncId}'...`
@@ -368,6 +382,11 @@ class ActualApi {
                         : undefined
                 ),
             budgetHints
+        );
+
+        await this.resolveBudgetDataDir(
+            budgetConfig.syncId,
+            budgetRootDir
         );
 
         this.logger.debug(

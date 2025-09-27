@@ -626,18 +626,22 @@ describe('ActualApi', () => {
 
         const api = new ActualApi(serverConfig, createLogger());
 
+        const nonMatchingMetadata = JSON.stringify({
+            groupId: 'different-budget',
+        });
+
         readdirMock.mockResolvedValue([
             createDirent('alpha'),
             createDirent('beta'),
         ]);
-        readFileMock.mockResolvedValue(
-            JSON.stringify({ groupId: 'different-budget' })
-        );
+        readFileMock.mockResolvedValue(nonMatchingMetadata);
+        downloadBudgetMock.mockResolvedValue(undefined);
 
         await expect(api.loadBudget('missing-budget')).rejects.toThrow(
             /No Actual budget directory found for syncId 'missing-budget'\./
         );
-        expect(downloadBudgetMock).not.toHaveBeenCalled();
+        expect(downloadBudgetMock).toHaveBeenCalledTimes(1);
+        expect(readdirMock).toHaveBeenCalledTimes(2);
     });
 
     it('reinitialises across sequential budgets without leaking session state', async () => {
