@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import path from 'node:path';
 
 // Type for transaction import - matches the ImportTransaction interface
 type ImportTransaction = {
@@ -23,6 +24,7 @@ type ImportTransaction = {
 import type { ActualServerConfig } from '../src/utils/config.js';
 import type Logger from '../src/utils/Logger.js';
 import { LogLevel } from '../src/utils/Logger.js';
+import { DEFAULT_DATA_DIR } from '../src/utils/shared.js';
 
 const initMock = vi.fn();
 const getAccountsMock = vi.fn();
@@ -49,6 +51,20 @@ vi.mock('@actual-app/api', () => ({
     },
 }));
 
+const accessMock = vi.fn();
+const mkdirMock = vi.fn();
+const readdirMock = vi.fn();
+const readFileMock = vi.fn();
+
+vi.mock('fs/promises', () => ({
+    default: {
+        access: accessMock,
+        mkdir: mkdirMock,
+        readdir: readdirMock,
+        readFile: readFileMock,
+    },
+}));
+
 const createLogger = () =>
     ({
         debug: vi.fn(),
@@ -57,6 +73,15 @@ const createLogger = () =>
         error: vi.fn(),
         getLevel: () => LogLevel.INFO,
     }) as unknown as Logger;
+
+const markApiInitialized = (api: unknown, dataDir = DEFAULT_DATA_DIR) => {
+    const internals = api as {
+        isInitialized: boolean;
+        currentDataDir: string | null;
+    };
+    internals.isInitialized = true;
+    internals.currentDataDir = dataDir;
+};
 
 describe('ActualApi', () => {
     beforeEach(() => {
@@ -69,6 +94,14 @@ describe('ActualApi', () => {
         getTransactionsMock.mockReset();
         shutdownMock.mockReset();
         shutdownMock.mockResolvedValue(undefined);
+        accessMock.mockReset();
+        mkdirMock.mockReset();
+        readdirMock.mockReset();
+        readFileMock.mockReset();
+        accessMock.mockResolvedValue(undefined);
+        mkdirMock.mockResolvedValue(undefined);
+        readdirMock.mockResolvedValue([]);
+        readFileMock.mockRejectedValue(new Error('missing metadata'));
     });
 
     afterEach(() => {
@@ -98,9 +131,7 @@ describe('ActualApi', () => {
         };
 
         const api = new ActualApi(serverConfig, createLogger());
-        // Mark as initialized to avoid touching the filesystem in tests
-        // @ts-expect-error accessing protected test hook
-        api.isInitialized = true;
+        markApiInitialized(api);
 
         const logSpy = vi.spyOn(console, 'log');
         getTransactionsMock.mockImplementation(async () => {
@@ -150,9 +181,17 @@ describe('ActualApi', () => {
         };
 
         const api = new ActualApi(serverConfig, createLogger());
-        // @ts-expect-error accessing protected test hook
-        api.isInitialized = true;
 
+        readdirMock.mockResolvedValue(['budget-dir', 'other']);
+        readFileMock.mockImplementation(async (filePath: string) => {
+            if (filePath === path.join(DEFAULT_DATA_DIR, 'budget-dir', 'metadata.json')) {
+                return JSON.stringify({ groupId: 'budget' });
+            }
+
+            return JSON.stringify({ groupId: 'other-budget' });
+        });
+
+        initMock.mockResolvedValue(undefined);
         downloadBudgetMock.mockResolvedValue(undefined);
         loadBudgetMock.mockResolvedValue(undefined);
         syncMock.mockResolvedValue(undefined);
@@ -162,6 +201,11 @@ describe('ActualApi', () => {
         expect(downloadBudgetMock).toHaveBeenCalledWith('budget', undefined);
         expect(loadBudgetMock).toHaveBeenCalledWith('budget');
         expect(syncMock).toHaveBeenCalled();
+        expect(initMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                dataDir: path.join(DEFAULT_DATA_DIR, 'budget-dir'),
+            })
+        );
         expect(downloadBudgetMock.mock.invocationCallOrder[0]).toBeLessThan(
             loadBudgetMock.mock.invocationCallOrder[0]
         );
@@ -196,8 +240,14 @@ describe('ActualApi', () => {
 
             const logger = createLogger();
             const api = new ActualApi(serverConfig, logger);
-            // @ts-expect-error accessing protected test hook
-            api.isInitialized = true;
+            readdirMock.mockResolvedValue(['budget-dir']);
+            readFileMock.mockResolvedValue(
+                JSON.stringify({ groupId: 'budget' })
+            );
+            markApiInitialized(
+                api,
+                path.join(DEFAULT_DATA_DIR, 'budget-dir')
+            );
 
             downloadBudgetMock.mockImplementation(
                 () => new Promise(() => undefined)
@@ -251,8 +301,7 @@ describe('ActualApi', () => {
         };
 
         const api = new ActualApi(serverConfig, createLogger());
-        // @ts-expect-error accessing protected test hook
-        api.isInitialized = true;
+        markApiInitialized(api);
 
         const transactions: ImportTransaction[] = [
             {
@@ -329,8 +378,7 @@ describe('ActualApi', () => {
 
             const logger = createLogger();
             const api = new ActualApi(serverConfig, logger);
-            // @ts-expect-error accessing protected test hook
-            api.isInitialized = true;
+            markApiInitialized(api);
 
             const transactions: ImportTransaction[] = [
                 {
@@ -450,11 +498,7 @@ describe('ActualApi', () => {
         expect(shutdownMock).not.toHaveBeenCalled();
     });
 
-    it('handles directory naming mismatch by using correct directory', async () => {
-        // This test verifies that the directory naming mismatch fix is working
-        // by ensuring the loadBudget method can handle the scenario where
-        // the budget directory has a different name than the sync ID
-
+    it('derives the budget directory from metadata before initialisation', async () => {
         const { default: ActualApi } = await import(
             '../src/utils/ActualApi.js'
         );
@@ -465,7 +509,7 @@ describe('ActualApi', () => {
             requestTimeoutMs: 45000,
             budgets: [
                 {
-                    syncId: 'test-budget-sync-id',
+                    syncId: 'target-budget',
                     e2eEncryption: {
                         enabled: false,
                         password: undefined,
@@ -477,13 +521,126 @@ describe('ActualApi', () => {
 
         const api = new ActualApi(serverConfig, createLogger());
 
-        // Mock the Actual API calls
+        readdirMock.mockResolvedValue(['alpha', 'target-directory', 'beta']);
+        readFileMock.mockImplementation(async (filePath: string) => {
+            if (filePath === path.join(DEFAULT_DATA_DIR, 'target-directory', 'metadata.json')) {
+                return JSON.stringify({ groupId: 'target-budget' });
+            }
+
+            return JSON.stringify({ groupId: 'other-budget' });
+        });
+
+        initMock.mockResolvedValue(undefined);
         downloadBudgetMock.mockResolvedValue(undefined);
         loadBudgetMock.mockResolvedValue(undefined);
         syncMock.mockResolvedValue(undefined);
 
-        // This should not throw an error even if there's a directory naming mismatch
-        // The test verifies that the method handles the mismatch gracefully
-        await expect(api.loadBudget('test-budget-sync-id')).resolves.not.toThrow();
+        await api.loadBudget('target-budget');
+
+        expect(initMock).toHaveBeenCalledTimes(1);
+        expect(initMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                dataDir: path.join(DEFAULT_DATA_DIR, 'target-directory'),
+            })
+        );
+        expect(downloadBudgetMock).toHaveBeenCalled();
+    });
+
+    it('throws a helpful error when no metadata matches the requested budget', async () => {
+        const { default: ActualApi } = await import(
+            '../src/utils/ActualApi.js'
+        );
+
+        const serverConfig: ActualServerConfig = {
+            serverUrl: 'http://localhost:5006',
+            serverPassword: 'secret',
+            requestTimeoutMs: 45000,
+            budgets: [
+                {
+                    syncId: 'missing-budget',
+                    e2eEncryption: {
+                        enabled: false,
+                        password: undefined,
+                    },
+                    accountMapping: {},
+                },
+            ],
+        };
+
+        const api = new ActualApi(serverConfig, createLogger());
+
+        readdirMock.mockResolvedValue(['alpha', 'beta']);
+        readFileMock.mockResolvedValue(
+            JSON.stringify({ groupId: 'different-budget' })
+        );
+
+        await expect(api.loadBudget('missing-budget')).rejects.toThrow(
+            "No Actual budget directory found for syncId 'missing-budget'."
+        );
+        expect(downloadBudgetMock).not.toHaveBeenCalled();
+    });
+
+    it('reinitialises across sequential budgets without leaking session state', async () => {
+        const { default: ActualApi } = await import(
+            '../src/utils/ActualApi.js'
+        );
+
+        const serverConfig: ActualServerConfig = {
+            serverUrl: 'http://localhost:5006',
+            serverPassword: 'secret',
+            requestTimeoutMs: 45000,
+            budgets: [
+                {
+                    syncId: 'first-budget',
+                    e2eEncryption: {
+                        enabled: false,
+                        password: undefined,
+                    },
+                    accountMapping: {},
+                },
+                {
+                    syncId: 'second-budget',
+                    e2eEncryption: {
+                        enabled: false,
+                        password: undefined,
+                    },
+                    accountMapping: {},
+                },
+            ],
+        };
+
+        const api = new ActualApi(serverConfig, createLogger());
+
+        readdirMock.mockResolvedValue(['dir-first', 'dir-second']);
+        readFileMock.mockImplementation(async (filePath: string) => {
+            if (filePath === path.join(DEFAULT_DATA_DIR, 'dir-first', 'metadata.json')) {
+                return JSON.stringify({ groupId: 'first-budget' });
+            }
+            if (filePath === path.join(DEFAULT_DATA_DIR, 'dir-second', 'metadata.json')) {
+                return JSON.stringify({ groupId: 'second-budget' });
+            }
+            throw new Error('unexpected file');
+        });
+
+        initMock.mockResolvedValue(undefined);
+        downloadBudgetMock.mockResolvedValue(undefined);
+        loadBudgetMock.mockResolvedValue(undefined);
+        syncMock.mockResolvedValue(undefined);
+
+        await api.loadBudget('first-budget');
+        await api.shutdown();
+        await api.loadBudget('second-budget');
+
+        expect(initMock).toHaveBeenCalledTimes(2);
+        const [firstInitArgs, secondInitArgs] = initMock.mock.calls.map(
+            ([args]) => args
+        );
+        expect(firstInitArgs.dataDir).toBe(
+            path.join(DEFAULT_DATA_DIR, 'dir-first')
+        );
+        expect(secondInitArgs.dataDir).toBe(
+            path.join(DEFAULT_DATA_DIR, 'dir-second')
+        );
+        expect(shutdownMock).toHaveBeenCalled();
     });
 });
