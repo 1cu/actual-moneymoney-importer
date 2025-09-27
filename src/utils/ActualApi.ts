@@ -546,7 +546,8 @@ class ActualApi {
         syncId: string,
         rootDir?: string
     ): Promise<string> {
-        const actualDataDir = rootDir ?? this.currentDataDir ?? DEFAULT_DATA_DIR;
+        const actualDataDir =
+            rootDir ?? this.currentDataDir ?? DEFAULT_DATA_DIR;
 
         let entries: Dirent[];
         try {
