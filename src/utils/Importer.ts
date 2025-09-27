@@ -162,6 +162,9 @@ class Importer {
                 );
             }
 
+            const hasMoneyMoneyTransactionsForAccount =
+                createTransactions.length > 0;
+
             const existingActualTransactions =
                 await this.actualApi.getTransactions(actualAccount.id, {
                     from: importDate,
@@ -174,29 +177,39 @@ class Importer {
 
             // Push start transaction if no transactions exist
             if (existingActualTransactions.length === 0) {
-                const startTransaction: CreateTransaction = {
-                    date: format(
-                        monMonTransactions.length > 0
-                            ? monMonTransactions[monMonTransactions.length - 1]
-                                  .valueDate
-                            : new Date(),
-                        DATE_FORMAT
-                    ),
-                    amount: this.getStartingBalanceForAccount(
-                        monMonAccount,
-                        monMonTransactions
-                    ),
-                    imported_id: `${monMonAccount.uuid}-start`,
-                    cleared: true,
-                    notes: 'Starting balance',
-                    imported_payee: 'Starting balance',
-                };
+                if (!hasMoneyMoneyTransactionsForAccount) {
+                    this.logger.warn(
+                        `Skipping starting balance for Actual account '${actualAccount.name}' because no MoneyMoney transactions were found for account ${monMonAccount.uuid} in this import window.`,
+                        [
+                            'Extend the date range or review ignore patterns if a starting balance is expected.',
+                        ]
+                    );
+                } else {
+                    const startTransaction: CreateTransaction = {
+                        date: format(
+                            monMonTransactions.length > 0
+                                ? monMonTransactions[
+                                      monMonTransactions.length - 1
+                                  ].valueDate
+                                : new Date(),
+                            DATE_FORMAT
+                        ),
+                        amount: this.getStartingBalanceForAccount(
+                            monMonAccount,
+                            monMonTransactions
+                        ),
+                        imported_id: `${monMonAccount.uuid}-start`,
+                        cleared: true,
+                        notes: 'Starting balance',
+                        imported_payee: 'Starting balance',
+                    };
 
-                this.logger.debug(
-                    `No existing transactions found for Actual account '${actualAccount.name}'. Adding start transaction with amount ${startTransaction.amount}...`
-                );
+                    this.logger.debug(
+                        `No existing transactions found for Actual account '${actualAccount.name}'. Adding start transaction with amount ${startTransaction.amount}...`
+                    );
 
-                createTransactions.push(startTransaction);
+                    createTransactions.push(startTransaction);
+                }
             }
 
             // Filter out transactions that already exist in Actual
