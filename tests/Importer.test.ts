@@ -839,13 +839,108 @@ describe('Importer', () => {
         );
 
         expect(maskedCall?.[1]).toEqual([
-            `"C${'•'.repeat('Coffee'.length - 2)}e"`,
-            `"S${'•'.repeat('Starting balance'.length - 2)}e"`,
+            '"PAYEE#B0E1F06C"',
+            '"PAYEE#1F3A9C56"',
         ]);
 
         const [, createTransactions] = actualApi.importTransactions.mock.calls[0];
         createTransactions.forEach((transaction: { payee_name?: string; imported_payee?: string }) => {
             expect(transaction.payee_name).toBe(transaction.imported_payee);
         });
+    });
+
+    it('keeps payee names masked at DEBUG log level when masking is enabled', async () => {
+        const config: Config = {
+            payeeTransformation: {
+                enabled: false,
+                skipModelValidation: false,
+                openAiModel: 'gpt-3.5-turbo',
+            },
+            import: {
+                importUncheckedTransactions: true,
+                synchronizeClearedStatus: false,
+                maskPayeeNamesInLogs: true,
+            },
+            actualServers: [],
+        };
+
+        const budgetConfig: ActualBudgetConfig = {
+            syncId: 'budget-1',
+            earliestImportDate: undefined,
+            e2eEncryption: {
+                enabled: false,
+                password: undefined,
+            },
+            accountMapping: {},
+        };
+
+        moneyMoneyTransactionsMock.mockResolvedValue([
+            {
+                id: 'txn-6',
+                accountUuid: 'primary-account',
+                name: 'Bakery',
+                purpose: 'Baguette',
+                comment: '',
+                valueDate: new Date('2024-04-10T00:00:00Z'),
+                bookingDate: new Date('2024-04-11T00:00:00Z'),
+                amount: 3.25,
+                booked: true,
+                bankCode: '',
+                accountNumber: '',
+                partner: '',
+                partnerAccount: '',
+                category: '',
+                purposeCode: '',
+                currencyCode: 'EUR',
+                balance: 0,
+            },
+        ]);
+
+        const actualApi = {
+            getTransactions: vi.fn().mockResolvedValue([]),
+            importTransactions: vi.fn().mockResolvedValue({
+                added: [],
+                updated: [],
+                errors: [],
+            }),
+        };
+
+        const accountMap = {
+            getMap: () =>
+                new Map([
+                    [
+                        {
+                            uuid: 'primary-account',
+                            name: 'Checking',
+                            balance: [[50]],
+                        },
+                        {
+                            id: 'actual-1',
+                            name: 'Checking',
+                        },
+                    ],
+                ]),
+        };
+
+        const logger = createLogger(LogLevel.DEBUG);
+
+        const importer = new Importer(
+            config,
+            budgetConfig,
+            actualApi as unknown as ActualApi,
+            logger,
+            accountMap as unknown as AccountMap
+        );
+
+        await importer.importTransactions({});
+
+        const maskedCall = logger.debug.mock.calls.find(
+            ([message]) => message === 'Final payee names for import (masked):'
+        );
+
+        expect(maskedCall?.[1]).toEqual([
+            '"PAYEE#75DDAF84"',
+            '"PAYEE#1F3A9C56"',
+        ]);
     });
 });
