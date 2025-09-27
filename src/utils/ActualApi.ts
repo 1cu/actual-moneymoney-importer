@@ -30,7 +30,7 @@ import {
     DEFAULT_ACTUAL_REQUEST_TIMEOUT_MS,
     FALLBACK_ACTUAL_REQUEST_TIMEOUT_MS,
 } from './config.js';
-import Logger from './Logger.js';
+import type Logger from './Logger.js';
 import { DEFAULT_DATA_DIR } from './shared.js';
 
 const isActualNoise = (args: unknown[]) => {
@@ -110,8 +110,8 @@ class ActualApi {
     private currentDataDir: string | null = null;
 
     constructor(
-        private serverConfig: ActualServerConfig,
-        private logger: Logger
+        private readonly serverConfig: ActualServerConfig,
+        private readonly logger: Logger
     ) {}
 
     private getRequestTimeoutMs(): number {
@@ -371,17 +371,16 @@ class ActualApi {
         this.logger.debug(
             `Downloading budget with syncId '${budgetConfig.syncId}'...`
         );
+        const encryptionPassword =
+            budgetConfig.e2eEncryption.enabled &&
+            budgetConfig.e2eEncryption.password
+                ? { password: budgetConfig.e2eEncryption.password }
+                : undefined;
+
         await this.runActualRequest(
             `download budget '${budgetConfig.syncId}'`,
             () =>
-                actual.downloadBudget(
-                    budgetConfig.syncId,
-                    budgetConfig.e2eEncryption.enabled
-                        ? {
-                              password: budgetConfig.e2eEncryption.password,
-                          }
-                        : undefined
-                ),
+                actual.downloadBudget(budgetConfig.syncId, encryptionPassword),
             budgetHints
         );
 
@@ -610,7 +609,7 @@ class ActualApi {
 
         throw new Error(
             `No Actual budget directory found for syncId '${syncId}'. ` +
-                `Checked directories: ${inspectedSummary}. ` +
+                `Checked directories under '${actualDataDir}': ${inspectedSummary}. ` +
                 'Open the budget in Actual Desktop and sync it before retrying.'
         );
     }
@@ -662,7 +661,8 @@ class ActualApi {
         // entire process while an Actual request is in flight. Concurrent requests
         // share the suppression window, so unrelated log output may be filtered.
         // The Actual client may still emit logs outside this window (e.g. after a
-        // timeout) because the SDK lacks granular logger hooks.
+        // timeout) because the SDK lacks granular logger hooks. In the future we
+        // could scope suppression per logger if the SDK exposes suitable hooks.
         if (ActualApi.suppressDepth === 0) {
             ActualApi.originals = {
                 log: console.log,
