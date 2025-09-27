@@ -620,7 +620,7 @@ describe('ActualApi', () => {
         );
 
         await expect(api.loadBudget('missing-budget')).rejects.toThrow(
-            "No Actual budget directory found for syncId 'missing-budget'."
+            /No Actual budget directory found for syncId 'missing-budget'\./
         );
         expect(downloadBudgetMock).not.toHaveBeenCalled();
     });

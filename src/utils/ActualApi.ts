@@ -306,6 +306,11 @@ class ActualApi {
         }
 
         if (this.currentDataDir !== desiredDataDir) {
+            this.logger.debug(
+                `Reinitialising Actual data directory: ${
+                    this.currentDataDir ?? '(none)'
+                } -> ${desiredDataDir}`
+            );
             await this.shutdown();
             await this.init(desiredDataDir);
         }
@@ -509,8 +514,15 @@ class ActualApi {
         };
     }
 
-    private async resolveBudgetDataDir(syncId: string): Promise<string> {
-        const actualDataDir = DEFAULT_DATA_DIR;
+    private async resolveBudgetDataDir(
+        syncId: string,
+        rootDir?: string
+    ): Promise<string> {
+        const actualDataDir =
+            rootDir ??
+            (this.currentDataDir
+                ? path.dirname(this.currentDataDir)
+                : DEFAULT_DATA_DIR);
 
         let budgetDirs: string[] = [];
         try {
