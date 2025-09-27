@@ -458,15 +458,15 @@ class ActualApi {
             } catch (error) {
                 lastError = error;
 
-                if (attempt >= maxAttempts || !this.shouldRetryBudgetLoad(error)) {
+                if (
+                    attempt >= maxAttempts ||
+                    !this.shouldRetryBudgetLoad(error)
+                ) {
                     throw error;
                 }
 
                 const retryHints: Array<string | Error> = [
-                    ...this.createContextHints([
-                        ...budgetHints,
-                        attemptHint,
-                    ]),
+                    ...this.createContextHints([...budgetHints, attemptHint]),
                 ];
                 if (error instanceof Error) {
                     retryHints.push(error);
@@ -592,10 +592,12 @@ class ActualApi {
             return false;
         }
 
-        const message = error.message ?? '';
+        const message = error.message;
         return (
             error instanceof TypeError &&
-            message.includes("Cannot read properties of null (reading 'prepare')")
+            message.includes(
+                "Cannot read properties of null (reading 'prepare')"
+            )
         );
     }
 
@@ -810,9 +812,7 @@ class ActualApi {
                 const record = parsed as Record<string, unknown>;
                 const groupIdRaw = record.groupId;
                 const groupId =
-                    typeof groupIdRaw === 'string'
-                        ? groupIdRaw.trim()
-                        : '';
+                    typeof groupIdRaw === 'string' ? groupIdRaw.trim() : '';
                 if (!groupId) {
                     metadataDiagnostics.push(
                         `${entry.name}: metadata missing groupId`
@@ -846,10 +846,7 @@ class ActualApi {
                 };
                 this.logger.debug(
                     `Using budget directory: ${entry.name} for syncId ${syncId}`,
-                    [
-                        `Metadata path: ${metadataPath}`,
-                        `Local budget ID: ${id}`,
-                    ]
+                    [`Metadata path: ${metadataPath}`, `Local budget ID: ${id}`]
                 );
                 return {
                     directory: resolvedDir,
@@ -858,7 +855,10 @@ class ActualApi {
                 };
             } catch (error) {
                 const maybeErrno = error as NodeJS.ErrnoException | undefined;
-                if (maybeErrno?.code === 'ENOENT' || maybeErrno?.code === 'EISDIR') {
+                if (
+                    maybeErrno?.code === 'ENOENT' ||
+                    maybeErrno?.code === 'EISDIR'
+                ) {
                     metadataDiagnostics.push(
                         `${entry.name}: metadata.json not found`
                     );
