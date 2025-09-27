@@ -311,7 +311,7 @@ class ActualApi {
 
         if (this.currentDataDir !== desiredDataDir) {
             this.logger.debug(
-                `Reinitialising ActualApi: ${
+                `Reinitialising Actual data directory: ${
                     this.currentDataDir ?? '(none)'
                 } -> ${desiredDataDir}`
             );
@@ -347,13 +347,18 @@ class ActualApi {
 
         const budgetHints = [`Budget sync ID: ${budgetConfig.syncId}`];
 
-        let resolvedBudgetDir: string | null = null;
         const missingBudgetMessagePrefix = `No Actual budget directory found for syncId '${budgetConfig.syncId}'.`;
+        const rootDataDir = this.currentDataDir ?? DEFAULT_DATA_DIR;
+
+        await this.ensureInitialization(rootDataDir);
 
         try {
-            resolvedBudgetDir = await this.resolveBudgetDataDir(
-                budgetConfig.syncId
+            const resolvedBudgetDir = await this.resolveBudgetDataDir(
+                budgetConfig.syncId,
+                this.currentDataDir ?? rootDataDir
             );
+            const resolvedRootDir = path.dirname(resolvedBudgetDir);
+            await this.ensureInitialization(resolvedRootDir);
         } catch (error) {
             if (
                 !(error instanceof Error) ||
@@ -362,9 +367,6 @@ class ActualApi {
                 throw error;
             }
         }
-
-        const initialDataDir = resolvedBudgetDir ?? DEFAULT_DATA_DIR;
-        await this.ensureInitialization(initialDataDir);
 
         this.logger.debug(
             `Downloading budget with syncId '${budgetConfig.syncId}'...`
@@ -383,11 +385,14 @@ class ActualApi {
             budgetHints
         );
 
+        const downloadRootDir = this.currentDataDir ?? rootDataDir;
         const finalBudgetDir = await this.resolveBudgetDataDir(
-            budgetConfig.syncId
+            budgetConfig.syncId,
+            downloadRootDir
         );
 
-        await this.ensureInitialization(finalBudgetDir);
+        const finalRootDir = path.dirname(finalBudgetDir);
+        await this.ensureInitialization(finalRootDir);
 
         this.logger.debug(
             `Loading budget with syncId '${budgetConfig.syncId}'...`
@@ -537,8 +542,11 @@ class ActualApi {
         };
     }
 
-    private async resolveBudgetDataDir(syncId: string): Promise<string> {
-        const actualDataDir = DEFAULT_DATA_DIR;
+    private async resolveBudgetDataDir(
+        syncId: string,
+        rootDir?: string
+    ): Promise<string> {
+        const actualDataDir = rootDir ?? this.currentDataDir ?? DEFAULT_DATA_DIR;
 
         let entries: Dirent[];
         try {

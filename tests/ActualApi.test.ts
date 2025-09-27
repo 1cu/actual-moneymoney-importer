@@ -215,9 +215,7 @@ describe('ActualApi', () => {
         expect(loadBudgetMock).toHaveBeenCalledWith('budget');
         expect(syncMock).toHaveBeenCalled();
         expect(initMock).toHaveBeenCalledWith(
-            expect.objectContaining({
-                dataDir: path.join(DEFAULT_DATA_DIR, 'budget-dir'),
-            })
+            expect.objectContaining({ dataDir: DEFAULT_DATA_DIR })
         );
         expect(initMock).toHaveBeenCalledTimes(1);
         expect(downloadBudgetMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -626,9 +624,7 @@ describe('ActualApi', () => {
 
         expect(initMock).toHaveBeenCalledTimes(1);
         expect(initMock).toHaveBeenCalledWith(
-            expect.objectContaining({
-                dataDir: path.join(DEFAULT_DATA_DIR, 'target-directory'),
-            })
+            expect.objectContaining({ dataDir: DEFAULT_DATA_DIR })
         );
         expect(downloadBudgetMock).toHaveBeenCalled();
     });
@@ -713,9 +709,7 @@ describe('ActualApi', () => {
 
         expect(initMock).toHaveBeenCalledTimes(1);
         const [[initArgs]] = initMock.mock.calls;
-        expect(initArgs.dataDir).toBe(
-            path.join(DEFAULT_DATA_DIR, 'budget-dir')
-        );
+        expect(initArgs.dataDir).toBe(DEFAULT_DATA_DIR);
         expect(shutdownMock).toHaveBeenCalledTimes(1);
     });
 
@@ -773,22 +767,9 @@ describe('ActualApi', () => {
         await api.loadBudget('first-budget');
         await api.loadBudget('second-budget');
 
-        expect(initMock).toHaveBeenCalledTimes(2);
-        const [firstInitArgs, secondInitArgs] = initMock.mock.calls.map(
-            ([args]) => args
-        );
-        expect(firstInitArgs.dataDir).toBe(
-            path.join(DEFAULT_DATA_DIR, 'dir-first')
-        );
-        expect(secondInitArgs.dataDir).toBe(
-            path.join(DEFAULT_DATA_DIR, 'dir-second')
-        );
-        expect(shutdownMock).toHaveBeenCalledTimes(1);
-        expect(logger.debug).toHaveBeenCalledWith(
-            `Reinitialising ActualApi: ${path.join(
-                DEFAULT_DATA_DIR,
-                'dir-first'
-            )} -> ${path.join(DEFAULT_DATA_DIR, 'dir-second')}`
-        );
+        expect(initMock).toHaveBeenCalledTimes(1);
+        const [[singleInitArgs]] = initMock.mock.calls;
+        expect(singleInitArgs.dataDir).toBe(DEFAULT_DATA_DIR);
+        expect(shutdownMock).not.toHaveBeenCalled();
     });
 });
