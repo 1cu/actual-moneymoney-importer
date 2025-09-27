@@ -20,6 +20,7 @@ type ImportTransaction = {
 };
 import { format } from 'date-fns';
 import fs from 'fs/promises';
+import type { Dirent } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import util from 'node:util';
@@ -310,7 +311,7 @@ class ActualApi {
 
         if (this.currentDataDir !== desiredDataDir) {
             this.logger.debug(
-                `Reinitialising Actual data directory: ${
+                `Reinitialising ActualApi: ${
                     this.currentDataDir ?? '(none)'
                 } -> ${desiredDataDir}`
             );
@@ -346,17 +347,12 @@ class ActualApi {
 
         const budgetHints = [`Budget sync ID: ${budgetConfig.syncId}`];
 
-        const budgetRootDir = this.currentDataDir ?? DEFAULT_DATA_DIR;
-
-        await this.ensureInitialization(budgetRootDir);
-
-        const missingBudgetMessagePrefix =
-            `No Actual budget directory found for syncId '${budgetConfig.syncId}'.`;
+        let resolvedBudgetDir: string | null = null;
+        const missingBudgetMessagePrefix = `No Actual budget directory found for syncId '${budgetConfig.syncId}'.`;
 
         try {
-            await this.resolveBudgetDataDir(
-                budgetConfig.syncId,
-                budgetRootDir
+            resolvedBudgetDir = await this.resolveBudgetDataDir(
+                budgetConfig.syncId
             );
         } catch (error) {
             if (
@@ -366,6 +362,9 @@ class ActualApi {
                 throw error;
             }
         }
+
+        const initialDataDir = resolvedBudgetDir ?? DEFAULT_DATA_DIR;
+        await this.ensureInitialization(initialDataDir);
 
         this.logger.debug(
             `Downloading budget with syncId '${budgetConfig.syncId}'...`
@@ -384,10 +383,11 @@ class ActualApi {
             budgetHints
         );
 
-        await this.resolveBudgetDataDir(
-            budgetConfig.syncId,
-            budgetRootDir
+        const finalBudgetDir = await this.resolveBudgetDataDir(
+            budgetConfig.syncId
         );
+
+        await this.ensureInitialization(finalBudgetDir);
 
         this.logger.debug(
             `Loading budget with syncId '${budgetConfig.syncId}'...`
@@ -537,37 +537,35 @@ class ActualApi {
         };
     }
 
-    private async resolveBudgetDataDir(
-        syncId: string,
-        rootDir?: string
-    ): Promise<string> {
-        const actualDataDir =
-            rootDir ?? this.currentDataDir ?? DEFAULT_DATA_DIR;
+    private async resolveBudgetDataDir(syncId: string): Promise<string> {
+        const actualDataDir = DEFAULT_DATA_DIR;
 
-        let budgetDirs: string[] = [];
+        let entries: Dirent[];
         try {
-            const entries = await fs.readdir(actualDataDir, {
-                withFileTypes: true,
-            });
-            budgetDirs = entries
-                .filter((entry) => entry.isDirectory())
-                .map((entry) => entry.name)
-                .sort((left, right) => left.localeCompare(right));
+            entries = await fs.readdir(actualDataDir, { withFileTypes: true });
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'Unknown error';
-            this.logger.debug(
-                `Unable to inspect Actual data directory at ${actualDataDir}: ${message}`
-            );
-            budgetDirs = [];
+            const maybeErrno = error as NodeJS.ErrnoException | undefined;
+            if (maybeErrno?.code === 'ENOENT') {
+                entries = [];
+            } else {
+                throw error;
+            }
         }
 
-        for (const dir of budgetDirs) {
-            if (dir === '.' || dir === '..') {
-                continue;
-            }
+        const inspectedDirs: string[] = [];
 
-            const metadataPath = path.join(actualDataDir, dir, 'metadata.json');
+        const sortedEntries = entries
+            .filter((entry) => entry.isDirectory())
+            .sort((left, right) => left.name.localeCompare(right.name));
+
+        for (const entry of sortedEntries) {
+            inspectedDirs.push(entry.name);
+            const metadataPath = path.join(
+                actualDataDir,
+                entry.name,
+                'metadata.json'
+            );
+
             try {
                 const metadataRaw = await fs.readFile(metadataPath, 'utf8');
                 const metadata = JSON.parse(metadataRaw) as {
@@ -575,20 +573,36 @@ class ActualApi {
                 };
 
                 if (metadata.groupId === syncId) {
-                    const resolved = path.join(actualDataDir, dir);
+                    const resolvedDir = path.join(actualDataDir, entry.name);
                     this.logger.debug(
-                        `Resolved Actual budget directory '${dir}' for syncId '${syncId}'`
+                        `Using budget directory: ${entry.name} for syncId ${syncId}`
                     );
-                    return resolved;
+                    return resolvedDir;
                 }
-            } catch (_error) {
-                // Ignore directories without readable metadata
+            } catch (error) {
+                const maybeErrno = error as NodeJS.ErrnoException | undefined;
+                if (
+                    maybeErrno?.code === 'ENOENT' ||
+                    maybeErrno?.code === 'EISDIR'
+                ) {
+                    continue;
+                }
+
+                if (error instanceof SyntaxError) {
+                    continue;
+                }
+
+                throw error;
             }
         }
 
+        const inspectedSummary =
+            inspectedDirs.length > 0 ? inspectedDirs.join(', ') : '(none)';
+
         throw new Error(
             `No Actual budget directory found for syncId '${syncId}'. ` +
-                'Open the budget in Actual Desktop to create the metadata and try again.'
+                `Checked directories: ${inspectedSummary}. ` +
+                'Open the budget in Actual Desktop and sync it before retrying.'
         );
     }
 

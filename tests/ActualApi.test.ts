@@ -138,7 +138,8 @@ describe('ActualApi', () => {
             ],
         };
 
-        const api = new ActualApi(serverConfig, createLogger());
+        const logger = createLogger();
+        const api = new ActualApi(serverConfig, logger);
         await api.init();
 
         const logSpy = vi.spyOn(console, 'log');
@@ -188,7 +189,8 @@ describe('ActualApi', () => {
             ],
         };
 
-        const api = new ActualApi(serverConfig, createLogger());
+        const logger = createLogger();
+        const api = new ActualApi(serverConfig, logger);
 
         readdirMock.mockResolvedValue([
             createDirent('budget-dir'),
@@ -214,14 +216,18 @@ describe('ActualApi', () => {
         expect(syncMock).toHaveBeenCalled();
         expect(initMock).toHaveBeenCalledWith(
             expect.objectContaining({
-                dataDir: DEFAULT_DATA_DIR,
+                dataDir: path.join(DEFAULT_DATA_DIR, 'budget-dir'),
             })
         );
+        expect(initMock).toHaveBeenCalledTimes(1);
         expect(downloadBudgetMock.mock.invocationCallOrder[0]).toBeLessThan(
             loadBudgetMock.mock.invocationCallOrder[0]
         );
         expect(loadBudgetMock.mock.invocationCallOrder[0]).toBeLessThan(
             syncMock.mock.invocationCallOrder[0]
+        );
+        expect(logger.debug).toHaveBeenCalledWith(
+            'Using budget directory: budget-dir for syncId budget'
         );
     });
 
@@ -273,6 +279,8 @@ describe('ActualApi', () => {
     it('surfaces timeout errors from Actual API calls', async () => {
         vi.useFakeTimers();
 
+        let timersRestored = false;
+
         try {
             const { default: ActualApi, ActualApiTimeoutError } = await import(
                 '../src/utils/ActualApi.js'
@@ -300,11 +308,12 @@ describe('ActualApi', () => {
             readFileMock.mockResolvedValue(
                 JSON.stringify({ groupId: 'budget' })
             );
-            await api.init(DEFAULT_DATA_DIR);
 
-            downloadBudgetMock.mockImplementation(
+            downloadBudgetMock.mockImplementationOnce(
                 () => new Promise(() => undefined)
             );
+            loadBudgetMock.mockResolvedValue(undefined);
+            syncMock.mockResolvedValue(undefined);
 
             const loadPromise = api.loadBudget('budget');
             const capturedError = loadPromise.catch((error) => error);
@@ -321,13 +330,34 @@ describe('ActualApi', () => {
             );
             expect(loadBudgetMock).not.toHaveBeenCalled();
             expect(shutdownMock).toHaveBeenCalledTimes(1);
+            expect(initMock).toHaveBeenCalledTimes(1);
+
+            await vi.runOnlyPendingTimersAsync();
+            vi.clearAllTimers();
+            vi.useRealTimers();
+            timersRestored = true;
+
+            downloadBudgetMock.mockReset();
+            downloadBudgetMock.mockResolvedValue(undefined);
+            loadBudgetMock.mockReset();
+            loadBudgetMock.mockResolvedValue(undefined);
+            syncMock.mockReset();
+            syncMock.mockResolvedValue(undefined);
+            initMock.mockClear();
+            shutdownMock.mockClear();
+
+            await api.loadBudget('budget');
+
+            expect(initMock).toHaveBeenCalledTimes(1);
+            expect(shutdownMock).not.toHaveBeenCalled();
         } finally {
-            // Ensure no timers remain and restore timers
-            try {
-                await vi.runOnlyPendingTimersAsync();
-                vi.clearAllTimers();
-            } finally {
-                vi.useRealTimers();
+            if (!timersRestored) {
+                try {
+                    await vi.runOnlyPendingTimersAsync();
+                    vi.clearAllTimers();
+                } finally {
+                    vi.useRealTimers();
+                }
             }
         }
     });
@@ -597,7 +627,7 @@ describe('ActualApi', () => {
         expect(initMock).toHaveBeenCalledTimes(1);
         expect(initMock).toHaveBeenCalledWith(
             expect.objectContaining({
-                dataDir: DEFAULT_DATA_DIR,
+                dataDir: path.join(DEFAULT_DATA_DIR, 'target-directory'),
             })
         );
         expect(downloadBudgetMock).toHaveBeenCalled();
@@ -638,13 +668,58 @@ describe('ActualApi', () => {
         downloadBudgetMock.mockResolvedValue(undefined);
 
         await expect(api.loadBudget('missing-budget')).rejects.toThrow(
-            /No Actual budget directory found for syncId 'missing-budget'\./
+            /No Actual budget directory found for syncId 'missing-budget'\. Checked directories: alpha, beta\. Open the budget in Actual Desktop and sync it before retrying\./
         );
         expect(downloadBudgetMock).toHaveBeenCalledTimes(1);
         expect(readdirMock).toHaveBeenCalledTimes(2);
     });
 
-    it('reinitialises across sequential budgets without leaking session state', async () => {
+    it('resets initialization state after a manual shutdown', async () => {
+        const { default: ActualApi } = await import(
+            '../src/utils/ActualApi.js'
+        );
+
+        const serverConfig: ActualServerConfig = {
+            serverUrl: 'http://localhost:5006',
+            serverPassword: 'secret',
+            requestTimeoutMs: 45000,
+            budgets: [
+                {
+                    syncId: 'budget',
+                    e2eEncryption: {
+                        enabled: false,
+                        password: undefined,
+                    },
+                    accountMapping: {},
+                },
+            ],
+        };
+
+        const api = new ActualApi(serverConfig, createLogger());
+
+        readdirMock.mockResolvedValue([createDirent('budget-dir')]);
+        readFileMock.mockResolvedValue(
+            JSON.stringify({ groupId: 'budget' })
+        );
+        downloadBudgetMock.mockResolvedValue(undefined);
+        loadBudgetMock.mockResolvedValue(undefined);
+        syncMock.mockResolvedValue(undefined);
+
+        await api.loadBudget('budget');
+        initMock.mockClear();
+        await api.shutdown();
+
+        await api.loadBudget('budget');
+
+        expect(initMock).toHaveBeenCalledTimes(1);
+        const [[initArgs]] = initMock.mock.calls;
+        expect(initArgs.dataDir).toBe(
+            path.join(DEFAULT_DATA_DIR, 'budget-dir')
+        );
+        expect(shutdownMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('switches Actual data directories when loading different budgets', async () => {
         const { default: ActualApi } = await import(
             '../src/utils/ActualApi.js'
         );
@@ -673,7 +748,8 @@ describe('ActualApi', () => {
             ],
         };
 
-        const api = new ActualApi(serverConfig, createLogger());
+        const logger = createLogger();
+        const api = new ActualApi(serverConfig, logger);
 
         readdirMock.mockResolvedValue([
             createDirent('dir-first'),
@@ -695,15 +771,24 @@ describe('ActualApi', () => {
         syncMock.mockResolvedValue(undefined);
 
         await api.loadBudget('first-budget');
-        await api.shutdown();
         await api.loadBudget('second-budget');
 
         expect(initMock).toHaveBeenCalledTimes(2);
         const [firstInitArgs, secondInitArgs] = initMock.mock.calls.map(
             ([args]) => args
         );
-        expect(firstInitArgs.dataDir).toBe(DEFAULT_DATA_DIR);
-        expect(secondInitArgs.dataDir).toBe(DEFAULT_DATA_DIR);
-        expect(shutdownMock).toHaveBeenCalled();
+        expect(firstInitArgs.dataDir).toBe(
+            path.join(DEFAULT_DATA_DIR, 'dir-first')
+        );
+        expect(secondInitArgs.dataDir).toBe(
+            path.join(DEFAULT_DATA_DIR, 'dir-second')
+        );
+        expect(shutdownMock).toHaveBeenCalledTimes(1);
+        expect(logger.debug).toHaveBeenCalledWith(
+            `Reinitialising ActualApi: ${path.join(
+                DEFAULT_DATA_DIR,
+                'dir-first'
+            )} -> ${path.join(DEFAULT_DATA_DIR, 'dir-second')}`
+        );
     });
 });
