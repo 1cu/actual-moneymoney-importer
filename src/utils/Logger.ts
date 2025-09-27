@@ -7,7 +7,7 @@ export enum LogLevel {
     DEBUG = 3,
 }
 
-type LogHint = string | string[];
+type LogHint = string | Error | Array<string | Error>;
 
 class Logger {
     private logLevel: LogLevel;
@@ -48,16 +48,44 @@ class Logger {
             }[level];
 
             console.log(chalkColor(prefix), `[${timestamp}]`, message);
-            if (hint) {
-                const arrayHint = Array.isArray(hint) ? hint : [hint];
+            const hints = this.normaliseHints(hint);
+            if (hints.length > 0) {
                 const hintIndent = ' '.repeat(
                     `${prefix} [${timestamp}] `.length
                 );
-                for (const hint of arrayHint) {
-                    console.log(chalk.gray(hintIndent, '↳ ', hint));
+                for (const line of hints) {
+                    console.log(chalk.gray(hintIndent, '↳ ', line));
                 }
             }
         }
+    }
+
+    private normaliseHints(hint?: LogHint): string[] {
+        if (!hint) {
+            return [];
+        }
+
+        const rawHints = Array.isArray(hint) ? hint : [hint];
+        const normalised: string[] = [];
+
+        for (const entry of rawHints) {
+            if (entry instanceof Error) {
+                const stack = entry.stack;
+                if (stack) {
+                    const lines = stack.split('\n').map((line) => line.trim());
+                    if (lines.length > 0) {
+                        normalised.push(...lines.filter((line) => line.length));
+                        continue;
+                    }
+                }
+                normalised.push(`Error: ${entry.message || entry.name}`);
+                continue;
+            }
+
+            normalised.push(entry);
+        }
+
+        return normalised;
     }
 
     public getLevel(): LogLevel {
