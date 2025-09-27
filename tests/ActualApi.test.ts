@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import path from 'node:path';
 import type { Dirent } from 'node:fs';
+import { withFakeTimers } from './helpers/timers.js';
 
 // Type for transaction import - matches the ImportTransaction interface
 type ImportTransaction = {
@@ -264,7 +265,8 @@ describe('ActualApi', () => {
             '../src/utils/ActualApi.js'
         );
 
-        const api = new ActualApi(makeServerConfig('budget'), createLogger());
+        const logger = createLogger();
+        const api = new ActualApi(makeServerConfig('budget'), logger);
 
         readdirMock.mockResolvedValue([createDirent('budget-dir')]);
         readFileMock.mockImplementation(async (filePath: string) => {
@@ -279,10 +281,10 @@ describe('ActualApi', () => {
         });
 
         const postError = Object.assign(
-            new Error('PostError: file-not-found'),
+            new Error('PostError: file not found'),
             {
                 type: 'PostError',
-                reason: 'file-not-found',
+                reason: 'file not found',
             }
         );
 
@@ -291,35 +293,76 @@ describe('ActualApi', () => {
         await expect(api.loadBudget('budget')).rejects.toThrow(
             /Actual server could not find the requested budget file/
         );
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.stringContaining(
+                'Actual server could not find the requested budget file'
+            ),
+            expect.arrayContaining([
+                'Server URL: http://localhost:5006',
+                'Budget sync ID: budget',
+                `Data root: ${DEFAULT_DATA_DIR}`,
+            ])
+        );
+        expect(loadBudgetMock).not.toHaveBeenCalled();
+    });
+
+    it('treats group-not-found errors as friendly download failures', async () => {
+        const { default: ActualApi } = await import(
+            '../src/utils/ActualApi.js'
+        );
+
+        const logger = createLogger();
+        const api = new ActualApi(makeServerConfig('budget'), logger);
+
+        readdirMock.mockResolvedValue([createDirent('budget-dir')]);
+        readFileMock.mockResolvedValue(JSON.stringify({ groupId: 'budget' }));
+
+        const postError = Object.assign(
+            new Error('PostError: group-not-found'),
+            {
+                type: 'PostError',
+                reason: 'group-not-found',
+            }
+        );
+
+        downloadBudgetMock.mockRejectedValue(postError);
+
+        await expect(api.loadBudget('budget')).rejects.toThrow(
+            /Actual server could not find the requested budget file/
+        );
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.stringContaining(
+                'Actual server could not find the requested budget file'
+            ),
+            expect.arrayContaining([
+                'Server URL: http://localhost:5006',
+                'Budget sync ID: budget',
+                `Data root: ${DEFAULT_DATA_DIR}`,
+            ])
+        );
         expect(loadBudgetMock).not.toHaveBeenCalled();
     });
 
     it('surfaces timeout errors from Actual API calls', async () => {
-        vi.useFakeTimers();
+        const { default: ActualApi, ActualApiTimeoutError } = await import(
+            '../src/utils/ActualApi.js'
+        );
 
-        let timersRestored = false;
+        const logger = createLogger();
+        const api = new ActualApi(
+            makeServerConfig('budget', { requestTimeoutMs: 5 }),
+            logger
+        );
+        readdirMock.mockResolvedValue([createDirent('budget-dir')]);
+        readFileMock.mockResolvedValue(JSON.stringify({ groupId: 'budget' }));
 
-        try {
-            const { default: ActualApi, ActualApiTimeoutError } = await import(
-                '../src/utils/ActualApi.js'
-            );
+        downloadBudgetMock.mockImplementationOnce(
+            () => new Promise(() => undefined)
+        );
+        loadBudgetMock.mockResolvedValue(undefined);
+        syncMock.mockResolvedValue(undefined);
 
-            const logger = createLogger();
-            const api = new ActualApi(
-                makeServerConfig('budget', { requestTimeoutMs: 5 }),
-                logger
-            );
-            readdirMock.mockResolvedValue([createDirent('budget-dir')]);
-            readFileMock.mockResolvedValue(
-                JSON.stringify({ groupId: 'budget' })
-            );
-
-            downloadBudgetMock.mockImplementationOnce(
-                () => new Promise(() => undefined)
-            );
-            loadBudgetMock.mockResolvedValue(undefined);
-            syncMock.mockResolvedValue(undefined);
-
+        await withFakeTimers(async () => {
             const loadPromise = api.loadBudget('budget');
             const capturedError = loadPromise.catch((error) => error);
 
@@ -336,35 +379,52 @@ describe('ActualApi', () => {
             expect(loadBudgetMock).not.toHaveBeenCalled();
             expect(shutdownMock).toHaveBeenCalledTimes(1);
             expect(initMock).toHaveBeenCalledTimes(1);
+        });
 
-            await vi.runOnlyPendingTimersAsync();
-            vi.clearAllTimers();
-            vi.useRealTimers();
-            timersRestored = true;
+        downloadBudgetMock.mockReset();
+        downloadBudgetMock.mockResolvedValue(undefined);
+        loadBudgetMock.mockReset();
+        loadBudgetMock.mockResolvedValue(undefined);
+        syncMock.mockReset();
+        syncMock.mockResolvedValue(undefined);
+        initMock.mockClear();
+        shutdownMock.mockClear();
 
-            downloadBudgetMock.mockReset();
-            downloadBudgetMock.mockResolvedValue(undefined);
-            loadBudgetMock.mockReset();
-            loadBudgetMock.mockResolvedValue(undefined);
-            syncMock.mockReset();
-            syncMock.mockResolvedValue(undefined);
-            initMock.mockClear();
-            shutdownMock.mockClear();
+        await api.loadBudget('budget');
 
-            await api.loadBudget('budget');
+        expect(initMock).toHaveBeenCalledTimes(1);
+        expect(shutdownMock).not.toHaveBeenCalled();
+    });
 
-            expect(initMock).toHaveBeenCalledTimes(1);
-            expect(shutdownMock).not.toHaveBeenCalled();
-        } finally {
-            if (!timersRestored) {
-                try {
-                    await vi.runOnlyPendingTimersAsync();
-                    vi.clearAllTimers();
-                } finally {
-                    vi.useRealTimers();
-                }
-            }
-        }
+    it('caps shutdown duration when timeout-triggered shutdown hangs', async () => {
+        const { default: ActualApi, ActualApiTimeoutError } = await import(
+            '../src/utils/ActualApi.js'
+        );
+
+        const logger = createLogger();
+        const api = new ActualApi(
+            makeServerConfig('budget', { requestTimeoutMs: 6 }),
+            logger
+        );
+        readdirMock.mockResolvedValue([createDirent('budget-dir')]);
+        readFileMock.mockResolvedValue(JSON.stringify({ groupId: 'budget' }));
+
+        downloadBudgetMock.mockImplementationOnce(
+            () => new Promise(() => undefined)
+        );
+        shutdownMock.mockImplementationOnce(() => new Promise(() => undefined));
+        loadBudgetMock.mockResolvedValue(undefined);
+        syncMock.mockResolvedValue(undefined);
+
+        await withFakeTimers(async () => {
+            const loadPromise = api.loadBudget('budget');
+            const capturedError = loadPromise.catch((error) => error);
+
+            await vi.advanceTimersByTimeAsync(10);
+            const timeoutError = await capturedError;
+            expect(timeoutError).toBeInstanceOf(ActualApiTimeoutError);
+            expect(shutdownMock).toHaveBeenCalledTimes(1);
+        });
     });
 
     it('populates imported ids and deduplicates transactions before import', async () => {
@@ -517,10 +577,7 @@ describe('ActualApi', () => {
             return Promise.resolve({ added: newTransactions, updated: [] });
         });
 
-        const firstAttempt = api.importTransactions(
-            'account-1',
-            transactions
-        );
+        const firstAttempt = api.importTransactions('account-1', transactions);
         const firstAttemptError = firstAttempt.catch((error) => error);
 
         await vi.advanceTimersByTimeAsync(10);
@@ -539,10 +596,7 @@ describe('ActualApi', () => {
         resolveFirstAttempt!();
         await Promise.resolve();
 
-        const secondAttempt = api.importTransactions(
-            'account-1',
-            transactions
-        );
+        const secondAttempt = api.importTransactions('account-1', transactions);
         const result = await secondAttempt;
         expect(result).toBeDefined();
 
@@ -644,6 +698,7 @@ describe('ActualApi', () => {
 
         readdirMock.mockResolvedValue([
             createDirent('corrupt'),
+            createDirent('non-object'),
             createDirent('valid'),
         ]);
         readFileMock.mockImplementation(async (filePath: string) => {
@@ -652,6 +707,12 @@ describe('ActualApi', () => {
                 path.join(DEFAULT_DATA_DIR, 'corrupt', 'metadata.json')
             ) {
                 throw new SyntaxError('Unexpected token');
+            }
+            if (
+                filePath ===
+                path.join(DEFAULT_DATA_DIR, 'non-object', 'metadata.json')
+            ) {
+                return '"unexpected"';
             }
             if (
                 filePath ===
@@ -752,7 +813,7 @@ describe('ActualApi', () => {
         await api.loadBudget('budget');
 
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining('scanning first 100')
+            expect.stringContaining('scanning first 100 (omitting 5)')
         );
         expect(downloadBudgetMock).toHaveBeenCalled();
         expect(loadBudgetMock).toHaveBeenCalled();

@@ -164,9 +164,13 @@ class ActualApi {
             reason?: unknown;
         };
 
+        const reason = typeof details.reason === 'string' ? details.reason : '';
+
         if (
             details.type === 'PostError' &&
-            details.reason === 'file-not-found'
+            /(^|[-\s])file[-\s]?not[-\s]?found$|group[-\s]?not[-\s]?found/i.test(
+                reason
+            )
         ) {
             return (
                 'The Actual server could not find the requested budget file. ' +
@@ -193,7 +197,12 @@ class ActualApi {
                     operation,
                     timeoutMs
                 );
-                Promise.resolve(actual.shutdown())
+                Promise.race([
+                    Promise.resolve(actual.shutdown()),
+                    new Promise((resolve) =>
+                        setTimeout(resolve, Math.min(5_000, timeoutMs / 3))
+                    ),
+                ])
                     .catch((shutdownError) => {
                         const reason =
                             shutdownError instanceof Error
@@ -350,9 +359,10 @@ class ActualApi {
 
         await this.ensureInitialization(rootDataDir);
 
+        const downloadRootDir = this.currentDataDir ?? rootDataDir;
         const initialBudgetDir = await this.tryResolveBudgetDirectory(
             budgetConfig.syncId,
-            this.currentDataDir ?? rootDataDir
+            downloadRootDir
         );
 
         if (initialBudgetDir) {
@@ -368,15 +378,15 @@ class ActualApi {
             budgetConfig.e2eEncryption.password
                 ? { password: budgetConfig.e2eEncryption.password }
                 : undefined;
+        const downloadHints = [...budgetHints, `Data root: ${downloadRootDir}`];
 
         await this.runActualRequest(
             `download budget '${budgetConfig.syncId}'`,
             () =>
                 actual.downloadBudget(budgetConfig.syncId, encryptionPassword),
-            budgetHints
+            downloadHints
         );
 
-        const downloadRootDir = this.currentDataDir ?? rootDataDir;
         const finalBudgetDir = await this.resolveBudgetDataDir(
             budgetConfig.syncId,
             downloadRootDir
@@ -579,7 +589,9 @@ class ActualApi {
 
         if (sortedEntries.length > MAX_DIRS_TO_SCAN) {
             this.logger.warn(
-                `Found ${sortedEntries.length} directories, scanning first ${MAX_DIRS_TO_SCAN}`
+                `Found ${sortedEntries.length} directories, scanning first ${MAX_DIRS_TO_SCAN} (omitting ${
+                    sortedEntries.length - MAX_DIRS_TO_SCAN
+                })`
             );
         }
 
@@ -593,9 +605,11 @@ class ActualApi {
 
             try {
                 const metadataRaw = await fs.readFile(metadataPath, 'utf8');
-                const metadata = JSON.parse(metadataRaw) as {
-                    groupId?: string;
-                };
+                const parsed = JSON.parse(metadataRaw);
+                const metadata =
+                    parsed && typeof parsed === 'object' && 'groupId' in parsed
+                        ? (parsed as { groupId?: string })
+                        : {};
 
                 if (metadata.groupId === syncId) {
                     const resolvedDir = path.join(actualDataDir, entry.name);
