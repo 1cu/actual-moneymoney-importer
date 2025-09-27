@@ -138,11 +138,11 @@ class Importer {
             {} as Record<string, MonMonTransaction[]>
         );
 
-        for (const [monMonAccountUuid, monMonTransactions] of Object.entries(
+        for (const [monMonAccountUuid, accountTransactions] of Object.entries(
             monMonTransactionMap
         )) {
             this.logger.debug(
-                `Found ${monMonTransactions.length} transactions for account ${monMonAccountUuid}`
+                `Found ${accountTransactions.length} transactions for account ${monMonAccountUuid}`
             );
         }
 
@@ -152,11 +152,11 @@ class Importer {
         // Iterate over account mapping
         for (const [monMonAccount, actualAccount] of accountMapping) {
             const accountStartTime = Date.now();
-            const monMonTransactions =
+            const accountTransactions =
                 monMonTransactionMap[monMonAccount.uuid] ?? [];
 
             let createTransactions: CreateTransaction[] = [];
-            for (const monMonTransaction of monMonTransactions) {
+            for (const monMonTransaction of accountTransactions) {
                 createTransactions.push(
                     await this.convertToActualTransaction(monMonTransaction)
                 );
@@ -187,16 +187,16 @@ class Importer {
                 } else {
                     const startTransaction: CreateTransaction = {
                         date: format(
-                            monMonTransactions.length > 0
-                                ? monMonTransactions[
-                                      monMonTransactions.length - 1
+                            accountTransactions.length > 0
+                                ? accountTransactions[
+                                      accountTransactions.length - 1
                                   ].valueDate
                                 : new Date(),
                             DATE_FORMAT
                         ),
                         amount: this.getStartingBalanceForAccount(
                             monMonAccount,
-                            monMonTransactions
+                            accountTransactions
                         ),
                         imported_id: `${monMonAccount.uuid}-start`,
                         cleared: true,
