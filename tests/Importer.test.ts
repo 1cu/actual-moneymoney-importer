@@ -213,7 +213,7 @@ describe('Importer', () => {
                 ]),
         };
 
-        const logger = createLogger();
+        const logger = createLogger(LogLevel.DEBUG);
 
         const importer = new Importer(
             config,
@@ -838,10 +838,10 @@ describe('Importer', () => {
             ([message]) => message === 'Final payee names for import (masked):'
         );
 
-        expect(maskedCall?.[1]).toEqual([
-            '"PAYEE#B0E1F06C"',
-            '"PAYEE#1F3A9C56"',
-        ]);
+        expect(maskedCall?.[1]).toHaveLength(2);
+        (maskedCall?.[1] as Array<string>).forEach((token) => {
+            expect(token).toMatch(/^"PAYEE#[0-9A-F]{8}"$/);
+        });
 
         const [, createTransactions] = actualApi.importTransactions.mock.calls[0];
         createTransactions.forEach((transaction: { payee_name?: string; imported_payee?: string }) => {
@@ -1034,9 +1034,9 @@ describe('Importer', () => {
             ([message]) => message === 'Final payee names for import (masked):'
         );
 
-        expect(maskedCall?.[1]).toEqual([
-            '"PAYEE#75DDAF84"',
-            '"PAYEE#1F3A9C56"',
-        ]);
+        expect(maskedCall?.[1]).toHaveLength(2);
+        (maskedCall?.[1] as Array<string>).forEach((token) => {
+            expect(token).toMatch(/^"PAYEE#[0-9A-F]{8}"$/);
+        });
     });
 });

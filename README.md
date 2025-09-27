@@ -124,6 +124,7 @@ The payee transformation feature automatically converts payee names to human-rea
 By default, payee transformation debug logs mask payee names unless you opt out with `maskPayeeNamesInLogs = false`. This keeps sensitive payee data hidden even when running with verbose logging levels.
 
 Importer debug logs display raw payee names unless you enable `maskPayeeNamesInLogs`. When masking is enabled, payees are replaced with deterministic placeholders (e.g., `PAYEE#1234ABCD`) so you can still trace individual entries without exposing the original names.
+Note: `[payeeTransformation].maskPayeeNamesInLogs` controls PayeeTransformer debug logs, while `[import].maskPayeeNamesInLogs` controls Importer logs.
 
 #### Custom Prompts
 
