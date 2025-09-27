@@ -203,7 +203,7 @@ describe('ActualApi', () => {
         expect(syncMock).toHaveBeenCalled();
         expect(initMock).toHaveBeenCalledWith(
             expect.objectContaining({
-                dataDir: path.join(DEFAULT_DATA_DIR, 'budget-dir'),
+                dataDir: DEFAULT_DATA_DIR,
             })
         );
         expect(downloadBudgetMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -289,10 +289,7 @@ describe('ActualApi', () => {
             readFileMock.mockResolvedValue(
                 JSON.stringify({ groupId: 'budget' })
             );
-            markApiInitialized(
-                api,
-                path.join(DEFAULT_DATA_DIR, 'budget-dir')
-            );
+            markApiInitialized(api, DEFAULT_DATA_DIR);
 
             downloadBudgetMock.mockImplementation(
                 () => new Promise(() => undefined)
@@ -585,7 +582,7 @@ describe('ActualApi', () => {
         expect(initMock).toHaveBeenCalledTimes(1);
         expect(initMock).toHaveBeenCalledWith(
             expect.objectContaining({
-                dataDir: path.join(DEFAULT_DATA_DIR, 'target-directory'),
+                dataDir: DEFAULT_DATA_DIR,
             })
         );
         expect(downloadBudgetMock).toHaveBeenCalled();
@@ -680,12 +677,8 @@ describe('ActualApi', () => {
         const [firstInitArgs, secondInitArgs] = initMock.mock.calls.map(
             ([args]) => args
         );
-        expect(firstInitArgs.dataDir).toBe(
-            path.join(DEFAULT_DATA_DIR, 'dir-first')
-        );
-        expect(secondInitArgs.dataDir).toBe(
-            path.join(DEFAULT_DATA_DIR, 'dir-second')
-        );
+        expect(firstInitArgs.dataDir).toBe(DEFAULT_DATA_DIR);
+        expect(secondInitArgs.dataDir).toBe(DEFAULT_DATA_DIR);
         expect(shutdownMock).toHaveBeenCalled();
     });
 });

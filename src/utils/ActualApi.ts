@@ -346,8 +346,9 @@ class ActualApi {
         const budgetDataDir = await this.resolveBudgetDataDir(
             budgetConfig.syncId
         );
+        const budgetRootDir = path.dirname(budgetDataDir);
 
-        await this.ensureInitialization(budgetDataDir);
+        await this.ensureInitialization(budgetRootDir);
 
         this.logger.debug(
             `Downloading budget with syncId '${budgetConfig.syncId}'...`
@@ -519,10 +520,7 @@ class ActualApi {
         rootDir?: string
     ): Promise<string> {
         const actualDataDir =
-            rootDir ??
-            (this.currentDataDir
-                ? path.dirname(this.currentDataDir)
-                : DEFAULT_DATA_DIR);
+            rootDir ?? this.currentDataDir ?? DEFAULT_DATA_DIR;
 
         let budgetDirs: string[] = [];
         try {
