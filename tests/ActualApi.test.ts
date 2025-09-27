@@ -214,6 +214,51 @@ describe('ActualApi', () => {
         );
     });
 
+    it('surfaces a helpful error when the server no longer has the budget file', async () => {
+        const { default: ActualApi } = await import(
+            '../src/utils/ActualApi.js'
+        );
+
+        const serverConfig: ActualServerConfig = {
+            serverUrl: 'http://localhost:5006',
+            serverPassword: 'secret',
+            requestTimeoutMs: 45000,
+            budgets: [
+                {
+                    syncId: 'budget',
+                    e2eEncryption: {
+                        enabled: false,
+                        password: undefined,
+                    },
+                    accountMapping: {},
+                },
+            ],
+        };
+
+        const api = new ActualApi(serverConfig, createLogger());
+
+        readdirMock.mockResolvedValue(['budget-dir']);
+        readFileMock.mockImplementation(async (filePath: string) => {
+            if (filePath === path.join(DEFAULT_DATA_DIR, 'budget-dir', 'metadata.json')) {
+                return JSON.stringify({ groupId: 'budget' });
+            }
+
+            throw new Error('Unexpected file path');
+        });
+
+        const postError = Object.assign(new Error('PostError: file-not-found'), {
+            type: 'PostError',
+            reason: 'file-not-found',
+        });
+
+        downloadBudgetMock.mockRejectedValue(postError);
+
+        await expect(api.loadBudget('budget')).rejects.toThrow(
+            /Actual server could not find the requested budget file/
+        );
+        expect(loadBudgetMock).not.toHaveBeenCalled();
+    });
+
     it('surfaces timeout errors from Actual API calls', async () => {
         vi.useFakeTimers();
 

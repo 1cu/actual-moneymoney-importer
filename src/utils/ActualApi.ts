@@ -146,6 +146,33 @@ class ActualApi {
         return [`Server URL: ${this.serverConfig.serverUrl}`, ...extras];
     }
 
+    private getFriendlyErrorMessage(
+        operation: string,
+        error: unknown
+    ): string | null {
+        if (
+            !operation.startsWith('download budget') ||
+            !error ||
+            typeof error !== 'object'
+        ) {
+            return null;
+        }
+
+        const details = error as {
+            type?: unknown;
+            reason?: unknown;
+        };
+
+        if (details.type === 'PostError' && details.reason === 'file-not-found') {
+            return (
+                'The Actual server could not find the requested budget file. ' +
+                'Open the budget in Actual Desktop so it can re-upload the file before retrying.'
+            );
+        }
+
+        return null;
+    }
+
     private async runActualRequest<T>(
         operation: string,
         callback: () => Promise<T>,
@@ -208,8 +235,16 @@ class ActualApi {
                 throw error;
             }
 
-            const message =
-                error instanceof Error ? error.message : 'Unknown error';
+            const friendlyMessage = this.getFriendlyErrorMessage(
+                operation,
+                error
+            );
+
+            const message = friendlyMessage
+                ? friendlyMessage
+                : error instanceof Error
+                  ? error.message
+                  : 'Unknown error';
 
             const wrappedError =
                 error instanceof Error
