@@ -163,7 +163,10 @@ class ActualApi {
             reason?: unknown;
         };
 
-        if (details.type === 'PostError' && details.reason === 'file-not-found') {
+        if (
+            details.type === 'PostError' &&
+            details.reason === 'file-not-found'
+        ) {
             return (
                 'The Actual server could not find the requested budget file. ' +
                 'Open the budget in Actual Desktop so it can re-upload the file before retrying.'
@@ -524,7 +527,13 @@ class ActualApi {
 
         let budgetDirs: string[] = [];
         try {
-            budgetDirs = await fs.readdir(actualDataDir);
+            const entries = await fs.readdir(actualDataDir, {
+                withFileTypes: true,
+            });
+            budgetDirs = entries
+                .filter((entry) => entry.isDirectory())
+                .map((entry) => entry.name)
+                .sort((left, right) => left.localeCompare(right));
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : 'Unknown error';

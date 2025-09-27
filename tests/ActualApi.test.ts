@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import path from 'node:path';
+import type { Dirent } from 'node:fs';
 
 // Type for transaction import - matches the ImportTransaction interface
 type ImportTransaction = {
@@ -74,14 +75,20 @@ const createLogger = () =>
         getLevel: () => LogLevel.INFO,
     }) as unknown as Logger;
 
-const markApiInitialized = (api: unknown, dataDir = DEFAULT_DATA_DIR) => {
-    const internals = api as {
-        isInitialized: boolean;
-        currentDataDir: string | null;
-    };
-    internals.isInitialized = true;
-    internals.currentDataDir = dataDir;
-};
+const createDirent = (
+    name: string,
+    { isDirectory = true }: { isDirectory?: boolean } = {}
+): Dirent =>
+    ({
+        name,
+        isDirectory: () => isDirectory,
+        isFile: () => !isDirectory,
+        isBlockDevice: () => false,
+        isCharacterDevice: () => false,
+        isFIFO: () => false,
+        isSymbolicLink: () => false,
+        isSocket: () => false,
+    }) as unknown as Dirent;
 
 describe('ActualApi', () => {
     beforeEach(() => {
@@ -94,6 +101,7 @@ describe('ActualApi', () => {
         getTransactionsMock.mockReset();
         shutdownMock.mockReset();
         shutdownMock.mockResolvedValue(undefined);
+        initMock.mockResolvedValue(undefined);
         accessMock.mockReset();
         mkdirMock.mockReset();
         readdirMock.mockReset();
@@ -131,7 +139,7 @@ describe('ActualApi', () => {
         };
 
         const api = new ActualApi(serverConfig, createLogger());
-        markApiInitialized(api);
+        await api.init();
 
         const logSpy = vi.spyOn(console, 'log');
         getTransactionsMock.mockImplementation(async () => {
@@ -182,7 +190,10 @@ describe('ActualApi', () => {
 
         const api = new ActualApi(serverConfig, createLogger());
 
-        readdirMock.mockResolvedValue(['budget-dir', 'other']);
+        readdirMock.mockResolvedValue([
+            createDirent('budget-dir'),
+            createDirent('other'),
+        ]);
         readFileMock.mockImplementation(async (filePath: string) => {
             if (filePath === path.join(DEFAULT_DATA_DIR, 'budget-dir', 'metadata.json')) {
                 return JSON.stringify({ groupId: 'budget' });
@@ -237,7 +248,7 @@ describe('ActualApi', () => {
 
         const api = new ActualApi(serverConfig, createLogger());
 
-        readdirMock.mockResolvedValue(['budget-dir']);
+        readdirMock.mockResolvedValue([createDirent('budget-dir')]);
         readFileMock.mockImplementation(async (filePath: string) => {
             if (filePath === path.join(DEFAULT_DATA_DIR, 'budget-dir', 'metadata.json')) {
                 return JSON.stringify({ groupId: 'budget' });
@@ -285,11 +296,11 @@ describe('ActualApi', () => {
 
             const logger = createLogger();
             const api = new ActualApi(serverConfig, logger);
-            readdirMock.mockResolvedValue(['budget-dir']);
+            readdirMock.mockResolvedValue([createDirent('budget-dir')]);
             readFileMock.mockResolvedValue(
                 JSON.stringify({ groupId: 'budget' })
             );
-            markApiInitialized(api, DEFAULT_DATA_DIR);
+            await api.init(DEFAULT_DATA_DIR);
 
             downloadBudgetMock.mockImplementation(
                 () => new Promise(() => undefined)
@@ -343,7 +354,7 @@ describe('ActualApi', () => {
         };
 
         const api = new ActualApi(serverConfig, createLogger());
-        markApiInitialized(api);
+        await api.init();
 
         const transactions: ImportTransaction[] = [
             {
@@ -420,7 +431,7 @@ describe('ActualApi', () => {
 
             const logger = createLogger();
             const api = new ActualApi(serverConfig, logger);
-            markApiInitialized(api);
+            await api.init();
 
             const transactions: ImportTransaction[] = [
                 {
@@ -563,7 +574,11 @@ describe('ActualApi', () => {
 
         const api = new ActualApi(serverConfig, createLogger());
 
-        readdirMock.mockResolvedValue(['alpha', 'target-directory', 'beta']);
+        readdirMock.mockResolvedValue([
+            createDirent('alpha'),
+            createDirent('target-directory'),
+            createDirent('beta'),
+        ]);
         readFileMock.mockImplementation(async (filePath: string) => {
             if (filePath === path.join(DEFAULT_DATA_DIR, 'target-directory', 'metadata.json')) {
                 return JSON.stringify({ groupId: 'target-budget' });
@@ -611,7 +626,10 @@ describe('ActualApi', () => {
 
         const api = new ActualApi(serverConfig, createLogger());
 
-        readdirMock.mockResolvedValue(['alpha', 'beta']);
+        readdirMock.mockResolvedValue([
+            createDirent('alpha'),
+            createDirent('beta'),
+        ]);
         readFileMock.mockResolvedValue(
             JSON.stringify({ groupId: 'different-budget' })
         );
@@ -653,7 +671,10 @@ describe('ActualApi', () => {
 
         const api = new ActualApi(serverConfig, createLogger());
 
-        readdirMock.mockResolvedValue(['dir-first', 'dir-second']);
+        readdirMock.mockResolvedValue([
+            createDirent('dir-first'),
+            createDirent('dir-second'),
+        ]);
         readFileMock.mockImplementation(async (filePath: string) => {
             if (filePath === path.join(DEFAULT_DATA_DIR, 'dir-first', 'metadata.json')) {
                 return JSON.stringify({ groupId: 'first-budget' });
