@@ -196,7 +196,8 @@ class ActualApi {
     private async runActualRequest<T>(
         operation: string,
         callback: () => Promise<T>,
-        additionalHints?: string | string[]
+        additionalHints?: string | string[],
+        options?: { skipTimeoutShutdown?: boolean }
     ): Promise<T> {
         const timeoutMs = this.getRequestTimeoutMs();
         let timeoutHandle: NodeJS.Timeout | null = null;
@@ -209,27 +210,49 @@ class ActualApi {
                     operation,
                     timeoutMs
                 );
+                const finalizeTimeout = () => {
+                    this.isInitialized = false;
+                    this.currentDataDir = null;
+                    reject(timeoutError);
+                };
+
+                if (options?.skipTimeoutShutdown) {
+                    finalizeTimeout();
+                    return;
+                }
+
+                const extraHints = Array.isArray(additionalHints)
+                    ? additionalHints
+                    : additionalHints
+                      ? [additionalHints]
+                      : [];
+                const fallbackHints = [
+                    ...extraHints,
+                    `Timeout triggered by operation '${operation}'`,
+                ];
+                const warnHints = this.createContextHints(fallbackHints);
+                const shutdownAttempt = this.runActualRequest(
+                    'shutdown session',
+                    () => actual.shutdown(),
+                    fallbackHints,
+                    { skipTimeoutShutdown: true }
+                ).catch((shutdownError) => {
+                    const reason =
+                        shutdownError instanceof Error
+                            ? shutdownError.message
+                            : String(shutdownError);
+                    this.logger.warn(
+                        `Actual client shutdown after timeout failed: ${reason}`,
+                        warnHints
+                    );
+                });
+
                 Promise.race([
-                    Promise.resolve(actual.shutdown()),
+                    shutdownAttempt,
                     new Promise((resolve) =>
                         setTimeout(resolve, Math.min(5_000, timeoutMs / 3))
                     ),
-                ])
-                    .catch((shutdownError) => {
-                        const reason =
-                            shutdownError instanceof Error
-                                ? shutdownError.message
-                                : String(shutdownError);
-                        this.logger.warn(
-                            `Actual client shutdown after timeout failed: ${reason}`,
-                            hints
-                        );
-                    })
-                    .finally(() => {
-                        this.isInitialized = false;
-                        this.currentDataDir = null;
-                        reject(timeoutError);
-                    });
+                ]).finally(finalizeTimeout);
             }, timeoutMs);
         });
 
@@ -534,18 +557,19 @@ class ActualApi {
     }
 
     private shouldRetryBudgetLoad(error: unknown): boolean {
-        if (!error) {
+        const lower = (
+            error instanceof Error ? error.message : String(error ?? '')
+        ).toLowerCase();
+        if (!lower) {
             return false;
         }
-
-        const message =
-            error instanceof Error ? error.message : String(error ?? '');
-        const lower = message.toLowerCase();
         const retryPatterns = [
             'budget directory does not exist',
             'budget-not-found',
             'no actual budget directory found',
             'not accessible',
+            'enoent',
+            'eisdir',
         ];
 
         return retryPatterns.some((pattern) => lower.includes(pattern));

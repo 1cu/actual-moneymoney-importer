@@ -72,9 +72,17 @@ class Logger {
             if (entry instanceof Error) {
                 const stack = entry.stack;
                 if (stack) {
-                    const lines = stack.split('\n').map((line) => line.trim());
+                    const max = 15;
+                    const raw = stack.split('\n');
+                    const lines = raw
+                        .slice(0, max)
+                        .map((line) => line.trim())
+                        .filter((line) => line.length);
+                    if (raw.length > max) {
+                        lines.push(`… ${raw.length - max} more lines`);
+                    }
                     if (lines.length > 0) {
-                        normalised.push(...lines.filter((line) => line.length));
+                        normalised.push(...lines);
                         continue;
                     }
                 }
