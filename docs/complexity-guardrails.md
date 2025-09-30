@@ -9,7 +9,7 @@ why the pipeline is red and how to make it green again.
 
 | Command | What fails | Primary files (current status) | Related stories | How to fix |
 | --- | --- | --- | --- | --- |
-| `npm run lint:complexity` | `max-lines` violations now block merges. | `src/utils/ActualApi.ts` (1,045 lines / limit 400), `src/utils/PayeeTransformer.ts` (436 / 400), `src/utils/config.ts` (235 / 200). | 14.2 (Actual API & payee refactor), 14.3 (config split). | Break the monoliths into focused modules. Keep utilities ≤400 lines, commands ≤300, configuration files ≤200. |
+| `npm run lint:complexity` | `max-lines` violations now block merges. | `src/utils/ActualApi.ts` (1,045 lines / limit 400), `src/utils/PayeeTransformer.ts` (436 / 400). | 14.2 (Actual API & payee refactor). | Break the monoliths into focused modules. Keep utilities ≤400 lines, commands ≤300, configuration files ≤200. |
 | `npm run lint:eslint` | Cognitive complexity breaches surface as hard errors. | 85 warnings promoted to failures across tests and utilities. | 14.2-14.5. | Extract helpers, simplify branches, and reduce nested logic while keeping behaviour identical. |
 | `npm run analyze:cyclomatic` | Cyclomatic complexity >40 is disallowed. | `src/utils/ActualApi.ts` (547), `src/commands/import.command.ts` (158), `src/utils/config.ts` (129), `src/utils/AccountMap.ts` (133). | 14.2 (Actual API), 14.4 (command pipeline), 14.5 (account map). | Split control flow into smaller functions, remove redundant branching, and trim shared state coupling. |
 
@@ -51,7 +51,7 @@ why the pipeline is red and how to make it green again.
 | --- | ---: | ---: | ---: | --- |
 | `src/utils/ActualApi.ts` | 1,045 | 400 | +645 | 14.2 |
 | `src/utils/PayeeTransformer.ts` | 436 | 400 | +36 | 14.2 |
-| `src/utils/config.ts` | 235 | 200 | +35 | 14.3 |
+| `src/utils/config.ts` | 17 | 200 | -183 | 14.3 (✅ split into schema/defaults/loader) |
 
 ### Cyclomatic Hotspots
 
@@ -75,6 +75,22 @@ When all rows show values at or below the limits, Story 14.6 can be closed out.
   - `src/utils/config.ts` ≤200 lines.
   - Schema and runtime I/O separated with passing tests.
   - No cognitive complexity violations originating from config helpers.
+
+### Configuration Flow Overview (Story 14.3)
+
+1. **Schema validation** – `src/utils/config/schema.ts` holds the Zod schema,
+   trims/normalises date fields, and exposes the timeout constants that callers
+   reuse when instantiating the Actual client.
+2. **Default decision capture** – `src/utils/config/defaults.ts` inspects the
+   raw TOML payload and records which values fell back to defaults so the CLI
+   can explain hidden behaviour.
+3. **Runtime loading** – `src/utils/config/loader.ts` reads the TOML file,
+   applies the schema, and returns both the parsed config and default decision
+   log. Downstream helpers import from `config.ts`, which now simply re-exports
+   these focused modules.
+4. **Contributor guidance** – when updating configuration, touch the schema,
+   adjust the default collector if new fallbacks appear, and surface any new
+   logging expectations alongside the loader.
 - **Story 14.4 – Import Command Simplification**
   - `import.command.ts` cyclomatic score <40.
   - Handler delegates to smaller helpers with coverage in Vitest.
