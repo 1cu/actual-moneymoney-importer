@@ -41,8 +41,44 @@ if ! gh auth status &> /dev/null; then
     exit 1
 fi
 
-OWNER=1cu
-REPO=actual-moneymoney
+# Auto-detect repository information from current git context
+get_repo_info() {
+    local remote_url
+    remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+    
+    if [ -z "$remote_url" ]; then
+        echo "❌ Error: Not in a git repository or no 'origin' remote found"
+        echo "Please run this script from within a git repository with a GitHub remote"
+        exit 1
+    fi
+    
+    # Extract owner and repo from various URL formats
+    # GitHub HTTPS: https://github.com/owner/repo.git
+    # GitHub SSH: git@github.com:owner/repo.git
+    # GitHub HTTPS (no .git): https://github.com/owner/repo
+    local owner_repo
+    
+    # Handle SSH format: git@github.com:owner/repo.git
+    if [[ "$remote_url" =~ git@github\.com:([^/]+)/([^/]+) ]]; then
+        local repo_name="${BASH_REMATCH[2]}"
+        # Remove .git suffix if present
+        repo_name="${repo_name%.git}"
+        owner_repo="${BASH_REMATCH[1]}/${repo_name}"
+    # Handle HTTPS format: https://github.com/owner/repo.git
+    elif [[ "$remote_url" =~ https://github\.com/([^/]+)/([^/]+) ]]; then
+        local repo_name="${BASH_REMATCH[2]}"
+        # Remove .git suffix if present
+        repo_name="${repo_name%.git}"
+        owner_repo="${BASH_REMATCH[1]}/${repo_name}"
+    else
+        echo "❌ Error: Not a GitHub repository"
+        echo "Remote URL: $remote_url"
+        echo "Please ensure you're in a GitHub repository"
+        exit 1
+    fi
+    
+    echo "$owner_repo"
+}
 
 PR="$1"
 
@@ -79,9 +115,24 @@ elif [ $# -gt 1 ]; then
     esac
 fi
 
+# Get repository information (skip for help and cleanup commands)
+if [ "$COMMAND" != "help" ] && [ "$COMMAND" != "cleanup" ]; then
+    REPO_INFO=$(get_repo_info)
+    OWNER=$(echo "$REPO_INFO" | cut -d'/' -f1)
+    REPO=$(echo "$REPO_INFO" | cut -d'/' -f2)
+    
+    # Show detected repository information (only for non-status commands to avoid clutter)
+    if [ "$COMMAND" != "status" ]; then
+        echo "🔍 Detected repository: $OWNER/$REPO" >&2
+    fi
+fi
+
 # Handle help command
 if [ "$COMMAND" = "help" ]; then
     echo "Enhanced GitHub PR Comments Fetcher with AI Resolution Support"
+    echo ""
+    echo "This script automatically detects the GitHub repository from the current git context."
+    echo "Make sure you're in a GitHub repository with an 'origin' remote."
     echo ""
     echo "Usage: $0 <PR_NUMBER> [--resolve <COMMENT_ID1,COMMENT_ID2,...>] [--status] [--cleanup] [--help]"
     echo ""
