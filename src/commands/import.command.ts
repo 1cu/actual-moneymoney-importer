@@ -6,7 +6,7 @@ import ActualApi from '../utils/ActualApi.js';
 import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import PayeeTransformer from '../utils/PayeeTransformer.js';
-import { loadConfig, logDefaultedConfigDecisions } from '../utils/config.js';
+import { loadConfig } from '../utils/config.js';
 import { DATE_FORMAT } from '../utils/shared.js';
 import type { Config, ActualServerConfig, ActualBudgetConfig } from '../utils/config.js';
 
@@ -159,11 +159,7 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
     const structuredLogs = Boolean(argv.structuredLogs);
     const logger = new Logger(logLevel, { structuredLogs });
 
-    const { config, defaultDecisions } = await loadConfig(argv);
-
-    if (defaultDecisions.length > 0) {
-        logDefaultedConfigDecisions(logger, defaultDecisions);
-    }
+    const { config } = await loadConfig(argv);
 
     const payeeTransformer = config.payeeTransformation.enabled
         ? new PayeeTransformer(config.payeeTransformation, logger)

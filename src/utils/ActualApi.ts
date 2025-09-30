@@ -53,7 +53,7 @@ const SUPPRESSED_PATTERNS = [
 // Simple console filtering - just check if message matches suppressed patterns
 const shouldSuppressConsoleOutput = (args: unknown[]): boolean => {
     if (args.length === 0) return false;
-    
+
     const message = util.format(...(args as [unknown, ...unknown[]]));
     return SUPPRESSED_PATTERNS.some(pattern => pattern.test(message));
 };
@@ -308,11 +308,11 @@ class ActualApi {
 
             const friendlyMessage = this.getFriendlyErrorMessage(operation, error);
             const message = friendlyMessage || (error instanceof Error ? error.message : 'Unknown error');
-            
+
             const wrappedError = error instanceof Error
                 ? createErrorWithCause(`Actual API operation '${operation}' failed: ${message}`, error)
                 : new Error(`Actual API operation '${operation}' failed: ${message}`);
-            
+
             this.logger.error(wrappedError.message, hints);
             throw wrappedError;
         } finally {
@@ -494,7 +494,7 @@ class ActualApi {
                     'enoent',
                     'eisdir',
                 ].some(pattern => errorLower.includes(pattern));
-                
+
                 if (attempt >= maxAttempts || !shouldRetry) {
                     throw error;
                 }
@@ -536,7 +536,7 @@ class ActualApi {
                 'enoent',
                 'eisdir',
             ].some(pattern => errorLower.includes(pattern));
-            
+
             if (shouldRetry) {
                 return null;
             }
@@ -748,11 +748,11 @@ class ActualApi {
 
         for (const entry of dirs) {
             const metadataPath = path.join(actualDataDir, entry.name, 'metadata.json');
-            
+
             try {
                 const metadataRaw = await fs.readFile(metadataPath, 'utf8');
                 const parsed = JSON.parse(metadataRaw);
-                
+
                 if (parsed?.groupId === syncId) {
                     const resolvedDir = path.join(actualDataDir, entry.name);
                     const metadata: BudgetMetadata = {
@@ -760,7 +760,7 @@ class ActualApi {
                         id: parsed.id || entry.name,
                         groupId: syncId,
                     };
-                    
+
                     return {
                         directory: resolvedDir,
                         metadata,
@@ -816,14 +816,14 @@ class ActualApi {
                 debug: console.debug,
                 warn: console.warn,
             };
-            
+
             const originals = ActualApi.originals;
             console.log = createConsoleInterceptor(this.logger, originals.log);
             console.info = createConsoleInterceptor(this.logger, originals.info);
             console.debug = createConsoleInterceptor(this.logger, originals.debug);
             console.warn = createConsoleInterceptor(this.logger, originals.warn);
         }
-        
+
         ActualApi.suppressDepth++;
         return () => {
             ActualApi.suppressDepth--;
