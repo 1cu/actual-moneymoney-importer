@@ -240,7 +240,7 @@ describe('Importer', () => {
             'actual-account-1',
             expect.objectContaining({
                 from: expect.any(Date),
-                to: expect.any(Date)
+                to: expect.any(Date),
             })
         );
         expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
