@@ -273,7 +273,8 @@ class Importer {
     }
 
     private getStartingBalanceForAccount(account: MonMonAccount, transactions: MonMonTransaction[]) {
-        const firstBalanceRow = account.balance[0]; // VERIFY this is the latest/current balance
+        // Use the first (earliest) balance entry, not the last
+        const firstBalanceRow = account.balance[0];
         const monMonAccountBalance = firstBalanceRow?.[0];
 
         if (monMonAccountBalance === undefined) {

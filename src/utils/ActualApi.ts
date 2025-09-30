@@ -91,6 +91,7 @@ export class ActualApiTimeoutError extends Error {
 class ActualApi {
     protected isInitialized = false;
     private currentDataDir: string | null = null;
+    private static consolePatchDepth = 0;
 
     public constructor(
         private readonly serverConfig: ActualServerConfig,
@@ -121,10 +122,7 @@ class ActualApi {
         const unpatch = this.patchConsole();
 
         try {
-            const timeoutPromise = new Promise<never>((_, reject) => {
-                setTimeout(() => reject(new ActualApiTimeoutError(operation, timeoutMs)), timeoutMs);
-            });
-            return await Promise.race([callback(), timeoutPromise]);
+            return await this.withCancellableTimeout(callback, timeoutMs, operation);
         } catch (error) {
             if (error instanceof ActualApiTimeoutError) {
                 this.logger.error(error.message, hints);
@@ -135,6 +133,38 @@ class ActualApi {
             throw error;
         } finally {
             unpatch();
+        }
+    }
+
+    private async withCancellableTimeout<T>(
+        callback: () => Promise<T>,
+        timeoutMs: number,
+        operation: string
+    ): Promise<T> {
+        let timeoutId: NodeJS.Timeout | undefined;
+        let isCancelled = false;
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+                if (!isCancelled) {
+                    reject(new ActualApiTimeoutError(operation, timeoutMs));
+                }
+            }, timeoutMs);
+        });
+
+        try {
+            const result = await Promise.race([callback(), timeoutPromise]);
+            isCancelled = true;
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            return result;
+        } catch (error) {
+            isCancelled = true;
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            throw error;
         }
     }
 
@@ -325,23 +355,37 @@ class ActualApi {
     }
 
     private patchConsole(): () => void {
-        // Simple console suppression - no complex depth tracking
-        const originalLog = console.log;
-        const originalInfo = console.info;
-        const originalDebug = console.debug;
-        const originalWarn = console.warn;
+        // Re-entrant console patching with depth tracking
+        ActualApi.consolePatchDepth++;
 
-        console.log = createConsoleInterceptor(this.logger, originalLog);
-        console.info = createConsoleInterceptor(this.logger, originalInfo);
-        console.debug = createConsoleInterceptor(this.logger, originalDebug);
-        console.warn = createConsoleInterceptor(this.logger, originalWarn);
+        if (ActualApi.consolePatchDepth === 1) {
+            // Only patch on first call
+            const originalLog = console.log;
+            const originalInfo = console.info;
+            const originalDebug = console.debug;
+            const originalWarn = console.warn;
 
-        return () => {
-            console.log = originalLog;
-            console.info = originalInfo;
-            console.debug = originalDebug;
-            console.warn = originalWarn;
-        };
+            console.log = createConsoleInterceptor(this.logger, originalLog);
+            console.info = createConsoleInterceptor(this.logger, originalInfo);
+            console.debug = createConsoleInterceptor(this.logger, originalDebug);
+            console.warn = createConsoleInterceptor(this.logger, originalWarn);
+
+            return () => {
+                ActualApi.consolePatchDepth--;
+                if (ActualApi.consolePatchDepth === 0) {
+                    // Only restore on last unpatch
+                    console.log = originalLog;
+                    console.info = originalInfo;
+                    console.debug = originalDebug;
+                    console.warn = originalWarn;
+                }
+            };
+        } else {
+            // Already patched, just track depth
+            return () => {
+                ActualApi.consolePatchDepth--;
+            };
+        }
     }
 }
 

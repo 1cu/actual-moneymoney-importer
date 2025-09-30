@@ -48,9 +48,19 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
             stderr,
         };
     } catch (error: unknown) {
-        const err = error as { code?: number; stdout?: string; stderr?: string; message?: string };
+        const err = error as { code?: number | string; stdout?: string; stderr?: string; message?: string };
+
+        // Coerce non-numeric codes to numeric fallback
+        let exitCode = 1;
+        if (typeof err.code === 'number') {
+            exitCode = err.code;
+        } else if (typeof err.code === 'string') {
+            const parsed = parseInt(err.code, 10);
+            exitCode = isNaN(parsed) ? 1 : parsed;
+        }
+
         return {
-            exitCode: err.code ?? 1,
+            exitCode,
             stdout: err.stdout ?? '',
             stderr: err.stderr ?? err.message ?? '',
         };

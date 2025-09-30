@@ -138,7 +138,7 @@
   `DEFAULT_DATA_DIR`) and keep the in-memory `transformationCache` for repeated
   payees.
 - Respect the masking configuration when logging payee names. Never log raw
-  names when `maskPayeeNamesInLogs` is true.
+  names when payee transformation is enabled.
 
 ### `types/`
 

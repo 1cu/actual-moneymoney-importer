@@ -1,6 +1,9 @@
 import OpenAI from 'openai';
+import fs from 'fs/promises';
+import path from 'node:path';
 import Logger from './Logger.js';
 import type { PayeeTransformationConfig } from './config.js';
+import { DEFAULT_DATA_DIR } from './shared.js';
 
 type ExtendedChatCompletionCreateParams = OpenAI.Chat.Completions.ChatCompletionCreateParams;
 
@@ -110,8 +113,44 @@ class PayeeTransformer {
             return this.availableModels;
         }
 
+        // Try to load from disk cache first
+        const cachePath = path.join(DEFAULT_DATA_DIR, 'openai-model-cache.json');
+        try {
+            const cacheData = await fs.readFile(cachePath, 'utf-8');
+            const cache = JSON.parse(cacheData) as { models: string[]; timestamp: number };
+
+            // Check if cache is less than 24 hours old
+            const now = Date.now();
+            const cacheAge = now - cache.timestamp;
+            const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+            if (cacheAge < maxAge && Array.isArray(cache.models)) {
+                this.availableModels = cache.models;
+                return this.availableModels;
+            }
+        } catch {
+            // Cache file doesn't exist or is invalid, continue to API call
+        }
+
+        // Fetch from API and cache
         const response = await this.openai.models.list();
         this.availableModels = response.data.map((m) => m.id);
+
+        // Save to disk cache
+        try {
+            await fs.mkdir(DEFAULT_DATA_DIR, { recursive: true });
+            await fs.writeFile(
+                cachePath,
+                JSON.stringify({
+                    models: this.availableModels,
+                    timestamp: Date.now(),
+                }),
+                'utf-8'
+            );
+        } catch {
+            // Ignore cache write errors
+        }
+
         return this.availableModels;
     }
 

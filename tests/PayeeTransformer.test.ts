@@ -108,7 +108,6 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'custom-model',
                 skipModelValidation: true,
-                maskPayeeNamesInLogs: false,
             },
             createLogger()
         );
@@ -131,7 +130,6 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'gpt-3.5-turbo',
                 skipModelValidation: false,
-                maskPayeeNamesInLogs: false,
             },
             createLogger()
         );
@@ -144,15 +142,15 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'gpt-3.5-turbo',
                 skipModelValidation: false,
-                maskPayeeNamesInLogs: false,
             },
             createLogger()
         );
 
         await secondTransformer.transformPayees(['Vendor B']);
 
-        // Each transformer instance has its own model cache, so it will call list twice
-        expect(listMock).toHaveBeenCalledTimes(2);
+        // Each transformer instance has its own model cache, but with disk caching,
+        // the second call will use the cached result, so only 1 API call is made
+        expect(listMock).toHaveBeenCalledTimes(1);
     });
 
     it('memoizes transformed payees within the same run', async () => {
@@ -164,7 +162,6 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'gpt-3.5-turbo',
                 skipModelValidation: false,
-                maskPayeeNamesInLogs: false,
             },
             createLogger()
         );
@@ -187,7 +184,6 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'gpt-3.5-turbo',
                 skipModelValidation: false,
-                maskPayeeNamesInLogs: false,
             },
             createLogger()
         );
@@ -211,7 +207,6 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'gpt-3.5-turbo',
                 skipModelValidation: false,
-                maskPayeeNamesInLogs: false,
             },
             logger
         );
@@ -234,7 +229,6 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'gpt-3.5-turbo',
                 skipModelValidation: false,
-                maskPayeeNamesInLogs: false,
             },
             logger
         );
@@ -270,7 +264,6 @@ describe('PayeeTransformer', () => {
                 openAiApiKey: 'key',
                 openAiModel: 'gpt-3.5-turbo',
                 skipModelValidation: false,
-                maskPayeeNamesInLogs: false,
             },
             logger
         );

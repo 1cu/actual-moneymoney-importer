@@ -102,25 +102,31 @@ export class AccountMap {
         if (this.mapping || this._isLoading) return;
         this._isLoading = true;
 
-        const accountMapping = this.budgetConfig.accountMapping ?? {};
-        if (typeof accountMapping !== 'object' || accountMapping === null) {
-            throw new Error('Invalid budget configuration: accountMapping must be an object');
+        try {
+            const accountMapping = this.budgetConfig.accountMapping ?? {};
+            if (typeof accountMapping !== 'object' || accountMapping === null) {
+                throw new Error('Invalid budget configuration: accountMapping must be an object');
+            }
+
+            const [moneyMoneyAccounts, actualAccounts] = await Promise.all([
+                getAccounts(),
+                this.actualApi.getAccounts(),
+            ]);
+            this.moneyMoneyAccounts = moneyMoneyAccounts;
+            this.actualAccounts = actualAccounts as Array<ActualAccount>;
+
+            const parsedAccountMapping: Map<MonMonAccount, ActualAccount> = new Map();
+            const accountRefsFilter =
+                options.accountRefs && options.accountRefs.length > 0 ? new Set(options.accountRefs) : null;
+
+            for (const [moneyMoneyRef, actualRef] of Object.entries(accountMapping as Record<string, string>)) {
+                this.processAccountMapping(moneyMoneyRef, actualRef, accountRefsFilter, parsedAccountMapping);
+            }
+
+            this.mapping = parsedAccountMapping;
+        } finally {
+            this._isLoading = false;
         }
-
-        const [moneyMoneyAccounts, actualAccounts] = await Promise.all([getAccounts(), this.actualApi.getAccounts()]);
-        this.moneyMoneyAccounts = moneyMoneyAccounts;
-        this.actualAccounts = actualAccounts as Array<ActualAccount>;
-
-        const parsedAccountMapping: Map<MonMonAccount, ActualAccount> = new Map();
-        const accountRefsFilter =
-            options.accountRefs && options.accountRefs.length > 0 ? new Set(options.accountRefs) : null;
-
-        for (const [moneyMoneyRef, actualRef] of Object.entries(accountMapping as Record<string, string>)) {
-            this.processAccountMapping(moneyMoneyRef, actualRef, accountRefsFilter, parsedAccountMapping);
-        }
-
-        this.mapping = parsedAccountMapping;
-        this._isLoading = false;
     }
 
     private processAccountMapping(

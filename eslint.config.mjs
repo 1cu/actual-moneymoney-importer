@@ -68,7 +68,7 @@ export default defineConfig(
         },
     }),
     defineConfig({
-        files: ['src/index.ts', 'src/commands/*.ts'],
+        files: ['src/index.ts', 'src/commands/**/*.ts'],
         rules: {
             // Entry points and commands: 300 lines max (should be focused)
             'max-lines': ['error', 300],

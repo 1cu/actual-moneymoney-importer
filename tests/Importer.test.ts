@@ -26,7 +26,6 @@ describe('Importer', () => {
             import: {
                 importUncheckedTransactions: true,
                 synchronizeClearedStatus: true,
-                maskPayeeNamesInLogs: false,
             },
             actualServers: [],
         };
@@ -58,7 +57,7 @@ describe('Importer', () => {
 
         const mockPayeeTransformer = {
             transformPayees: vi.fn().mockResolvedValue([]),
-        } as PayeeTransformer;
+        } as unknown as PayeeTransformer;
 
         const importer = new Importer(
             config,
@@ -105,7 +104,6 @@ describe('Importer', () => {
             import: {
                 importUncheckedTransactions: true,
                 synchronizeClearedStatus: true,
-                maskPayeeNamesInLogs: false,
             },
             actualServers: [],
         };
@@ -137,7 +135,7 @@ describe('Importer', () => {
 
         const mockPayeeTransformer = {
             transformPayees: vi.fn().mockResolvedValue([]),
-        } as PayeeTransformer;
+        } as unknown as PayeeTransformer;
 
         const importer = new Importer(
             config,
@@ -171,7 +169,6 @@ describe('Importer', () => {
             import: {
                 importUncheckedTransactions: true,
                 synchronizeClearedStatus: true,
-                maskPayeeNamesInLogs: false,
             },
             actualServers: [],
         };
@@ -203,7 +200,7 @@ describe('Importer', () => {
 
         const mockPayeeTransformer = {
             transformPayees: vi.fn().mockResolvedValue([]),
-        } as PayeeTransformer;
+        } as unknown as PayeeTransformer;
 
         const importer = new Importer(
             config,
@@ -236,8 +233,27 @@ describe('Importer', () => {
             isDryRun: false,
         });
 
-        // Basic test - just verify the method can be called without errors
+        // Verify the complete import workflow including payee transformation
         expect(mockAccountMap.getMap).toHaveBeenCalled();
+        expect(mockPayeeTransformer.transformPayees).toHaveBeenCalledWith(['Test Transaction', 'Starting balance']);
+        expect(mockActualApi.getTransactions).toHaveBeenCalledWith(
+            'actual-account-1',
+            expect.objectContaining({
+                from: expect.any(Date),
+                to: expect.any(Date)
+            })
+        );
+        expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
+            'actual-account-1',
+            expect.arrayContaining([
+                expect.objectContaining({
+                    date: '2024-01-15',
+                    amount: 10000, // MoneyMoney uses cents
+                    payee_name: 'Test Transaction',
+                    cleared: true,
+                }),
+            ])
+        );
     });
 
     it('handles dry run mode', async () => {
@@ -250,7 +266,6 @@ describe('Importer', () => {
             import: {
                 importUncheckedTransactions: true,
                 synchronizeClearedStatus: true,
-                maskPayeeNamesInLogs: false,
             },
             actualServers: [],
         };
@@ -282,7 +297,7 @@ describe('Importer', () => {
 
         const mockPayeeTransformer = {
             transformPayees: vi.fn().mockResolvedValue([]),
-        } as PayeeTransformer;
+        } as unknown as PayeeTransformer;
 
         const importer = new Importer(
             config,

@@ -71,7 +71,6 @@ const payeeTransformationSchema = z.object({
     openAiApiKey: trimmedNonEmptyString('OpenAI API key must not be empty').optional(),
     openAiModel: z.string().trim().optional().default('gpt-3.5-turbo'),
     skipModelValidation: z.boolean().default(false),
-    maskPayeeNamesInLogs: z.boolean().default(true),
     customPrompt: z.string().optional(),
     modelConfig: z
         .object({
@@ -88,7 +87,6 @@ export const configSchema = z
         import: z.object({
             importUncheckedTransactions: z.boolean(),
             synchronizeClearedStatus: z.boolean().default(true),
-            maskPayeeNamesInLogs: z.boolean().default(false),
             ignorePatterns: z
                 .object({
                     commentPatterns: z.array(z.string()).optional(),
