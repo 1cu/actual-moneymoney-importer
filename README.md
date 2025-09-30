@@ -180,13 +180,9 @@ human-readable formats (e.g., "AMAZN S.A.R.L" to "Amazon"). To use this feature:
    configured model identifier without contacting the OpenAI model listing
    endpoint
 
-By default, payee transformation debug logs mask payee names unless you opt out
-with payee transformation disabled. This keeps sensitive payee data hidden even
-when running with verbose logging levels.
-
-Importer debug logs display raw payee names. When payee transformation is enabled, payees are replaced with
-deterministic placeholders (e.g., `PAYEE#1234ABCD`) so you can still trace
-individual entries without exposing the original names.
+When payee transformation is enabled, importer debug logs replace payees with deterministic placeholders
+(e.g., `PAYEE#1234ABCD`) so you can trace individual entries without exposing original names. When the
+feature is disabled, importer debug logs show raw payee names.
 
 #### Custom Prompts
 

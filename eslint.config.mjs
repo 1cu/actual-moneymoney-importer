@@ -76,7 +76,7 @@ export default defineConfig(
         },
     }),
     defineConfig({
-        files: ['src/utils/config-format.ts'],
+        files: ['src/utils/config.ts'],
         rules: {
             // Configuration files: 200 lines max (should be simple)
             'max-lines': ['error', 200],

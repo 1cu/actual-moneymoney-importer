@@ -140,4 +140,47 @@ describe('AccountMap', () => {
         expect(actualAccount.id).toBe('actual-primary');
         expect(logger.error).not.toHaveBeenCalled();
     });
+
+    it('silently skips missing accounts when requiresResolution is false', async () => {
+        const budgetConfig = createBudgetConfig({
+            'existing-account': 'actual-existing',
+            'missing-money-account': 'actual-missing',
+            'money-missing': 'actual-existing',
+        });
+        getAccountsMock.mockResolvedValue([
+            {
+                uuid: 'existing-account',
+                accountNumber: 'DE06',
+                name: 'Existing Account',
+            },
+        ]);
+        const actualApi = createActualApi([
+            {
+                id: 'actual-existing',
+                name: 'Existing Actual',
+                type: 'checking',
+                offbudget: false,
+                closed: false,
+            },
+        ]);
+        const logger = createTestLogger();
+        const accountMap = new AccountMap(budgetConfig, logger, actualApi);
+
+        // Only include the existing account in the filter
+        await accountMap.loadFromConfig({ accountRefs: ['existing-account'] });
+
+        const mapping = accountMap.getMap();
+        expect(mapping.size).toBe(1);
+        const [entry] = Array.from(mapping.entries());
+        expect(entry).toBeDefined();
+        if (!entry) {
+            throw new Error('Mapping entry missing');
+        }
+        const [monMonAccount, actualAccount] = entry;
+        expect(monMonAccount.uuid).toBe('existing-account');
+        expect(actualAccount.id).toBe('actual-existing');
+
+        // Verify no errors were logged for the missing accounts
+        expect(logger.error).not.toHaveBeenCalled();
+    });
 });

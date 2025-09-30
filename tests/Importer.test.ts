@@ -155,8 +155,8 @@ describe('Importer', () => {
             isDryRun: false,
         });
 
-        // Basic test - just verify the method can be called without errors
-        // Note: getMap might not be called when there are no transactions
+        expect(mockActualApi.importTransactions).not.toHaveBeenCalled();
+        expect(mockPayeeTransformer.transformPayees).not.toHaveBeenCalled();
     });
 
     it('handles payee transformation', async () => {
@@ -330,7 +330,8 @@ describe('Importer', () => {
             isDryRun: true,
         });
 
-        // Basic test - just verify the method can be called without errors
-        expect(mockAccountMap.getMap).toHaveBeenCalled();
+        expect(mockAccountMap.getMap).toHaveBeenCalledWith(['mm-account-1']);
+        expect(mockActualApi.importTransactions).not.toHaveBeenCalled();
+        expect(mockPayeeTransformer.transformPayees).not.toHaveBeenCalled();
     });
 });
