@@ -498,19 +498,17 @@ end-to-end CLI tests being available.
 
 ### Story 14.1 – Baseline complexity hotspots
 
-- **Status:** 🔍 Discovery
+- **Status:** ✅ Done
 - **User Story:** As a maintainer, I need an evidence-based inventory of our worst complexity offenders so that we can schedule safe refactor slices with clear success metrics.
 - **Dependencies:** None.
-- **Acceptance Criteria:**
-  - Capture current line counts, dependency graphs, and runtime profiling notes for `ActualApi.ts`, `Importer.ts`, payee transformation, and config utilities.
-  - Summarise risky patterns (e.g., console interception coupling, nested retry loops, fixture indirection) and propose candidate slices sized for 1–2 PRs each.
-  - Document findings in `docs/adr/complexity-audit.md` and link from this backlog entry.
-  - Update Roadmap notes with the selected refactor plan based on analysis.
+- **Context:** Ran the strict complexity profile (`npm run lint:complexity`, `npm run lint:eslint`, `npm run typecheck`, temporary `ENABLE_COMPLEXITY_RULES=true` max-lines gate, and cyclomatic analysis) and captured file-length deltas, dependency hotspots, and coupling patterns for Actual API, importer, payee transformer, configuration, and CLI commands.
+- **Evidence:** [`docs/adr/complexity-audit.md`](./adr/complexity-audit.md) now records the metrics tables, dependency notes, and prioritized refactor slices feeding Stories 14.2–14.6, giving each follow-up an explicit success metric and risk plan.
+- **Future Work:** Groom Stories 14.2–14.6 using the documented slices and tighten estimates once extraction strategies are validated against the audit.
 - **Tasks:**
-  - 14.1.a Run tooling (`npm run lint:complexity`, depcruise, profiling scripts) and record metrics.
-  - 14.1.b Analyze code patterns and coupling through static analysis tools and manual code review.
-  - 14.1.c Draft recommended slices with effort estimates and risk callouts based on tooling output.
-  - 14.1.d Document findings in `docs/adr/complexity-audit.md` and convert approved slices into follow-up stories.
+  - 14.1.a ✅ Captured tooling output (`npm run lint:complexity`, `npm run lint:eslint`, `npm run typecheck`, strict `max-lines` run, cyclomatic scan) with line-count baselines.
+  - 14.1.b ✅ Documented coupling and pattern analysis for console interception, retries, fixture indirection, error handling, and configuration nesting.
+  - 14.1.c ✅ Sized candidate refactor slices (effort, risk, dependencies, success metrics) aligned with Epic 14 follow-ups.
+  - 14.1.d ✅ Published `docs/adr/complexity-audit.md` and linked roadmap adjustments for downstream stories.
 
 ### Story 14.2 – Right-size Actual API orchestration
 
@@ -581,15 +579,15 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want automation that catches complexity regressions early so that future contributors can safely iterate without manual policing.
 - **Dependencies:** Outputs from Stories 14.1–14.5.
 - **Acceptance Criteria:**
-  - Extend lint/type/test automation with clear thresholds (file length, cyclomatic complexity, dependency circularity) and document how to react to failures.
-  - Add lightweight contributor tooling (e.g., npm scripts, Husky hooks) that surface warnings without blocking legitimate work-in-progress.
-  - Update AGENTS.md and README contributor sections describing the guardrails and how to request exceptions.
+  - Extend lint/type/test automation with clear thresholds (file length, cyclomatic complexity, dependency circularity) and document how to react to failures, including the temporary strict `ENABLE_COMPLEXITY_RULES` + comment-skipping `max-lines` profile trialled in Story 14.1.
+  - Add lightweight contributor tooling (e.g., npm scripts, Husky hooks) that surface warnings without blocking legitimate work-in-progress, offering an opt-in strict mode that reuses the Story 14.1 configuration bundle.
+  - Update AGENTS.md and README contributor sections describing the guardrails, how to enable the strict profile locally, and how to request exceptions.
   - Capture metrics after rollout to confirm the tooling runs within acceptable CI time.
 - **Tasks:**
-  - 14.6.a Evaluate existing scripts (`npm run lint:complexity`, etc.) for coverage gaps and propose enhancements.
-  - 14.6.b Add optional local tooling (pre-commit or `npm run check:complexity`) with documentation on opt-in usage.
-  - 14.6.c Update CI workflows if new checks are introduced, ensuring caching keeps runtimes reasonable.
-  - 14.6.d Publish guidance for handling false positives or legitimate exceptions.
+  - 14.6.a Evaluate existing scripts (`npm run lint:complexity`, strict `max-lines` run, cyclomatic scan) for coverage gaps and propose enhancements.
+  - 14.6.b Add optional local tooling (pre-commit or `npm run check:complexity`) that chains the Story 14.1 strict profile with default lint/type/test commands, documenting opt-in usage.
+  - 14.6.c Update CI workflows if new checks are introduced, ensuring caching keeps runtimes reasonable and clarifying when to toggle the strict profile.
+  - 14.6.d Publish guidance for handling false positives or legitimate exceptions, referencing the Story 14.1 metrics for context.
 
 ### Epic 14 Risks & Mitigations
 
