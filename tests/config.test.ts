@@ -1,14 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { afterEach, describe, expect, it } from 'vitest';
+import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { ArgumentsCamelCase } from 'yargs';
 import {
     configSchema,
-    FALLBACK_ACTUAL_REQUEST_TIMEOUT_MS,
-    loadConfig,
 } from '../src/utils/config.js';
-import Logger, { LogLevel } from '../src/utils/Logger.js';
 
 const buildBaseConfig = () => ({
     payeeTransformation: {
@@ -37,7 +33,7 @@ const buildBaseConfig = () => ({
     ],
 });
 
-const tmpPrefix = path.join(os.tmpdir(), 'actual-monmon-config-tests-');
+const _tmpPrefix = path.join(os.tmpdir(), 'actual-monmon-config-tests-');
 const createdTempDirs: string[] = [];
 
 afterEach(async () => {

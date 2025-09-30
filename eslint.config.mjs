@@ -2,21 +2,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eslint from '@eslint/js';
 import globals from 'globals';
-import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
 
 const { config: defineConfig, configs: tsConfigs } = tseslint;
 
-const enableComplexityRules = process.env.ENABLE_COMPLEXITY_RULES === 'true';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eslintProject = path.resolve(__dirname, 'tsconfig.eslint.json');
-
-const complexityRules = enableComplexityRules
-    ? {
-          complexity: ['error', { max: 40 }],
-          'sonarjs/cognitive-complexity': ['error', 60],
-      }
-    : {};
 
 const sharedRules = {
     'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
@@ -59,12 +50,8 @@ export default defineConfig(
                 tsconfigRootDir: __dirname,
             },
         },
-        plugins: {
-            sonarjs,
-        },
         rules: {
             ...sharedRules,
-            ...complexityRules,
         },
     }),
     defineConfig({
@@ -96,9 +83,6 @@ export default defineConfig(
                 project: eslintProject,
                 tsconfigRootDir: __dirname,
             },
-        },
-        plugins: {
-            sonarjs,
         },
         rules: {
             ...sharedRules,

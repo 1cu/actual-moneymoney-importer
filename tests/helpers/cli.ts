@@ -47,11 +47,12 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
             stdout,
             stderr,
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const err = error as { code?: number; stdout?: string; stderr?: string; message?: string };
         return {
-            exitCode: error.code ?? 1,
-            stdout: error.stdout ?? '',
-            stderr: error.stderr ?? error.message ?? '',
+            exitCode: err.code ?? 1,
+            stdout: err.stdout ?? '',
+            stderr: err.stderr ?? err.message ?? '',
         };
     }
 }
