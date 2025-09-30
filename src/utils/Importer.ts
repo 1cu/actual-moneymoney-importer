@@ -34,8 +34,8 @@ class Importer {
     }) {
         const importStartTime = Date.now();
         const fromDate = from ?? subMonths(new Date(), 1);
-        const earliestImportDate = this.budgetConfig.earliestImportDate 
-            ? new Date(this.budgetConfig.earliestImportDate) 
+        const earliestImportDate = this.budgetConfig.earliestImportDate
+            ? new Date(this.budgetConfig.earliestImportDate)
             : null;
         const importDate = earliestImportDate && earliestImportDate > fromDate ? earliestImportDate : fromDate;
 
@@ -65,7 +65,7 @@ class Importer {
             monMonTransactions = monMonTransactions.filter((t) => t.booked);
         }
         if (this.config.import.ignorePatterns?.payeePatterns) {
-            monMonTransactions = monMonTransactions.filter((t) => 
+            monMonTransactions = monMonTransactions.filter((t) =>
                 !this.matchesPattern(t.name, this.config.import.ignorePatterns!.payeePatterns)
             );
         }
@@ -168,7 +168,7 @@ class Importer {
         if (this.payeeTransformer && !isDryRun) {
             const uniquePayees = Array.from(new Set(filteredTransactions.map((t) => String(t.imported_payee ?? ''))));
             const transformedPayees = await this.payeeTransformer.transformPayees(uniquePayees);
-            
+
             if (transformedPayees) {
                 filteredTransactions.forEach((t) => {
                     const original = t.imported_payee as string;
@@ -191,7 +191,7 @@ class Importer {
             this.logger.info(`DRY RUN - Would import ${filteredTransactions.length} transactions to '${actualAccount.name}'`);
         } else {
             const result = await this.actualApi.importTransactions(actualAccount.id, filteredTransactions);
-            
+
             if (result.errors?.length > 0) {
                 this.logger.error(`Import errors: ${result.errors.length} errors occurred`);
             }

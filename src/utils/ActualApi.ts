@@ -390,134 +390,38 @@ class ActualApi {
                 ? { password: budgetConfig.e2eEncryption.password }
                 : undefined;
 
-        const maxAttempts = 2;
-        let lastError: unknown;
+        // Simple budget loading - no complex retry logic
+        await this.ensureInitialization(rootDataDir);
+        
+        this.logger.debug(`Downloading budget with syncId '${budgetConfig.syncId}'...`);
+        await this.runActualRequest(
+            `download budget '${budgetConfig.syncId}'`,
+            () => actual.downloadBudget(budgetConfig.syncId, encryptionPassword),
+            budgetHints
+        );
 
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const attemptHint = `Attempt ${attempt}/${maxAttempts}`;
-            try {
-                await this.ensureInitialization(rootDataDir);
-
-                let downloadRootDir = this.currentDataDir ?? rootDataDir;
-
-                const initialResolution = await this.tryResolveBudgetDirectory(budgetConfig.syncId, downloadRootDir);
-
-                if (initialResolution) {
-                    const resolvedRootDir = path.dirname(initialResolution.directory);
-                    await this.ensureInitialization(resolvedRootDir);
-                    downloadRootDir = this.currentDataDir ?? resolvedRootDir;
-                }
-
-                const downloadHints = [...budgetHints, `Data root: ${downloadRootDir}`, attemptHint];
-
-                this.logger.debug(
-                    `Downloading budget with syncId '${budgetConfig.syncId}' (attempt ${attempt}/${maxAttempts})...`
-                );
-
-                await this.runActualRequest(
-                    `download budget '${budgetConfig.syncId}'`,
-                    () => actual.downloadBudget(budgetConfig.syncId, encryptionPassword),
-                    downloadHints
-                );
-
-                let resolvedBudget: BudgetDirectoryResolution;
-                if (initialResolution) {
-                    try {
-                        const refreshedMetadata = await this.readBudgetMetadataByPath(initialResolution.metadataPath);
-                        resolvedBudget = {
-                            ...initialResolution,
-                            metadata: refreshedMetadata,
-                        };
-                    } catch (_refreshError) {
-                        resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir);
-                    }
-                } else {
-                    resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir);
-                }
-
-                this.logger.debug(`Using budget directory: ${path.basename(resolvedBudget.directory)} for syncId ${budgetConfig.syncId}`, [
-                    `Metadata path: ${resolvedBudget.metadataPath}`,
-                    `Local budget ID: ${resolvedBudget.metadata.id}`
-                ]);
-
-                const finalRootDir = path.dirname(resolvedBudget.directory);
-
-                try {
-                    await fs.access(resolvedBudget.directory);
-                } catch (error) {
-                    throw createErrorWithCause(
-                        `Budget directory '${resolvedBudget.directory}' for syncId '${budgetConfig.syncId}' is not accessible`,
-                        error instanceof Error ? error : new Error(String(error))
-                    );
-                }
-
-                if (!resolvedBudget.metadata.id || resolvedBudget.metadata.groupId !== budgetConfig.syncId) {
-                    const observedGroup = resolvedBudget.metadata.groupId ?? '(missing)';
-                    const observedId = resolvedBudget.metadata.id ?? '(missing)';
-                    throw new Error(
-                        `Budget metadata mismatch: expected groupId '${budgetConfig.syncId}', got '${observedGroup}' (id='${observedId}').`
-                    );
-                }
-
-                await this.ensureInitialization(finalRootDir);
-
-                const localBudgetId = resolvedBudget.metadata.id;
-                const loadHints = [
-                    ...budgetHints,
-                    `Local budget ID: ${localBudgetId}`,
-                    `Data root: ${finalRootDir}`,
-                    attemptHint,
-                ];
-
-                this.logger.debug(
-                    `Loading budget with syncId '${budgetConfig.syncId}' from local id '${localBudgetId}'...`
-                );
-
-                await this.runActualRequest(
-                    `load budget '${budgetConfig.syncId}'`,
-                    () => actual.loadBudget(localBudgetId),
-                    loadHints
-                );
-
-                this.logger.debug(`Synchronizing budget with syncId '${budgetConfig.syncId}'...`);
-                await this.sync([...budgetHints, attemptHint]);
-                return;
-            } catch (error) {
-                lastError = error;
-
-                const errorLower = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase();
-                const shouldRetry = errorLower && [
-                    'budget directory does not exist',
-                    'budget-not-found',
-                    'no actual budget directory found',
-                    'not accessible',
-                    'enoent',
-                    'eisdir',
-                ].some(pattern => errorLower.includes(pattern));
-
-                if (attempt >= maxAttempts || !shouldRetry) {
-                    throw error;
-                }
-
-                const retryHints: Array<string | Error> = [...this.createContextHints([...budgetHints, attemptHint])];
-                if (error instanceof Error) {
-                    retryHints.push(error);
-                } else {
-                    retryHints.push(String(error));
-                }
-
-                this.logger.warn(
-                    `Budget load attempt ${attempt} failed (${error instanceof Error ? error.message : String(error)}). Retrying...`,
-                    retryHints
-                );
-
-                await this.shutdownSilently([...budgetHints, attemptHint]);
-            }
+        // Simple budget resolution
+        const resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, this.currentDataDir ?? rootDataDir);
+        
+        this.logger.debug(`Using budget directory: ${path.basename(resolvedBudget.directory)} for syncId ${budgetConfig.syncId}`);
+        
+        // Simple validation
+        if (!resolvedBudget.metadata.id || resolvedBudget.metadata.groupId !== budgetConfig.syncId) {
+            throw new Error(`Budget metadata mismatch: expected groupId '${budgetConfig.syncId}', got '${resolvedBudget.metadata.groupId}'`);
         }
 
-        if (lastError) {
-            throw lastError;
-        }
+        await this.ensureInitialization(path.dirname(resolvedBudget.directory));
+
+        // Load and sync budget
+        this.logger.debug(`Loading budget with syncId '${budgetConfig.syncId}' from local id '${resolvedBudget.metadata.id}'...`);
+        await this.runActualRequest(
+            `load budget '${budgetConfig.syncId}'`,
+            () => actual.loadBudget(resolvedBudget.metadata.id),
+            budgetHints
+        );
+
+        this.logger.debug(`Synchronizing budget with syncId '${budgetConfig.syncId}'...`);
+        await this.sync(budgetHints);
     }
 
     private async tryResolveBudgetDirectory(
