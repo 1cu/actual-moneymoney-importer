@@ -49,7 +49,7 @@ why the pipeline is red and how to make it green again.
 
 | File | Lines | Limit | Delta | Story |
 | --- | ---: | ---: | ---: | --- |
-| `src/utils/ActualApi.ts` | 1,045 | 400 | +645 | 14.2 |
+| `src/utils/ActualApi.ts` | 1,091 | 400 | +691 | 14.2 |
 | `src/utils/PayeeTransformer.ts` | 436 | 400 | +36 | 14.2 |
 | `src/utils/config.ts` | 17 | 200 | -183 | 14.3 (✅ split into schema/defaults/loader) |
 
@@ -71,6 +71,7 @@ When all rows show values at or below the limits, Story 14.6 can be closed out.
   - `ActualApi.ts` and `PayeeTransformer.ts` ≤400 lines each.
   - Cyclomatic score <40 for every exported helper.
   - No cognitive complexity failures in their modules.
+  - Progress snapshot: console noise suppression no longer uses pattern caches or categorisation layers, trimming ~175 lines (1,267 ➝ 1,091) from `ActualApi.ts` while keeping debug logging at `LogLevel.DEBUG`.
 - **Story 14.3 – Configuration Split**
   - `src/utils/config.ts` ≤200 lines.
   - Schema and runtime I/O separated with passing tests.
