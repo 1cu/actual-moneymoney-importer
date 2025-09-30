@@ -45,7 +45,10 @@ const budgetSchema = z
         accountMapping: z.record(z.string(), z.string()),
     })
     .superRefine((val, ctx) => {
-        if (val.e2eEncryption.enabled && !val.e2eEncryption.password) {
+        if (
+            val.e2eEncryption.enabled &&
+            (val.e2eEncryption.password === undefined || val.e2eEncryption.password === '')
+        ) {
             ctx.addIssue({
                 code: ZodIssueCode.custom,
                 message: 'Password must not be empty if end-to-end encryption is enabled',
@@ -99,7 +102,10 @@ export const configSchema = z
     })
     .superRefine((val, ctx) => {
         // Check openAI key if payeeTransformation is enabled
-        if (val.payeeTransformation.enabled && !val.payeeTransformation.openAiApiKey) {
+        if (
+            val.payeeTransformation.enabled &&
+            (val.payeeTransformation.openAiApiKey === undefined || val.payeeTransformation.openAiApiKey === '')
+        ) {
             ctx.addIssue({
                 code: ZodIssueCode.custom,
                 message: 'OpenAI key must not be empty if payeeTransformation is enabled',
@@ -118,7 +124,7 @@ export interface LoadedConfig {
 }
 
 export const getConfigFile = (argv: ArgumentsCamelCase): string => {
-    if (argv.config) {
+    if (argv.config !== undefined && argv.config !== null) {
         const argvConfigFile = path.resolve(argv.config as string);
         return argvConfigFile;
     }
@@ -162,7 +168,7 @@ export const loadConfig = async (argv: ArgumentsCamelCase): Promise<LoadedConfig
         if (e instanceof ZodError) {
             const formattedIssues = e.issues
                 .map((issue) => {
-                    const path = issue.path.join('.') || '<root>';
+                    const path = issue.path.join('.') === '' ? '<root>' : issue.path.join('.');
                     return `${path}: ${issue.message}`;
                 })
                 .join('; ');
