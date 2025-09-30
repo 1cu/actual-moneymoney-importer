@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eslint from '@eslint/js';
 import globals from 'globals';
+import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
 
 const { config: defineConfig, configs: tsConfigs } = tseslint;
@@ -11,6 +12,8 @@ const eslintProject = path.resolve(__dirname, 'tsconfig.eslint.json');
 
 const sharedRules = {
     'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
+    'complexity': ['error', 15],
+    'sonarjs/cognitive-complexity': ['error', 20],
     '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -50,6 +53,9 @@ export default defineConfig(
                 tsconfigRootDir: __dirname,
             },
         },
+        plugins: {
+            sonarjs,
+        },
         rules: {
             ...sharedRules,
         },
@@ -83,6 +89,9 @@ export default defineConfig(
                 project: eslintProject,
                 tsconfigRootDir: __dirname,
             },
+        },
+        plugins: {
+            sonarjs,
         },
         rules: {
             ...sharedRules,

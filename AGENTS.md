@@ -89,3 +89,33 @@ anti-patterns and examples.
 - Husky runs `npx --no commitlint --edit "$1"` via the `commit-msg` hook to
   enforce the format locally. If the hook blocks a commit, fix the message and
   recommit rather than bypassing the hook.
+
+## Complexity Prevention Guardrails
+
+To prevent future complexity creep, the project enforces strict guardrails:
+
+### File Length Limits
+- **Maximum file length**: 400 lines for TypeScript files
+- **Check command**: `npm run lint:file-length`
+- **Enforcement**: CI fails if any file exceeds the limit
+
+### Complexity Limits
+- **Cyclomatic complexity**: Maximum 15 per function
+- **Cognitive complexity**: Maximum 20 per function  
+- **Check command**: `npm run lint:complexity`
+- **Enforcement**: CI fails if any function exceeds limits
+
+### Quality Gates
+All changes must pass:
+- `npm run lint:eslint` - Code quality and style
+- `npm run lint:complexity` - Complexity limits
+- `npm run lint:file-length` - File length limits
+- `npm run lint:prettier` - Code formatting
+- `npm run typecheck` - TypeScript compilation
+- `npm test` - All tests passing
+
+### Complexity Prevention Principles
+- **DELETE over ABSTRACT** - Remove complexity instead of refactoring
+- **SIMPLIFY over OPTIMIZE** - Simple approaches work better than complex ones
+- **QUESTION every abstraction** - Many "helpers" are actually over-engineering
+- **Focus on essential functionality** - Avoid premature optimization

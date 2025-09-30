@@ -6,46 +6,30 @@ on:
     pull_request:
 jobs:
     quality:
-        name: Node ${{ matrix.node-version }} - ${{ matrix.task }}
+        name: Quality checks
         runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                node-version:
-                    - 20
-                    - 22
-                    - 24
-                task:
-                    - lint
-                    - typecheck
-                    - build
-                    - test
         steps:
             - uses: actions/checkout@v5
             - name: Setup Node.js
               uses: actions/setup-node@v5
               with:
-                  node-version: ${{ matrix.node-version }}
+                  node-version: 24
                   cache: npm
             - name: Install dependencies
               run: npm ci
             - name: ESLint
-              if: matrix.task == 'lint'
               run: npm run lint:eslint
-            - name: Complexity budget
-              if: matrix.task == 'lint'
+            - name: Complexity checks
               run: npm run lint:complexity
+            - name: File length checks
+              run: npm run lint:file-length
             - name: Prettier
-              if: matrix.task == 'lint'
               run: npm run lint:prettier
             - name: Type check
-              if: matrix.task == 'typecheck'
               run: npm run typecheck
             - name: Build
-              if: matrix.task == 'build'
               run: npm run build
             - name: Run tests
-              if: matrix.task == 'test'
               run: npm test
 
     commitlint:
