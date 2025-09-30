@@ -20,276 +20,55 @@ type ImportTransaction = {
 };
 import { format } from 'date-fns';
 import fs from 'fs/promises';
-import type { Dirent } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import util from 'node:util';
 
 import type { ActualServerConfig } from './config.js';
 import { DEFAULT_ACTUAL_REQUEST_TIMEOUT_MS, FALLBACK_ACTUAL_REQUEST_TIMEOUT_MS } from './config.js';
-import Logger, { LogLevel } from './Logger.js';
+import Logger from './Logger.js';
 import { DEFAULT_DATA_DIR } from './shared.js';
 
-// Enhanced pattern matching with categorization and regex support
+// Simple console filtering - just suppress common Actual SDK noise
 const SUPPRESSED_PATTERNS = [
-    { pattern: /^Got messages from server/i, type: 'sync', category: 'network' },
-    { pattern: /^Syncing since/i, type: 'sync', category: 'network' },
-    { pattern: /^SENT -------/i, type: 'network', category: 'network' },
-    { pattern: /^RECEIVED -------/i, type: 'network', category: 'network' },
-    { pattern: /^Performing transaction reconciliation/i, type: 'reconciliation', category: 'data' },
-    { pattern: /^Performing transaction reconciliation matching/i, type: 'reconciliation', category: 'data' },
-    // Add more patterns for common Actual SDK noise
-    { pattern: /^Loading budget/i, type: 'budget', category: 'data' },
-    { pattern: /^Budget loaded/i, type: 'budget', category: 'data' },
-    { pattern: /^Saving budget/i, type: 'budget', category: 'data' },
-    { pattern: /^Budget saved/i, type: 'budget', category: 'data' },
-    { pattern: /^Applying migration/i, type: 'migration', category: 'data' },
-    { pattern: /^Migration applied/i, type: 'migration', category: 'data' },
+    /^Got messages from server/i,
+    /^Syncing since/i,
+    /^SENT -------/i,
+    /^RECEIVED -------/i,
+    /^Performing transaction reconciliation/i,
+    /^Loading budget/i,
+    /^Budget loaded/i,
+    /^Saving budget/i,
+    /^Budget saved/i,
+    /^Applying migration/i,
+    /^Migration applied/i,
 ];
 
-// Performance optimization: Cache for repeated evaluations
-class ConsoleFilterCache {
-    private patternCache = new Map<string, boolean>();
-    private lastEvaluation: { args: unknown[]; decision: ConsoleNoiseDecision } | null = null;
-    private maxCacheSize = 1000; // Prevent memory leaks
+// Simple console filtering - no caching needed
 
-    private getCacheKey(args: unknown[]): string {
-        // Create a simple hash for caching
-        return args.map((arg) => (typeof arg === 'string' ? arg.substring(0, 50) : String(arg))).join('|');
-    }
+// Legacy support removed - using regex patterns only
 
-    public evaluateWithCache(args: unknown[]): ConsoleNoiseDecision {
-        // Check if we're evaluating the same args as last time (common case)
-        if (this.lastEvaluation && this.arraysEqual(this.lastEvaluation.args, args)) {
-            return this.lastEvaluation.decision;
-        }
+// Complex types removed - using simple boolean logic
 
-        // Check cache for simple string patterns
-        const cacheKey = this.getCacheKey(args);
-        if (this.patternCache.has(cacheKey)) {
-            const cached = this.patternCache.get(cacheKey);
-            const decision = cached
-                ? { action: 'suppress' as const, fallbackMessage: 'cached', type: 'cached', category: 'cached' }
-                : { action: 'passthrough' as const };
-
-            this.lastEvaluation = { args, decision };
-            return decision;
-        }
-
-        // Evaluate normally
-        const decision = evaluateActualConsoleOutput(args);
-
-        // Cache the result for simple cases
-        if (decision.action === 'passthrough' || (decision.action === 'suppress' && !decision.debugHints?.length)) {
-            this.patternCache.set(cacheKey, decision.action === 'suppress');
-
-            // Prevent memory leaks by limiting cache size
-            if (this.patternCache.size > this.maxCacheSize) {
-                const firstKey = this.patternCache.keys().next().value;
-                if (firstKey !== undefined) {
-                    this.patternCache.delete(firstKey);
-                }
-            }
-        }
-
-        this.lastEvaluation = { args, decision };
-        return decision;
-    }
-
-    private arraysEqual(a: unknown[], b: unknown[]): boolean {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (a[i] !== b[i]) return false;
-        }
-        return true;
-    }
-
-    public clearCache(): void {
-        this.patternCache.clear();
-        this.lastEvaluation = null;
-    }
-}
-
-// Global cache instance
-const consoleFilterCache = new ConsoleFilterCache();
-
-// Legacy support for simple prefix matching
-const SUPPRESSED_PREFIXES = [
-    'Got messages from server',
-    'Syncing since',
-    'SENT -------',
-    'RECEIVED -------',
-    'Performing transaction reconciliation',
-    'Performing transaction reconciliation matching',
-];
-
-type ConsoleNoiseDecision =
-    | { action: 'passthrough' }
-    | {
-          action: 'suppress';
-          debugMessage?: string;
-          debugHints?: string[];
-          fallbackMessage: string;
-          type?: string;
-          category?: string;
-      };
-
-const evaluateActualConsoleOutput = (args: unknown[]): ConsoleNoiseDecision => {
-    if (args.length === 0) {
-        return { action: 'passthrough' };
-    }
-
-    // Handle edge cases for malformed console output
-    if (args.some((arg) => arg === null || arg === undefined)) {
-        return { action: 'passthrough' };
-    }
-
-    const formatted = util.format(...(args as [unknown, ...unknown[]]));
-    const [firstArg, ...rest] = args;
-
-    if (typeof firstArg === 'string') {
-        const trimmedFirstArg = firstArg.trim();
-
-        // Handle empty or whitespace-only strings
-        if (trimmedFirstArg.length === 0) {
-            return { action: 'passthrough' };
-        }
-
-        // Enhanced debug data processing with better error handling
-        if (/^Debug data for the operations:?/i.test(trimmedFirstArg)) {
-            const debugHints: string[] = [];
-            const metadata: Record<string, unknown> = {
-                timestamp: new Date().toISOString(),
-                source: 'actual-sdk',
-                operation: 'debug-data',
-            };
-
-            for (const entry of rest) {
-                if (typeof entry === 'undefined') {
-                    continue;
-                }
-
-                if (entry && typeof entry === 'object') {
-                    let serialised = '';
-                    try {
-                        // Handle circular references and complex objects
-                        serialised = JSON.stringify(entry, null, 2);
-                    } catch (_serializationError) {
-                        // Fallback to util.inspect with better error handling
-                        serialised = util.inspect(entry, {
-                            depth: 4,
-                            showHidden: false,
-                            colors: false,
-                            maxArrayLength: 10,
-                        });
-                        metadata.serializationError = true;
-                    }
-
-                    debugHints.push(serialised);
-                    continue;
-                }
-
-                debugHints.push(String(entry));
-            }
-
-            if (debugHints.length === 0) {
-                debugHints.push(formatted);
-            }
-
-            // Add metadata as first hint
-            debugHints.unshift(JSON.stringify(metadata, null, 2));
-
-            return {
-                action: 'suppress',
-                debugMessage: 'Actual sync debug data emitted by SDK',
-                debugHints,
-                fallbackMessage: formatted,
-                type: 'debug',
-                category: 'data',
-            };
-        }
-
-        // Enhanced pattern matching with regex support
-        const matchedPattern = SUPPRESSED_PATTERNS.find((p) => p.pattern.test(trimmedFirstArg));
-        if (matchedPattern) {
-            return {
-                action: 'suppress',
-                debugMessage: `Actual SDK ${matchedPattern.type} output`,
-                fallbackMessage: formatted,
-                type: matchedPattern.type,
-                category: matchedPattern.category,
-            };
-        }
-
-        // Fallback to legacy prefix matching for backward compatibility
-        if (SUPPRESSED_PREFIXES.some((prefix) => trimmedFirstArg.startsWith(prefix))) {
-            return {
-                action: 'suppress',
-                debugMessage: formatted,
-                fallbackMessage: formatted,
-                type: 'legacy',
-                category: 'unknown',
-            };
-        }
-    }
-
-    return { action: 'passthrough' };
+// Simple console filtering - just check if message matches suppressed patterns
+const shouldSuppressConsoleOutput = (args: unknown[]): boolean => {
+    if (args.length === 0) return false;
+    
+    const message = util.format(...(args as [unknown, ...unknown[]]));
+    return SUPPRESSED_PATTERNS.some(pattern => pattern.test(message));
 };
 
-// Enhanced console interceptor with granular log level control and performance optimization
-const createConsoleInterceptor =
-    <TArgs extends unknown[]>(
-        logger: Logger,
-        original: (...args: TArgs) => void,
-        options: {
-            minLevelForDebug?: LogLevel;
-            enableCategorization?: boolean;
-            categoryFilter?: string[];
-            enableCaching?: boolean;
-        } = {}
-    ) =>
-    (...args: TArgs): void => {
-        // Use cache for performance optimization if enabled
-        const decision =
-            options.enableCaching !== false
-                ? consoleFilterCache.evaluateWithCache(args)
-                : evaluateActualConsoleOutput(args);
-
-        if (decision.action === 'passthrough') {
-            original.apply(console, args);
-            return;
-        }
-
-        if (decision.action === 'suppress') {
-            const minLevel = options.minLevelForDebug ?? LogLevel.DEBUG;
-            const currentLevel = logger.getLevel();
-
-            // Check if we should log based on level and category filtering
-            const shouldLog =
-                currentLevel >= minLevel &&
-                (!options.categoryFilter || !decision.category || options.categoryFilter.includes(decision.category));
-
-            if (shouldLog) {
-                const hints = decision.debugHints?.length ? decision.debugHints : undefined;
-                let message = decision.debugMessage ?? decision.fallbackMessage;
-
-                // Add categorization to debug messages for better filtering
-                if (options.enableCategorization && decision.type && decision.category) {
-                    message = `[${decision.category.toUpperCase()}:${decision.type.toUpperCase()}] ${message}`;
-                }
-
-                // Use appropriate log level based on category
-                const logLevel = decision.category === 'network' ? LogLevel.INFO : LogLevel.DEBUG;
-                if (currentLevel >= logLevel) {
-                    if (logLevel === LogLevel.INFO) {
-                        logger.info(message, hints);
-                    } else {
-                        logger.debug(message, hints);
-                    }
-                }
-            }
-        }
-    };
+// Simple console interceptor - just suppress or pass through
+const createConsoleInterceptor = <TArgs extends unknown[]>(
+    _logger: Logger,
+    original: (...args: TArgs) => void
+) => (...args: TArgs): void => {
+    if (shouldSuppressConsoleOutput(args)) {
+        // Just suppress - no complex logging logic needed
+        return;
+    }
+    original.apply(console, args);
+};
 
 const normalizeForHash = (value: unknown): unknown => {
     if (Array.isArray(value)) {
@@ -505,69 +284,21 @@ class ActualApi {
     private async runActualRequest<T>(
         operation: string,
         callback: () => Promise<T>,
-        additionalHints?: string | string[],
-        options?: { skipTimeoutShutdown?: boolean }
+        additionalHints?: string | string[]
     ): Promise<T> {
         const timeoutMs = this.getRequestTimeoutMs();
-        let timeoutHandle: NodeJS.Timeout | null = null;
         const hints = this.createContextHints(additionalHints);
         const unpatch = this.patchConsole();
 
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutHandle = setTimeout(() => {
-                const timeoutError = new ActualApiTimeoutError(operation, timeoutMs);
-                const finalizeTimeout = () => {
-                    this.isInitialized = false;
-                    this.currentDataDir = null;
-                    reject(timeoutError);
-                };
-
-                if (options?.skipTimeoutShutdown) {
-                    finalizeTimeout();
-                    return;
-                }
-
-                const extraHints = Array.isArray(additionalHints)
-                    ? additionalHints
-                    : additionalHints
-                      ? [additionalHints]
-                      : [];
-                const fallbackHints = [...extraHints, `Timeout triggered by operation '${operation}'`];
-                const warnHints = this.createContextHints(fallbackHints);
-                const shutdownAttempt = this.runActualRequest(
-                    'shutdown session',
-                    () => actual.shutdown(),
-                    fallbackHints,
-                    { skipTimeoutShutdown: true }
-                ).catch((shutdownError) => {
-                    const reason = shutdownError instanceof Error ? shutdownError.message : String(shutdownError);
-                    this.logger.warn(`Actual client shutdown after timeout failed: ${reason}`, warnHints);
-                });
-
-                Promise.race([
-                    shutdownAttempt,
-                    new Promise((resolve) => setTimeout(resolve, Math.min(5_000, timeoutMs / 3))),
-                ]).finally(finalizeTimeout);
-            }, timeoutMs);
-        });
-
-        let rawCallback: Promise<T>;
         try {
-            rawCallback = Promise.resolve(callback());
-        } catch (error) {
-            rawCallback = Promise.reject<T>(error);
-        }
+            // Simple timeout with Promise.race
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => {
+                    reject(new ActualApiTimeoutError(operation, timeoutMs));
+                }, timeoutMs);
+            });
 
-        const racingCallback = rawCallback.then(
-            (value) => value,
-            (error) => {
-                throw error;
-            }
-        );
-        rawCallback.catch(() => {});
-
-        try {
-            const result = (await Promise.race([racingCallback, timeoutPromise])) as T;
+            const result = await Promise.race([callback(), timeoutPromise]);
             return result;
         } catch (error) {
             if (error instanceof ActualApiTimeoutError) {
@@ -576,23 +307,15 @@ class ActualApi {
             }
 
             const friendlyMessage = this.getFriendlyErrorMessage(operation, error);
-
-            const message = friendlyMessage
-                ? friendlyMessage
-                : error instanceof Error
-                  ? error.message
-                  : 'Unknown error';
-
-            const wrappedError =
-                error instanceof Error
-                    ? createErrorWithCause(`Actual API operation '${operation}' failed: ${message}`, error)
-                    : new Error(`Actual API operation '${operation}' failed: ${message}`);
+            const message = friendlyMessage || (error instanceof Error ? error.message : 'Unknown error');
+            
+            const wrappedError = error instanceof Error
+                ? createErrorWithCause(`Actual API operation '${operation}' failed: ${message}`, error)
+                : new Error(`Actual API operation '${operation}' failed: ${message}`);
+            
             this.logger.error(wrappedError.message, hints);
             throw wrappedError;
         } finally {
-            if (timeoutHandle) {
-                clearTimeout(timeoutHandle);
-            }
             unpatch();
         }
     }
@@ -706,25 +429,35 @@ class ActualApi {
                             metadata: refreshedMetadata,
                         };
                     } catch (_refreshError) {
-                        resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir, {
-                            logResolution: false,
-                        });
+                        resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir);
                     }
                 } else {
-                    resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir, {
-                        logResolution: false,
-                    });
+                    resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir);
                 }
 
-                this.logResolvedBudgetDirectory(resolvedBudget, budgetConfig.syncId);
+                this.logger.debug(`Using budget directory: ${path.basename(resolvedBudget.directory)} for syncId ${budgetConfig.syncId}`, [
+                    `Metadata path: ${resolvedBudget.metadataPath}`,
+                    `Local budget ID: ${resolvedBudget.metadata.id}`
+                ]);
 
                 const finalRootDir = path.dirname(resolvedBudget.directory);
 
-                await this.ensureBudgetDirectoryAccessible(
-                    resolvedBudget.directory,
-                    resolvedBudget.metadata,
-                    budgetConfig.syncId
-                );
+                try {
+                    await fs.access(resolvedBudget.directory);
+                } catch (error) {
+                    throw createErrorWithCause(
+                        `Budget directory '${resolvedBudget.directory}' for syncId '${budgetConfig.syncId}' is not accessible`,
+                        error instanceof Error ? error : new Error(String(error))
+                    );
+                }
+
+                if (!resolvedBudget.metadata.id || resolvedBudget.metadata.groupId !== budgetConfig.syncId) {
+                    const observedGroup = resolvedBudget.metadata.groupId ?? '(missing)';
+                    const observedId = resolvedBudget.metadata.id ?? '(missing)';
+                    throw new Error(
+                        `Budget metadata mismatch: expected groupId '${budgetConfig.syncId}', got '${observedGroup}' (id='${observedId}').`
+                    );
+                }
 
                 await this.ensureInitialization(finalRootDir);
 
@@ -752,7 +485,17 @@ class ActualApi {
             } catch (error) {
                 lastError = error;
 
-                if (attempt >= maxAttempts || !this.shouldRetryBudgetLoad(error)) {
+                const errorLower = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase();
+                const shouldRetry = errorLower && [
+                    'budget directory does not exist',
+                    'budget-not-found',
+                    'no actual budget directory found',
+                    'not accessible',
+                    'enoent',
+                    'eisdir',
+                ].some(pattern => errorLower.includes(pattern));
+                
+                if (attempt >= maxAttempts || !shouldRetry) {
                     throw error;
                 }
 
@@ -764,7 +507,7 @@ class ActualApi {
                 }
 
                 this.logger.warn(
-                    `Budget load attempt ${attempt} failed (${this.getErrorSummary(error)}). Retrying...`,
+                    `Budget load attempt ${attempt} failed (${error instanceof Error ? error.message : String(error)}). Retrying...`,
                     retryHints
                 );
 
@@ -782,11 +525,19 @@ class ActualApi {
         rootDir: string
     ): Promise<BudgetDirectoryResolution | null> {
         try {
-            return await this.resolveBudgetDataDir(syncId, rootDir, {
-                logResolution: false,
-            });
+            return await this.resolveBudgetDataDir(syncId, rootDir);
         } catch (error) {
-            if (this.shouldRetryBudgetLoad(error)) {
+            const errorLower = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase();
+            const shouldRetry = errorLower && [
+                'budget directory does not exist',
+                'budget-not-found',
+                'no actual budget directory found',
+                'not accessible',
+                'enoent',
+                'eisdir',
+            ].some(pattern => errorLower.includes(pattern));
+            
+            if (shouldRetry) {
                 return null;
             }
 
@@ -827,61 +578,8 @@ class ActualApi {
         return metadata;
     }
 
-    private async ensureBudgetDirectoryAccessible(
-        directory: string,
-        metadata: BudgetMetadata,
-        syncId: string
-    ): Promise<void> {
-        try {
-            await fs.access(directory);
-        } catch (error) {
-            throw createErrorWithCause(
-                `Budget directory '${directory}' for syncId '${syncId}' is not accessible`,
-                error instanceof Error ? error : new Error(String(error))
-            );
-        }
 
-        if (!metadata.id || metadata.groupId !== syncId) {
-            const observedGroup = metadata.groupId ?? '(missing)';
-            const observedId = metadata.id ?? '(missing)';
-            throw new Error(
-                `Budget metadata mismatch: expected groupId '${syncId}', got '${observedGroup}' (id='${observedId}').`
-            );
-        }
-    }
 
-    private shouldRetryBudgetLoad(error: unknown): boolean {
-        const lower = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase();
-        if (!lower) {
-            return false;
-        }
-        const retryPatterns = [
-            'budget directory does not exist',
-            'budget-not-found',
-            'no actual budget directory found',
-            'not accessible',
-            'enoent',
-            'eisdir',
-        ];
-
-        return retryPatterns.some((pattern) => lower.includes(pattern));
-    }
-
-    private getErrorSummary(error: unknown): string {
-        if (error instanceof Error) {
-            return error.message;
-        }
-
-        if (typeof error === 'string') {
-            return error;
-        }
-
-        try {
-            return JSON.stringify(error);
-        } catch {
-            return String(error);
-        }
-    }
 
     private async shutdownSilently(contextHints: string[]): Promise<void> {
         try {
@@ -898,14 +596,6 @@ class ActualApi {
         }
     }
 
-    private isIgnorableShutdownError(error: unknown): boolean {
-        if (!(error instanceof Error)) {
-            return false;
-        }
-
-        const message = error.message;
-        return error instanceof TypeError && message.includes("Cannot read properties of null (reading 'prepare')");
-    }
 
     public async importTransactions(
         accountId: string,
@@ -988,7 +678,7 @@ class ActualApi {
                 try {
                     await actual.shutdown();
                 } catch (error) {
-                    if (this.isIgnorableShutdownError(error)) {
+                    if (error instanceof TypeError && error.message.includes("Cannot read properties of null (reading 'prepare')")) {
                         const hints: Array<string | Error> = [
                             ...this.createContextHints('Operation: shutdown session'),
                         ];
@@ -1046,125 +736,44 @@ class ActualApi {
         };
     }
 
-    private logResolvedBudgetDirectory(resolution: BudgetDirectoryResolution, syncId: string): void {
-        const directoryName = path.basename(resolution.directory);
-        const hints = [`Metadata path: ${resolution.metadataPath}`, `Local budget ID: ${resolution.metadata.id}`];
-
-        this.logger.debug(`Using budget directory: ${directoryName} for syncId ${syncId}`, hints);
-    }
 
     private async resolveBudgetDataDir(
         syncId: string,
-        rootDir?: string,
-        options?: { logResolution?: boolean }
+        rootDir?: string
     ): Promise<BudgetDirectoryResolution> {
-        const { logResolution = true } = options ?? {};
         const actualDataDir = rootDir ?? this.currentDataDir ?? DEFAULT_DATA_DIR;
 
-        let entries: Dirent[];
-        try {
-            entries = await fs.readdir(actualDataDir, { withFileTypes: true });
-        } catch (error) {
-            const maybeErrno = error as NodeJS.ErrnoException | undefined;
-            if (maybeErrno?.code === 'ENOENT') {
-                entries = [];
-            } else {
-                throw error;
-            }
-        }
+        const entries = await fs.readdir(actualDataDir, { withFileTypes: true });
+        const dirs = entries.filter(entry => entry.isDirectory());
 
-        const inspectedDirs: string[] = [];
-        const metadataDiagnostics: string[] = [];
-        const MAX_DIRS_TO_SCAN = 100;
-
-        const sortedEntries = entries
-            .filter((entry) => entry.isDirectory())
-            .sort((left, right) => left.name.localeCompare(right.name));
-
-        if (sortedEntries.length > MAX_DIRS_TO_SCAN) {
-            this.logger.warn(
-                `Found ${sortedEntries.length} directories, scanning first ${MAX_DIRS_TO_SCAN} (omitting ${
-                    sortedEntries.length - MAX_DIRS_TO_SCAN
-                })`
-            );
-        }
-
-        for (const entry of sortedEntries.slice(0, MAX_DIRS_TO_SCAN)) {
-            inspectedDirs.push(entry.name);
+        for (const entry of dirs) {
             const metadataPath = path.join(actualDataDir, entry.name, 'metadata.json');
-
+            
             try {
                 const metadataRaw = await fs.readFile(metadataPath, 'utf8');
                 const parsed = JSON.parse(metadataRaw);
-                if (!parsed || typeof parsed !== 'object') {
-                    metadataDiagnostics.push(`${entry.name}: metadata is not an object`);
-                    continue;
+                
+                if (parsed?.groupId === syncId) {
+                    const resolvedDir = path.join(actualDataDir, entry.name);
+                    const metadata: BudgetMetadata = {
+                        ...(parsed as BudgetMetadata),
+                        id: parsed.id || entry.name,
+                        groupId: syncId,
+                    };
+                    
+                    return {
+                        directory: resolvedDir,
+                        metadata,
+                        metadataPath,
+                    };
                 }
-
-                const record = parsed as Record<string, unknown>;
-                const groupIdRaw = record.groupId;
-                const groupId = typeof groupIdRaw === 'string' ? groupIdRaw.trim() : '';
-                if (!groupId) {
-                    metadataDiagnostics.push(`${entry.name}: metadata missing groupId`);
-                    continue;
-                }
-
-                if (groupId !== syncId) {
-                    metadataDiagnostics.push(
-                        `${entry.name}: metadata groupId '${groupId}' does not match requested syncId '${syncId}'`
-                    );
-                    continue;
-                }
-
-                const idRaw = record.id;
-                const id = typeof idRaw === 'string' ? idRaw.trim() : entry.name;
-
-                if (!id) {
-                    metadataDiagnostics.push(`${entry.name}: metadata missing id`);
-                    continue;
-                }
-
-                const resolvedDir = path.join(actualDataDir, entry.name);
-                const metadata: BudgetMetadata = {
-                    ...(record as BudgetMetadata),
-                    id,
-                    groupId,
-                };
-                const resolution: BudgetDirectoryResolution = {
-                    directory: resolvedDir,
-                    metadata,
-                    metadataPath,
-                };
-                if (logResolution) {
-                    this.logResolvedBudgetDirectory(resolution, syncId);
-                }
-                return resolution;
-            } catch (error) {
-                const maybeErrno = error as NodeJS.ErrnoException | undefined;
-                if (maybeErrno?.code === 'ENOENT' || maybeErrno?.code === 'EISDIR') {
-                    metadataDiagnostics.push(`${entry.name}: metadata.json not found`);
-                    continue;
-                }
-
-                if (error instanceof SyntaxError) {
-                    metadataDiagnostics.push(`${entry.name}: metadata.json could not be parsed`);
-                    continue;
-                }
-
-                throw error;
+            } catch {
+                // Skip invalid metadata files
+                continue;
             }
         }
 
-        const inspectedSummary = inspectedDirs.length > 0 ? inspectedDirs.join(', ') : '(none)';
-        const metadataSummary =
-            metadataDiagnostics.length > 0 ? ` Metadata issues: ${metadataDiagnostics.join('; ')}.` : '';
-
-        throw new Error(
-            `No Actual budget directory found for syncId '${syncId}'. ` +
-                `Checked directories under '${actualDataDir}': ${inspectedSummary}.` +
-                metadataSummary +
-                ' Open the budget in Actual Desktop and sync it before retrying.'
-        );
+        throw new Error(`No Actual budget directory found for syncId '${syncId}' in '${actualDataDir}'`);
     }
 
     private createFallbackImportedId(accountId: string, transaction: ImportTransaction): string {
@@ -1199,12 +808,7 @@ class ActualApi {
     }
 
     private patchConsole(): () => void {
-        // Note: This temporarily monkey-patches the global console methods for the
-        // entire process while an Actual request is in flight. Concurrent requests
-        // share the suppression window, so unrelated log output may be filtered.
-        // The Actual client may still emit logs outside this window (e.g. after a
-        // timeout) because the SDK lacks granular logger hooks. In the future we
-        // could scope suppression per logger if the SDK exposes suitable hooks.
+        // Simple console patching - just suppress common Actual SDK noise
         if (ActualApi.suppressDepth === 0) {
             ActualApi.originals = {
                 log: console.log,
@@ -1212,44 +816,14 @@ class ActualApi {
                 debug: console.debug,
                 warn: console.warn,
             };
+            
             const originals = ActualApi.originals;
-            // Enhanced console interception with granular control and performance optimization
-            const consoleOptions = {
-                minLevelForDebug: LogLevel.DEBUG,
-                enableCategorization: true,
-                categoryFilter: ['network', 'data', 'debug'], // Allow these categories
-                enableCaching: true, // Enable performance caching
-            };
-
-            console.log = createConsoleInterceptor(
-                this.logger,
-                (...args: Parameters<typeof console.log>) => {
-                    originals.log.apply(console, args);
-                },
-                consoleOptions
-            );
-            console.info = createConsoleInterceptor(
-                this.logger,
-                (...args: Parameters<typeof console.info>) => {
-                    originals.info.apply(console, args);
-                },
-                consoleOptions
-            );
-            console.debug = createConsoleInterceptor(
-                this.logger,
-                (...args: Parameters<typeof console.debug>) => {
-                    originals.debug.apply(console, args);
-                },
-                consoleOptions
-            );
-            console.warn = createConsoleInterceptor(
-                this.logger,
-                (...args: Parameters<typeof console.warn>) => {
-                    originals.warn.apply(console, args);
-                },
-                consoleOptions
-            );
+            console.log = createConsoleInterceptor(this.logger, originals.log);
+            console.info = createConsoleInterceptor(this.logger, originals.info);
+            console.debug = createConsoleInterceptor(this.logger, originals.debug);
+            console.warn = createConsoleInterceptor(this.logger, originals.warn);
         }
+        
         ActualApi.suppressDepth++;
         return () => {
             ActualApi.suppressDepth--;
