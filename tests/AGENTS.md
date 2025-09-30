@@ -34,6 +34,32 @@ Target the assertions that deliver the most value—100% coverage is neither
 expected nor desired. It is acceptable to prune or skip low-value scenarios so
 long as the critical paths continue to have protection.
 
+## Complexity Prevention in Tests
+
+**CRITICAL**: Follow complexity prevention guidelines to avoid over-engineered tests:
+
+- **Keep tests simple**: Minimal fixtures, avoid over-mocking
+- **Don't over-mock**: Mock only what's necessary
+- **Prefer integration over unit**: Test real behavior when possible
+- **Remove obsolete tests**: Delete tests for removed functionality
+- **Avoid complex test builders**: Use simple test data instead
+
+### Test anti-patterns to avoid
+
+- Complex test builders with multiple setup methods
+- Over-mocking that duplicates production code
+- Complex test fixtures with excessive detail
+- Tests that are harder to understand than the code they test
+- Obsolete tests that no longer provide value
+
+### Preferred test patterns
+
+- Simple test data that's minimal but representative
+- Mock only external services, not internal utilities
+- Focus on critical paths and edge cases
+- Clear, readable test descriptions
+- Tests that fail with actionable error messages
+
 ## Error-path fixtures
 
 - `tests/helpers/error-fixtures.ts` exposes helpers for simulating Actual API

@@ -157,6 +157,32 @@
 - Keep functions and classes strongly typed; avoid implicit `any` by leveraging
   existing types from utilities and the configuration schema.
 
+## Complexity Prevention
+
+**CRITICAL**: Follow complexity prevention guidelines to avoid overengineering:
+
+- **File size limits**: Utility files max 400 lines, commands max 300 lines
+- **Delete over abstract**: Remove complexity instead of refactoring
+- **Inline simple functionality**: Don't create files for trivial functions
+- **Avoid over-engineering**: Question every abstraction
+- **Keep tests simple**: Minimal fixtures, avoid over-mocking
+
+### Anti-patterns to avoid
+
+- Complex caching with TTL, disk persistence, and performance optimization
+- Multiple fallback layers and complex error recovery
+- Generic abstractions that hide complexity
+- Over-mocking in tests
+- Complex configuration with too many flags
+
+### Preferred patterns
+
+- Simple, direct code that's readable by new developers
+- Minimal error handling with clear error messages
+- Single-purpose utilities with focused interfaces
+- Simple test data and minimal fixtures
+- Direct API calls without unnecessary abstraction layers
+
 ## Testing expectations
 
 - Add or update Vitest coverage in `tests/` whenever changing behaviour,
