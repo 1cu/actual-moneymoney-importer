@@ -16,8 +16,7 @@ interface RecordedEvent {
     readonly [key: string]: unknown;
 }
 
-const loaderPath = fileURLToPath(new URL('../helpers/cli-mock-loader.mjs', import.meta.url));
-const loaderNodeOptions = ['--loader', loaderPath] as const;
+// Simplified CLI testing - no complex mock loader needed
 
 const CLI_TIMEOUT_MS = 20000;
 
@@ -36,7 +35,6 @@ const buildRunCliOptions = (contextDir: string, eventsFile: string, overrides: R
         NODE_NO_WARNINGS: '1',
         ...overrides.env,
     },
-    nodeOptions: loaderNodeOptions,
     timeoutMs: CLI_TIMEOUT_MS,
     ...overrides,
 });
@@ -150,7 +148,6 @@ describe('CLI global options', () => {
                     CLI_TEST_EVENTS_FILE: eventsFile,
                     NODE_NO_WARNINGS: '1',
                 },
-                nodeOptions: loaderNodeOptions,
                 timeoutMs: CLI_TIMEOUT_MS,
             });
 
@@ -183,7 +180,6 @@ describe('CLI global options', () => {
                     CLI_TEST_EVENTS_FILE: eventsFile,
                     NODE_NO_WARNINGS: '1',
                 },
-                nodeOptions: loaderNodeOptions,
                 timeoutMs: CLI_TIMEOUT_MS,
             });
 
@@ -216,7 +212,6 @@ describe('CLI global options', () => {
                     CLI_TEST_EVENTS_FILE: eventsFile,
                     NODE_NO_WARNINGS: '1',
                 },
-                nodeOptions: loaderNodeOptions,
                 timeoutMs: CLI_TIMEOUT_MS,
             });
 
@@ -244,7 +239,6 @@ describe('CLI global options', () => {
                     CLI_TEST_EVENTS_FILE: eventsFile,
                     NODE_NO_WARNINGS: '1',
                 },
-                nodeOptions: loaderNodeOptions,
                 timeoutMs: CLI_TIMEOUT_MS,
             });
 
@@ -279,7 +273,6 @@ describe('CLI global options', () => {
                     CLI_TEST_EVENTS_FILE: eventsFile,
                     NODE_NO_WARNINGS: '1',
                 },
-                nodeOptions: loaderNodeOptions,
                 timeoutMs: CLI_TIMEOUT_MS,
             });
 
@@ -314,7 +307,6 @@ describe('CLI global options', () => {
                     CLI_TEST_EVENTS_FILE: eventsFile,
                     NODE_NO_WARNINGS: '1',
                 },
-                nodeOptions: loaderNodeOptions,
                 timeoutMs: CLI_TIMEOUT_MS,
             });
 
