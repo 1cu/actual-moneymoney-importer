@@ -7,6 +7,27 @@ import Logger, { LogLevel } from '../utils/Logger.js';
 import { configSchema, getConfigFile } from '../utils/config.js';
 import { EXAMPLE_CONFIG } from '../utils/shared.js';
 
+const createDefaultConfig = async (configPath: string, logger: Logger): Promise<void> => {
+    try {
+        await fs.mkdir(path.dirname(configPath), { recursive: true });
+        await fs.writeFile(configPath, EXAMPLE_CONFIG, { encoding: 'utf-8', mode: 0o600 });
+        logger.warn('Configuration file not found. Created default configuration file.');
+    } catch (createError) {
+        logger.error(
+            `Configuration validation failed: ${createError instanceof Error ? createError.message : String(createError)}`
+        );
+        throw createError;
+    }
+};
+
+const handleZodError = (error: z.ZodError, logger: Logger): void => {
+    logger.error('Configuration file is invalid:');
+    for (const issue of error.issues) {
+        const issuePath = issue.path.length ? issue.path.join('.') : '<root>';
+        logger.error(`Code ${issue.code} at path [${issuePath}]: ${issue.message}`);
+    }
+};
+
 const handleValidate = async (argv: ArgumentsCamelCase) => {
     const configPath = await getConfigFile(argv);
     const logLevel = (argv.logLevel ?? LogLevel.INFO) as number;
@@ -17,24 +38,17 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
 
     try {
         const configContent = await fs.readFile(configPath, 'utf-8');
-        const configData = toml.parse(configContent);
+        const configData = toml.parse(configContent) as Record<string, unknown>;
         configSchema.parse(configData);
         logger.info('Configuration is valid.');
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-            // Create default config
-            await fs.mkdir(path.dirname(configPath), { recursive: true });
-            await fs.writeFile(configPath, EXAMPLE_CONFIG, { encoding: 'utf-8', mode: 0o600 });
-            logger.warn('Configuration file not found. Created default configuration file.');
+            await createDefaultConfig(configPath, logger);
             return;
         }
 
         if (error instanceof z.ZodError) {
-            logger.error('Configuration file is invalid:');
-            for (const issue of error.issues) {
-                const issuePath = issue.path.length ? issue.path.join('.') : '<root>';
-                logger.error(`Code ${issue.code} at path [${issuePath}]: ${issue.message}`);
-            }
+            handleZodError(error, logger);
         } else {
             logger.error(`Configuration validation failed: ${error instanceof Error ? error.message : String(error)}`);
         }

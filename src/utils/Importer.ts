@@ -33,7 +33,9 @@ class Importer {
         isDryRun?: boolean;
     }) {
         const fromDate = from ?? subMonths(new Date(), 1);
-        const earliestImportDate = this.budgetConfig.earliestImportDate ? new Date(this.budgetConfig.earliestImportDate) : null;
+        const earliestImportDate = this.budgetConfig.earliestImportDate
+            ? new Date(this.budgetConfig.earliestImportDate)
+            : null;
         const importDate = earliestImportDate && earliestImportDate > fromDate ? earliestImportDate : fromDate;
 
         let monMonTransactions = await getTransactions({ from: importDate, to: toDate });
@@ -49,15 +51,18 @@ class Importer {
             monMonTransactions = monMonTransactions.filter((t) => t.booked);
         }
         if (this.config.import.ignorePatterns?.payeePatterns) {
-            monMonTransactions = monMonTransactions.filter((t) =>
-                !this.matchesPattern(t.name, this.config.import.ignorePatterns!.payeePatterns)
+            monMonTransactions = monMonTransactions.filter(
+                (t) => !this.matchesPattern(t.name, this.config.import.ignorePatterns!.payeePatterns)
             );
         }
 
-        const monMonTransactionMap = monMonTransactions.reduce((acc, transaction) => {
-            (acc[transaction.accountUuid] ??= []).push(transaction);
-            return acc;
-        }, {} as Record<string, MonMonTransaction[]>);
+        const monMonTransactionMap = monMonTransactions.reduce(
+            (acc, transaction) => {
+                (acc[transaction.accountUuid] ??= []).push(transaction);
+                return acc;
+            },
+            {} as Record<string, MonMonTransaction[]>
+        );
 
         const accountMapping = this.accountMap.getMap(accountRefs);
         let hasNewTransactions = false;
@@ -114,9 +119,7 @@ class Importer {
 
         // Filter out existing transactions
         const existingIds = new Set(
-            existingActualTransactions
-                .map((t) => t.imported_id)
-                .filter((id): id is string => Boolean(id))
+            existingActualTransactions.map((t) => t.imported_id).filter((id): id is string => Boolean(id))
         );
 
         const filteredTransactions = createTransactions.filter((t) => {
@@ -153,11 +156,13 @@ class Importer {
 
         // Import transactions
         if (isDryRun) {
-            this.logger.info(`DRY RUN - Would import ${filteredTransactions.length} transactions to '${actualAccount.name}'`);
+            this.logger.info(
+                `DRY RUN - Would import ${filteredTransactions.length} transactions to '${actualAccount.name}'`
+            );
         } else {
             const result = await this.actualApi.importTransactions(actualAccount.id, filteredTransactions);
 
-            if (result.errors?.length > 0) {
+            if (result.errors && result.errors.length > 0) {
                 this.logger.error(`Import errors: ${result.errors.length} errors occurred`);
             }
 
@@ -290,17 +295,12 @@ class Importer {
 
     private matchesPattern(value: string | undefined, patterns?: string[]) {
         if (!value || !patterns?.length) return false;
-        return patterns.some(pattern => {
+        return patterns.some((pattern) => {
             const regex = this.patternCache.get(pattern) || new RegExp(pattern.replace(/\*/g, '.*'), 'i');
             this.patternCache.set(pattern, regex);
             return regex.test(value);
         });
     }
-
 }
 
 export default Importer;
-
-
-
-

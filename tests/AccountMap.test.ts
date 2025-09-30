@@ -72,11 +72,9 @@ describe('AccountMap', () => {
         const accountMap = new AccountMap(budgetConfig, logger, actualApi);
 
         await expect(accountMap.loadFromConfig()).rejects.toThrow(
-            "Failed to resolve account mapping for budget 'budget-test'. MoneyMoney account reference 'missing-account' did not match any MoneyMoney accounts."
+            "MoneyMoney account reference 'missing-account' not found"
         );
-        expect(logger.error).toHaveBeenCalledWith(
-            "MoneyMoney account reference 'missing-account' did not match any MoneyMoney accounts."
-        );
+        expect(logger.error).toHaveBeenCalledWith("MoneyMoney account reference 'missing-account' not found");
     });
 
     it('throws when an Actual account reference is unresolved without filters', async () => {
@@ -95,11 +93,9 @@ describe('AccountMap', () => {
         const accountMap = new AccountMap(budgetConfig, logger, actualApi);
 
         await expect(accountMap.loadFromConfig()).rejects.toThrow(
-            "Failed to resolve account mapping for budget 'budget-test'. Actual account reference 'missing-actual' did not match any Actual accounts."
+            "Actual account reference 'missing-actual' not found"
         );
-        expect(logger.error).toHaveBeenCalledWith(
-            "Actual account reference 'missing-actual' did not match any Actual accounts."
-        );
+        expect(logger.error).toHaveBeenCalledWith("Actual account reference 'missing-actual' not found");
     });
 
     it('skips unresolved mappings outside the filtered account list', async () => {

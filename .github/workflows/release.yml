@@ -21,17 +21,8 @@ jobs:
             - name: Install dependencies
               run: npm install
 
-            - name: Lint with ESLint
-              run: npm run lint:eslint
-
-            - name: Complexity checks
-              run: npm run lint:complexity
-
-            - name: File length checks
-              run: npm run lint:file-length
-
-            - name: Lint with Prettier
-              run: npm run lint:prettier
+            - name: Lint all
+              run: npm run lint:all
 
             - name: Type check
               run: npm run typecheck

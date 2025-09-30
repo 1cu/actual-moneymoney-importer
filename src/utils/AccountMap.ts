@@ -112,7 +112,8 @@ export class AccountMap {
         this.actualAccounts = actualAccounts as Array<ActualAccount>;
 
         const parsedAccountMapping: Map<MonMonAccount, ActualAccount> = new Map();
-        const accountRefsFilter = options.accountRefs && options.accountRefs.length > 0 ? new Set(options.accountRefs) : null;
+        const accountRefsFilter =
+            options.accountRefs && options.accountRefs.length > 0 ? new Set(options.accountRefs) : null;
 
         for (const [moneyMoneyRef, actualRef] of Object.entries(accountMapping as Record<string, string>)) {
             this.processAccountMapping(moneyMoneyRef, actualRef, accountRefsFilter, parsedAccountMapping);
@@ -132,8 +133,14 @@ export class AccountMap {
         const actualAccount = this.getActualAccountByRef(actualRef);
         const requiresResolution = accountRefsFilter === null || accountRefsFilter.has(moneyMoneyRef);
 
-        if (requiresResolution && !moneyMoneyAccount) throw new Error(`MoneyMoney account reference '${moneyMoneyRef}' not found`);
-        if (requiresResolution && !actualAccount) throw new Error(`Actual account reference '${actualRef}' not found`);
+        if (requiresResolution && !moneyMoneyAccount) {
+            this.logger.error(`MoneyMoney account reference '${moneyMoneyRef}' not found`);
+            throw new Error(`MoneyMoney account reference '${moneyMoneyRef}' not found`);
+        }
+        if (requiresResolution && !actualAccount) {
+            this.logger.error(`Actual account reference '${actualRef}' not found`);
+            throw new Error(`Actual account reference '${actualRef}' not found`);
+        }
 
         if (moneyMoneyAccount && actualAccount) {
             parsedAccountMapping.set(moneyMoneyAccount, actualAccount);

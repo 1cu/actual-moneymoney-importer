@@ -2,9 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {
-    configSchema,
-} from '../src/utils/config.js';
+import { configSchema } from '../src/utils/config.js';
 
 const buildBaseConfig = () => ({
     payeeTransformation: {
@@ -368,4 +366,3 @@ describe('Config Validation', () => {
         });
     });
 });
-

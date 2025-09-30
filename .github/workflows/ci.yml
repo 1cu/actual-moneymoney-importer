@@ -17,14 +17,8 @@ jobs:
                   cache: npm
             - name: Install dependencies
               run: npm ci
-            - name: ESLint
-              run: npm run lint:eslint
-            - name: Complexity checks
-              run: npm run lint:complexity
-            - name: File length checks
-              run: npm run lint:file-length
-            - name: Prettier
-              run: npm run lint:prettier
+            - name: Lint all
+              run: npm run lint:all
             - name: Type check
               run: npm run typecheck
             - name: Build

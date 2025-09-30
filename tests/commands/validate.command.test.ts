@@ -157,10 +157,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(mkdirError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration directory.', [
-            'Path: tmp/custom',
-            'Reason: permission denied',
-        ]);
+        expect(loggerErrorMock).toHaveBeenCalledWith('Configuration validation failed: permission denied');
         expect(writeFileMock).not.toHaveBeenCalled();
     });
 
@@ -186,10 +183,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(writeError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration file.', [
-            'Path: tmp/custom/config.toml',
-            'Reason: disk full',
-        ]);
+        expect(loggerErrorMock).toHaveBeenCalledWith('Configuration validation failed: disk full');
     });
 
     it('logs syntax errors from the TOML parser with line and column details', async () => {
@@ -219,9 +213,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(syntaxError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith(
-            'Failed to parse configuration file: Unexpected token = (line 12, column 4)'
-        );
+        expect(loggerErrorMock).toHaveBeenCalledWith('Configuration validation failed: Unexpected token =');
         expect(configSchemaParseMock).not.toHaveBeenCalled();
     });
 

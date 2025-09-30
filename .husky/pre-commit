@@ -6,8 +6,6 @@ set -e
   echo "[husky] pre-commit checks bypassed by HUSKY_BYPASS_PRECOMMIT"; exit 0;
 }
 
-npm run lint:prettier
-npm run lint:eslint
-npm run lint:complexity
+npm run lint:all
 npm run typecheck
 npm test

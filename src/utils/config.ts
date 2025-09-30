@@ -6,7 +6,6 @@ import { formatISO, isValid as isValidDate, parseISO } from 'date-fns';
 import { ZodError, ZodIssueCode, z } from 'zod';
 import { DEFAULT_CONFIG_FILE } from './shared.js';
 
-
 const trimmedNonEmptyString = (message: string) => z.string().trim().min(1, message);
 
 const isoDateSchema = z
@@ -120,10 +119,6 @@ export interface LoadedConfig {
     config: Config;
 }
 
-
-
-
-
 export const getConfigFile = (argv: ArgumentsCamelCase): string => {
     if (argv.config) {
         const argvConfigFile = path.resolve(argv.config as string);
@@ -149,7 +144,7 @@ export const loadConfig = async (argv: ArgumentsCamelCase): Promise<LoadedConfig
     }
 
     try {
-        const configData = toml.parse(configContent);
+        const configData = toml.parse(configContent) as Record<string, unknown>;
         const config = configSchema.parse(configData);
 
         return {

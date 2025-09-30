@@ -33,7 +33,7 @@
 1. Run the quality gates from the repository root:
 
    ```bash
-   npm run lint:eslint && npm run lint:complexity && npm run lint:prettier && npm run typecheck && npm test
+   npm run lint:all && npm run typecheck && npm test
    ```
 
    Tests are meant to cover the most important paths; we do not require or aim
@@ -95,22 +95,21 @@ anti-patterns and examples.
 To prevent future complexity creep, the project enforces strict guardrails:
 
 ### File Length Limits
-- **Maximum file length**: 400 lines for TypeScript files
-- **Check command**: `npm run lint:file-length`
-- **Enforcement**: CI fails if any file exceeds the limit
+- **Source files** (`src/**/*.ts`): 400 lines max (utility files, core logic)
+- **Entry points & commands** (`src/index.ts`, `src/commands/*.ts`): 300 lines max (should be focused)
+- **Configuration files** (`src/utils/config-format.ts`): 200 lines max (should be simple)
+- **Test files** (`tests/**/*.ts`): 500 lines max (more lenient for test fixtures)
+- **Enforcement**: CI fails if any file exceeds its category limit
 
 ### Complexity Limits
 - **Cyclomatic complexity**: Maximum 15 per function
 - **Cognitive complexity**: Maximum 20 per function
-- **Check command**: `npm run lint:complexity`
+- **Check command**: `npm run lint:eslint`
 - **Enforcement**: CI fails if any function exceeds limits
 
 ### Quality Gates
 All changes must pass:
-- `npm run lint:eslint` - Code quality and style
-- `npm run lint:complexity` - Complexity limits
-- `npm run lint:file-length` - File length limits
-- `npm run lint:prettier` - Code formatting
+- `npm run lint:all` - All linting (ESLint with complexity and file length rules, Prettier)
 - `npm run typecheck` - TypeScript compilation
 - `npm test` - All tests passing
 
