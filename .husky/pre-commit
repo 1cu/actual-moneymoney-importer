@@ -9,5 +9,6 @@ set -e
 npm run lint:prettier
 npm run lint:eslint
 npm run lint:complexity
+npm run analyze:cyclomatic
 npm run typecheck
 npm test

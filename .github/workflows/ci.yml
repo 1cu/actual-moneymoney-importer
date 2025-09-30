@@ -35,6 +35,9 @@ jobs:
             - name: Complexity budget
               if: matrix.task == 'lint'
               run: npm run lint:complexity
+            - name: Cyclomatic complexity analysis
+              if: matrix.task == 'lint'
+              run: npm run analyze:cyclomatic
             - name: Prettier
               if: matrix.task == 'lint'
               run: npm run lint:prettier

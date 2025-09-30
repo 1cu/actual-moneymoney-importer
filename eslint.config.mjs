@@ -7,16 +7,16 @@ import tseslint from 'typescript-eslint';
 
 const { config: defineConfig, configs: tsConfigs } = tseslint;
 
-const enableComplexityRules = process.env.ENABLE_COMPLEXITY_RULES === 'true';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eslintProject = path.resolve(__dirname, 'tsconfig.eslint.json');
 
-const complexityRules = enableComplexityRules
-    ? {
-          complexity: ['error', { max: 40 }],
-          'sonarjs/cognitive-complexity': ['error', 60],
-      }
-    : {};
+const maxLinesRule = (max) => ['error', { max, skipBlankLines: true, skipComments: true }];
+
+const complexityRules = {
+    complexity: ['error', { max: 40 }],
+    'sonarjs/cognitive-complexity': ['error', 60],
+    'max-lines': maxLinesRule(400),
+};
 
 const sharedRules = {
     'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
@@ -68,6 +68,12 @@ export default defineConfig(
         },
     }),
     defineConfig({
+        files: ['src/commands/**/*.ts'],
+        rules: {
+            'max-lines': maxLinesRule(300),
+        },
+    }),
+    defineConfig({
         files: ['src/utils/config-format.ts'],
         rules: {
             '@typescript-eslint/no-unnecessary-condition': ['error', { allowConstantLoopConditions: false }],
@@ -102,11 +108,18 @@ export default defineConfig(
         },
         rules: {
             ...sharedRules,
+            'max-lines': maxLinesRule(500),
             '@typescript-eslint/no-unsafe-member-access': 'warn',
             '@typescript-eslint/no-unsafe-call': 'warn',
             '@typescript-eslint/no-unsafe-assignment': 'warn',
             '@typescript-eslint/no-unsafe-return': 'warn',
             '@typescript-eslint/no-unsafe-argument': 'warn',
+        },
+    }),
+    defineConfig({
+        files: ['src/utils/config.ts'],
+        rules: {
+            'max-lines': maxLinesRule(200),
         },
     })
 );

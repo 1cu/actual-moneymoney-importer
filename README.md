@@ -86,7 +86,7 @@ ready:
    all pass:
 
    ```bash
-   npm run lint:eslint && npm run lint:complexity && \
+   npm run lint:eslint && npm run lint:complexity && npm run analyze:cyclomatic && \
    npm run lint:prettier && npm run typecheck && npm test
    ```
 
@@ -339,8 +339,10 @@ For detailed workflows, see [CONTRIBUTING.md](./CONTRIBUTING.md). Helpful npm
 scripts when working on the project:
 
 - `npm run lint:eslint` – run ESLint against the TypeScript sources.
-- `npm run lint:complexity` – enforce the cyclomatic (max 40) and cognitive (max
-  60\) complexity budgets for the source tree.
+- `npm run lint:complexity` – enforce file-length caps (utilities ≤400 lines,
+  commands ≤300, configuration ≤200) and cognitive complexity ≤60.
+- `npm run analyze:cyclomatic` – fail fast when any file exceeds the cyclomatic
+  complexity limit of 40.
 - `npm run lint:prettier` – check formatting with Prettier.
 - `npm run typecheck` – perform a strict TypeScript type check without emitting
   files.
@@ -352,8 +354,9 @@ Run `mdformat <files>` locally when updating docs to keep diffs clean.
 
 The repository includes Husky hooks to keep the working tree clean:
 
-- `pre-commit` runs `npm run lint:prettier`, `npm run lint:eslint`, and
-  `npm run lint:complexity` to block formatting, lint, or complexity violations.
+- `pre-commit` runs `npm run lint:prettier`, `npm run lint:eslint`,
+  `npm run lint:complexity`, and `npm run analyze:cyclomatic` to block
+  formatting, lint, or complexity violations.
 - `pre-push` runs the quality gates so that pushes only succeed when the entire
   local CI suite is green.
 

@@ -26,7 +26,7 @@ up, run the quality checks, and collaborate smoothly with the team.
 1. Run the quality gates to confirm your environment is ready:
 
    ```bash
-   npm run lint:eslint && npm run lint:complexity && npm run lint:prettier && npm run typecheck && npm test
+   npm run lint:eslint && npm run lint:complexity && npm run analyze:cyclomatic && npm run lint:prettier && npm run typecheck && npm test
    ```
 
    This runs the same linting, type checking, build, and test scripts that run in
@@ -42,7 +42,7 @@ up, run the quality checks, and collaborate smoothly with the team.
 - Re-run the quality gates to verify linting, formatting, type safety, builds, and tests:
 
   ```bash
-  npm run lint:eslint && npm run lint:complexity && npm run lint:prettier && npm run typecheck && npm test
+  npm run lint:eslint && npm run lint:complexity && npm run analyze:cyclomatic && npm run lint:prettier && npm run typecheck && npm test
   ```
 
 - Update documentation alongside behaviour changes. Configuration updates
@@ -61,7 +61,8 @@ up, run the quality checks, and collaborate smoothly with the team.
 | Script | Purpose |
 | --------------------------- | ------------------------------------------------------------------------------------- |
 | `npm run lint:eslint` | Run ESLint across `src/`, `tests/`, and TypeScript config files. |
-| `npm run lint:complexity` | Enforce the cyclomatic (max 40) and cognitive (max 60) complexity budgets. |
+| `npm run lint:complexity` | Enforce line-count caps (utilities ≤400, commands ≤300, configuration ≤200) and cognitive complexity ≤60. |
+| `npm run analyze:cyclomatic` | Fail when any file exceeds the cyclomatic complexity limit of 40. |
 | `npm run lint:prettier` | Check formatting with Prettier across the repository (excluding generated artifacts). |
 | `npm run lint:prettier:fix` | Automatically format files with Prettier using the shared rules. |
 | `npm run typecheck` | Perform a strict TypeScript type check without emitting files. |
