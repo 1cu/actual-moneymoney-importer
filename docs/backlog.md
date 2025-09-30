@@ -489,6 +489,11 @@ end-to-end CLI tests being available.
 
 - **Epic Goal:** Build a shared roadmap for shrinking the codebase's highest-friction modules without regressing behaviour or losing observability.
 - **Business Value / User Benefit:** Targeted refactors shorten ramp-up time for new contributors, reduce bug surface area, and unblock downstream feature work that depends on clearer module boundaries.
+- **Key Learnings from Stories 14.2-14.3:**
+  - **DELETE over ABSTRACT** - Removing over-engineered systems entirely works better than refactoring them
+  - **SIMPLIFY over OPTIMIZE** - Simple approaches often work better than complex ones
+  - **QUESTION every abstraction** - Many "helpers" and "utilities" are actually over-engineering
+  - **Achieved 670+ lines removed** through deletion and simplification rather than extraction
 - **Success Criteria:**
   - Complexity audit captures baseline metrics (file length, cyclomatic complexity, runtime hot spots) for `ActualApi`, `Importer`, config helpers, and shared test utilities.
   - Follow-up stories land incremental refactors with unchanged public behaviour and green regression suites.
@@ -550,15 +555,16 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want our shared fixtures and helpers to stay lean so that writing new coverage is fast and intention-revealing.
 - **Dependencies:** 14.1.
 - **Acceptance Criteria:**
-  - Catalogue helpers/fixtures with high churn or indirection; agree on keep/simplify/delete actions.
-  - Replace overly abstract helpers with inline utilities where it lowers cognitive load without duplicating large blocks.
-  - Ensure CLI and importer integration suites remain green with updated fixtures.
-  - Document guidance in `tests/AGENTS.md` reflecting the streamlined approach.
+  - **DELETE** over-engineered test infrastructure (361-line cli-mock-loader.mjs, 174-line cli.ts)
+  - Replace complex mock loaders with simple inline mocks where possible
+  - Remove unnecessary test helpers that add more complexity than value
+  - Ensure CLI and importer integration suites remain green with simplified fixtures
+  - Document guidance in `tests/AGENTS.md` reflecting the streamlined approach
 - **Tasks:**
-  - 14.4.a Identify candidates (e.g., complex mock loaders, timer helpers) using audit output.
-  - 14.4.b Prototype simplified fixtures on one suite to validate ergonomics.
-  - 14.4.c Roll out agreed changes incrementally, capturing before/after diff sizes in PR notes.
-  - 14.4.d Update contributor docs with new expectations.
+  - 14.4.a **DELETE** cli-mock-loader.mjs (361 lines) - replace with simple mocks
+  - 14.4.b **SIMPLIFY** cli.ts (174 lines) - remove complex build management
+  - 14.4.c **DELETE** unnecessary test helpers - keep only essential ones
+  - 14.4.d Update contributor docs with simplified testing approach
 
 ### Story 14.5 – Dependency and import hygiene
 
@@ -566,14 +572,14 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want a lightweight dependency surface so that updates stay manageable and security scans remain quiet.
 - **Dependencies:** 14.1 findings and any refactors that introduce new modules.
 - **Acceptance Criteria:**
-  - Produce an inventory of runtime and dev dependencies highlighting potential removals or consolidations.
-  - Replace custom utilities with built-ins where ergonomics do not regress (document exceptions).
-  - Ensure any dependency removals include changelog/backlog notes and regression tests that cover the new path.
-  - Keep `npm audit` clean; capture results in the PR description.
+  - **AUDIT** current dependencies - many may be unnecessary after test infrastructure simplification
+  - **REMOVE** unused dev dependencies (semantic-release, complex tooling)
+  - Replace custom utilities with built-ins where ergonomics do not regress (document exceptions)
+  - Keep `npm audit` clean; capture results in the PR description
 - **Tasks:**
-  - 14.5.a Review `package.json` and `package-lock.json` for unused packages using depcheck or similar tooling.
-  - 14.5.b Simplify import graphs (e.g., prefer relative paths, avoid barrel cycles) while keeping ESM extension requirements intact.
-  - 14.5.c Update docs/tests to reflect dependency changes.
+  - 14.5.a **AUDIT** package.json - remove semantic-release, simplify dev dependencies
+  - 14.5.b **SIMPLIFY** import graphs - remove complex test infrastructure imports
+  - 14.5.c **REMOVE** unnecessary tooling - focus on essential dependencies only
 
 ### Story 14.6 – Lock in complexity guardrails
 
@@ -581,15 +587,15 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want automation that catches complexity regressions early so that future contributors can safely iterate without manual policing.
 - **Dependencies:** Outputs from Stories 14.1–14.5.
 - **Acceptance Criteria:**
-  - Extend lint/type/test automation with clear thresholds (file length, cyclomatic complexity, dependency circularity) and document how to react to failures, including the temporary strict `ENABLE_COMPLEXITY_RULES` + comment-skipping `max-lines` profile trialled in Story 14.1.
-  - Add lightweight contributor tooling (e.g., npm scripts, Husky hooks) that surface warnings without blocking legitimate work-in-progress, offering an opt-in strict mode that reuses the Story 14.1 configuration bundle.
-  - Update AGENTS.md and README contributor sections describing the guardrails, how to enable the strict profile locally, and how to request exceptions.
-  - Capture metrics after rollout to confirm the tooling runs within acceptable CI time.
+  - **SIMPLIFY** complexity rules - remove `ENABLE_COMPLEXITY_RULES` environment variable (already done in 14.2)
+  - **FOCUS** on essential guardrails: file length limits, basic complexity checks
+  - **REMOVE** over-engineered complexity tooling - keep it simple and fast
+  - Update AGENTS.md and README contributor sections describing the simplified guardrails
 - **Tasks:**
-  - 14.6.a Evaluate existing scripts (`npm run lint:complexity`, strict `max-lines` run, cyclomatic scan) for coverage gaps and propose enhancements.
-  - 14.6.b Add optional local tooling (pre-commit or `npm run check:complexity`) that chains the Story 14.1 strict profile with default lint/type/test commands, documenting opt-in usage.
-  - 14.6.c Update CI workflows if new checks are introduced, ensuring caching keeps runtimes reasonable and clarifying when to toggle the strict profile.
-  - 14.6.d Publish guidance for handling false positives or legitimate exceptions, referencing the Story 14.1 metrics for context.
+  - 14.6.a **SIMPLIFY** existing complexity scripts - remove complex tooling
+  - 14.6.b **FOCUS** on essential checks: file length, basic linting, type checking
+  - 14.6.c **REMOVE** complex CI workflows - keep simple and fast
+  - 14.6.d **DOCUMENT** simplified approach - emphasize deletion over refactoring
 
 ### Epic 14 Risks & Mitigations
 
