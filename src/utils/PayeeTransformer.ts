@@ -106,119 +106,37 @@ class PayeeTransformer {
     }
 
     public async transformPayees(payeeList: string[]): Promise<Record<string, string> | null> {
-        const prompt = this.generatePrompt();
-
-        if (payeeList.length === 0) {
-            this.logger.debug('No payees to transform. Returning empty object.');
-            return {};
-        }
+        if (payeeList.length === 0) return {};
 
         const uniquePayees = Array.from(new Set(payeeList));
         const uncachedPayees = uniquePayees.filter((payee) => !this.transformationCache.has(payee));
 
-        this.logger.debug('Original payee names:', this.formatPayeeListForLog(uniquePayees));
-
         if (uncachedPayees.length === 0) {
-            this.logger.debug('All payees resolved from cache. Skipping OpenAI request.');
             return this.buildResponse(uniquePayees);
         }
 
-        this.logger.debug(`Starting payee transformation...`, [
-            `Payees requested: ${uniquePayees.length}`,
-            `Using cache for: ${uniquePayees.length - uncachedPayees.length}`,
-            `Model: ${this.config.openAiModel}`,
-        ]);
-
         try {
             const model = await this.getConfiguredModel();
+            const response = await this.makeOpenAIRequest(this.generatePrompt(), uncachedPayees, model);
 
-            const response = await this.makeOpenAIRequest(prompt, uncachedPayees, model);
-
-            if (!response || !response.choices[0]?.message?.content) {
+            if (!response?.choices[0]?.message?.content) {
                 this.logger.error('Invalid response from OpenAI API');
                 return null;
             }
 
-            const finishReason = response.choices[0]?.finish_reason;
-            if (finishReason && finishReason !== 'stop') {
-                this.logger.error(`OpenAI response ended prematurely (finish_reason: ${finishReason}).`);
-                if (!this.shouldMaskPayeeLogs()) {
-                    const raw = response.choices[0].message.content ?? '';
-                    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-                    const hex = Array.from(new Uint8Array(hash))
-                        .map((b) => b.toString(16).padStart(2, '0'))
-                        .join('');
-                    this.logger.debug(
-                        `Raw response content may be truncated. contentSHA256=${hex}, length=${raw.length}`
-                    );
-                }
-                return null;
-            }
-
             const output = response.choices[0].message.content;
+            const parsed = JSON.parse(output) as Record<string, string>;
 
-            try {
-                const parsed = JSON.parse(output) as unknown;
-                if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-                    throw new Error('Transformed payee response is not an object');
+            // Simple validation and caching
+            for (const [original, transformed] of Object.entries(parsed)) {
+                if (typeof transformed === 'string') {
+                    this.transformationCache.set(original, transformed);
                 }
-
-                const transformedPayees = parsed as {
-                    [key: string]: string;
-                };
-
-                // Check for empty payload
-                if (Object.keys(transformedPayees).length === 0) {
-                    this.logger.warn('OpenAI returned empty payload, falling back to original payee names', [
-                        'This may indicate the model failed to process the request properly',
-                    ]);
-                    return this.buildResponse(uniquePayees);
-                }
-
-                // Check for duplicate keys by parsing the raw JSON string
-                // This is necessary because JSON.parse will silently use the last duplicate key
-                const rawKeys = this.extractKeysFromJsonString(output);
-                const uniqueRawKeys = new Set(rawKeys);
-                if (rawKeys.length !== uniqueRawKeys.size) {
-                    this.logger.warn('OpenAI response contains duplicate keys, falling back to original payee names', [
-                        'This indicates malformed response structure',
-                    ]);
-                    return this.buildResponse(uniquePayees);
-                }
-
-                const MAX_CACHE_ENTRIES = 5000; // tune as needed
-                for (const [original, transformed] of Object.entries(transformedPayees)) {
-                    if (typeof transformed === 'string') {
-                        if (this.transformationCache.size >= MAX_CACHE_ENTRIES) {
-                            // Evict the oldest entry (Map preserves insertion order)
-                            const oldestKey = this.transformationCache.keys().next().value as string | undefined;
-                            if (oldestKey) {
-                                this.transformationCache.delete(oldestKey);
-                            }
-                        }
-                        this.transformationCache.set(original, transformed);
-                    }
-                }
-
-                const finalResult = this.buildResponse(uniquePayees);
-
-                const mappingForLog = this.formatPayeeMappingForLog(finalResult);
-                this.logger.debug('Payee transformation completed:', ['Original → Transformed:', ...mappingForLog]);
-
-                return finalResult;
-            } catch (parseError) {
-                this.logger.error(
-                    `Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`
-                );
-                if (this.shouldMaskPayeeLogs()) {
-                    this.logger.debug('Raw response omitted to respect payee masking configuration.');
-                } else {
-                    this.logger.debug(`Raw response: ${output}`);
-                }
-                return null;
             }
+
+            return this.buildResponse(uniquePayees);
         } catch (error) {
-            this.handleError(error);
+            this.logger.error(`Payee transformation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             return null;
         }
     }
@@ -226,165 +144,60 @@ class PayeeTransformer {
     private async makeOpenAIRequest(
         prompt: string,
         payeeList: string[],
-        model: string,
-        retries = 3
+        model: string
     ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
-        const capabilities = this.getModelCapabilities(model);
+        const requestConfig: ExtendedChatCompletionCreateParams = {
+            model,
+            messages: [
+                { role: 'system', content: prompt },
+                { role: 'user', content: payeeList.join('\n') },
+            ],
+            response_format: {
+                type: 'json_object',
+            },
+        };
 
-        for (let attempt = 1; attempt <= retries; attempt++) {
-            try {
-                const requestConfig: ExtendedChatCompletionCreateParams = {
-                    model,
-                    messages: [
-                        { role: 'system', content: prompt },
-                        { role: 'user', content: payeeList.join('\n') },
-                    ],
-                    response_format: {
-                        type: 'json_object',
-                    },
-                };
-
-                // Add model-specific parameters based on capabilities
-                if (capabilities.supportsTemperature) {
-                    const t = this.config.modelConfig?.temperature ?? capabilities.defaultTemperature;
-                    requestConfig.temperature = Math.min(2, Math.max(0, t));
-                }
-
-                if (capabilities.supportsMaxTokens && this.config.modelConfig?.maxTokens !== undefined) {
-                    const requestedMaxTokens = this.config.modelConfig.maxTokens;
-                    requestConfig.max_tokens = Math.min(4096, Math.max(64, requestedMaxTokens));
-                }
-
-                this.logger.debug(`Making OpenAI request (attempt ${attempt})`, [
-                    `Model: ${model}`,
-                    `Temperature: ${requestConfig.temperature || 'default'}`,
-                    `Max tokens: ${requestConfig.max_tokens || 'default'}`,
-                ]);
-
-                const response = await this.openai.chat.completions.create(requestConfig);
-                return response;
-            } catch (error) {
-                if (attempt === retries) throw error;
-
-                // Only retry on specific errors
-                if (error instanceof Error && 'status' in error) {
-                    const status = (error as { status?: number }).status;
-                    if (status && (status === 429 || status >= 500)) {
-                        this.logger.debug(`Attempt ${attempt} failed, retrying... (${status})`);
-                        // Exponential backoff with jitter
-                        const base = 1000 * 2 ** (attempt - 1);
-                        const delay = Math.floor(base * (0.5 + Math.random())); // 50–150% jitter
-                        await new Promise((resolve) => setTimeout(resolve, delay));
-                        continue;
-                    }
-                }
-                throw error;
-            }
+        // Simple parameter handling
+        if (this.config.modelConfig?.temperature !== undefined) {
+            requestConfig.temperature = Math.min(2, Math.max(0, this.config.modelConfig.temperature));
         }
 
-        throw new Error('Failed to complete OpenAI request');
+        if (this.config.modelConfig?.maxTokens !== undefined) {
+            requestConfig.max_tokens = Math.min(4096, Math.max(64, this.config.modelConfig.maxTokens));
+        }
+
+        return await this.openai.chat.completions.create(requestConfig);
     }
 
-    private getModelCapabilities(model: string): ModelCapabilities {
-        if (this.modelCapabilities.has(model)) {
-            return this.modelCapabilities.get(model)!;
-        }
-
-        // Determine model capabilities based on model name patterns
-        const capabilities: ModelCapabilities = {
+    private getModelCapabilities(_model: string): ModelCapabilities {
+        return {
             supportsTemperature: true,
             supportsMaxTokens: true,
             defaultTemperature: 0.7,
         };
-
-        // GPT-4o/GPT-5 models expose full temperature control (0.0-2.0) and
-        // default closer to 0.7 for more creative responses. Older GPT-4 and
-        // GPT-3.5 series models default to the same midpoint but allow the
-        // full range to be configured explicitly when needed.
-        if (
-            model.includes('gpt-4o') ||
-            model.includes('gpt-5') ||
-            model.includes('gpt-4') ||
-            model.includes('gpt-3.5')
-        ) {
-            capabilities.defaultTemperature = 0.7;
-        }
-
-        this.modelCapabilities.set(model, capabilities);
-        return capabilities;
     }
 
     private async getConfiguredModel(): Promise<string> {
         if (this.config.skipModelValidation) {
-            this.logger.debug('Skipping OpenAI model validation.');
             return this.config.openAiModel;
         }
 
         const availableModels = await this.getAvailableModels();
-
         if (!availableModels.includes(this.config.openAiModel)) {
-            this.logger.error(
-                `The specified model '${this.config.openAiModel}' is invalid. The following models are available:`,
-                this.summarizeLogEntries(availableModels)
-            );
-            throw new Error('Invalid OpenAI model specified.');
+            throw new Error(`Invalid OpenAI model: ${this.config.openAiModel}`);
         }
 
         return this.config.openAiModel;
     }
 
     private async getAvailableModels(): Promise<Array<string>> {
-        if (this.modelListInitialized && this.availableModels) {
+        if (this.availableModels) {
             return this.availableModels;
         }
 
-        const now = Date.now();
-
-        const inMemoryCache = PayeeTransformer.modelCache;
-        if (inMemoryCache && inMemoryCache.expiresAt > now) {
-            this.logger.debug('Using in-memory OpenAI model cache.');
-            this.availableModels = inMemoryCache.models;
-            this.modelListInitialized = true;
-            return this.availableModels;
-        }
-
-        const diskCache = await PayeeTransformer.readModelCacheFromDisk(this.logger);
-        if (diskCache && diskCache.expiresAt > now) {
-            this.logger.debug('Loaded OpenAI model list from disk cache.');
-            PayeeTransformer.modelCache = diskCache;
-            this.availableModels = diskCache.models;
-            this.modelListInitialized = true;
-            return this.availableModels;
-        }
-
-        this.logger.debug('Fetching OpenAI model list from OpenAI API...');
-        let models: string[] = [];
-        try {
-            const response = await this.openai.models.list();
-            models = response.data.map((m) => m.id);
-        } catch (err) {
-            const e = err as { name?: string; message?: string; stack?: string };
-            this.logger.error('Failed to fetch OpenAI model list', [
-                `name: ${e?.name ?? 'Unknown'}`,
-                `message: ${e?.message ?? String(err)}`,
-                ...(e?.stack ? [`stack: ${e.stack.split('\n')[0]}`] : []),
-            ]);
-            throw err;
-        }
-        const cache: ModelCache = {
-            models,
-            expiresAt: now + MODEL_CACHE_TTL_MS,
-        };
-
-        PayeeTransformer.modelCache = cache;
-        this.availableModels = models;
-        this.modelListInitialized = true;
-
-        await PayeeTransformer.writeModelCacheToDisk(cache);
-
-        this.logger.debug(`Found ${models.length} available models.`);
-
-        return models;
+        const response = await this.openai.models.list();
+        this.availableModels = response.data.map((m) => m.id);
+        return this.availableModels;
     }
 
     private generatePrompt(): string {

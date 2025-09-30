@@ -621,7 +621,7 @@ end-to-end CLI tests being available.
 
 ### Story 14.8 – Simplify ActualApi loadBudget complexity
 
-- **Status:** ⬜ Ready for grooming
+- **Status:** ✅ Done
 - **User Story:** As a maintainer, I want the ActualApi.loadBudget method to be simple and focused so that budget loading is easy to understand and debug.
 - **Dependencies:** 14.7.
 - **Acceptance Criteria:**
@@ -630,11 +630,12 @@ end-to-end CLI tests being available.
   - **SIMPLIFY** to essential budget loading functionality
   - **REMOVE** over-engineered error handling and retry logic while preserving functionality
   - **FOCUS** on core budget loading only
+- **Evidence:** Dramatically simplified ActualApi loadBudget complexity. Reduced file length from 842 to 745 lines (-97 lines, ~12% reduction). Reduced complexity from 26 to under 15 (achieved target). Removed complex retry logic with attempt tracking and error pattern matching. Removed complex budget directory resolution with fallback logic. Removed over-engineered directory access and metadata validation. Simplified to direct budget download, resolution, validation, and loading. Maintained all core functionality.
 - **Tasks:**
-  - 14.8.a **ANALYZE** loadBudget method - identify over-engineered sections
-  - 14.8.b **DELETE** complex error handling and retry logic - keep only essential functionality
-  - 14.8.c **SIMPLIFY** to core budget loading - remove unnecessary complexity
-  - 14.8.d **VERIFY** complexity limits pass - ensure method is under 15 complexity
+  - 14.8.a ✅ **ANALYZED** loadBudget method - identified over-engineered sections
+  - 14.8.b ✅ **DELETED** complex error handling and retry logic - kept only essential functionality
+  - 14.8.c ✅ **SIMPLIFIED** to core budget loading - removed unnecessary complexity
+  - 14.8.d ✅ **VERIFIED** complexity limits pass - reduced from 26 to under 15
 
 ### Story 14.9 – Simplify PayeeTransformer complexity and file length
 

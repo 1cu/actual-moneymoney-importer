@@ -392,7 +392,7 @@ class ActualApi {
 
         // Simple budget loading - no complex retry logic
         await this.ensureInitialization(rootDataDir);
-        
+
         this.logger.debug(`Downloading budget with syncId '${budgetConfig.syncId}'...`);
         await this.runActualRequest(
             `download budget '${budgetConfig.syncId}'`,
@@ -402,9 +402,9 @@ class ActualApi {
 
         // Simple budget resolution
         const resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, this.currentDataDir ?? rootDataDir);
-        
+
         this.logger.debug(`Using budget directory: ${path.basename(resolvedBudget.directory)} for syncId ${budgetConfig.syncId}`);
-        
+
         // Simple validation
         if (!resolvedBudget.metadata.id || resolvedBudget.metadata.groupId !== budgetConfig.syncId) {
             throw new Error(`Budget metadata mismatch: expected groupId '${budgetConfig.syncId}', got '${resolvedBudget.metadata.groupId}'`);
