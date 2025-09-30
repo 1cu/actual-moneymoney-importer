@@ -9,97 +9,37 @@ import { EXAMPLE_CONFIG } from '../utils/shared.js';
 
 const handleValidate = async (argv: ArgumentsCamelCase) => {
     const configPath = await getConfigFile(argv);
-
     const logLevel = (argv.logLevel ?? LogLevel.INFO) as number;
     const structuredLogs = Boolean(argv.structuredLogs);
     const logger = new Logger(logLevel, { structuredLogs });
 
     logger.info(`Current configuration file: ${configPath}`);
 
-    let configContent: string;
     try {
-        logger.debug(`Reading configuration file...`);
-        configContent = await fs.readFile(configPath, 'utf-8');
+        const configContent = await fs.readFile(configPath, 'utf-8');
+        const configData = toml.parse(configContent);
+        configSchema.parse(configData);
+        logger.info('Configuration is valid.');
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-            const targetDirectory = path.dirname(configPath);
-
-            logger.debug(`Ensuring configuration directory exists: ${targetDirectory}`);
-            try {
-                await fs.mkdir(targetDirectory, { recursive: true });
-            } catch (mkdirError) {
-                const mkdirMessage = mkdirError instanceof Error ? mkdirError.message : String(mkdirError);
-                logger.error('Failed to create configuration directory.', [
-                    `Path: ${targetDirectory}`,
-                    `Reason: ${mkdirMessage}`,
-                ]);
-                throw mkdirError;
-            }
-
-            logger.debug('Writing default configuration template...');
-            try {
-                await fs.writeFile(configPath, EXAMPLE_CONFIG, {
-                    encoding: 'utf-8',
-                    mode: 0o600,
-                });
-            } catch (writeError) {
-                const writeMessage = writeError instanceof Error ? writeError.message : String(writeError);
-                logger.error('Failed to create configuration file.', [
-                    `Path: ${configPath}`,
-                    `Reason: ${writeMessage}`,
-                ]);
-                throw writeError;
-            }
-
-            logger.warn('Configuration file not found.');
-            logger.info(
-                `Created default configuration file at: ${configPath}. Please edit it with your preferred settings.`
-            );
-
+            // Create default config
+            await fs.mkdir(path.dirname(configPath), { recursive: true });
+            await fs.writeFile(configPath, EXAMPLE_CONFIG, { encoding: 'utf-8', mode: 0o600 });
+            logger.warn('Configuration file not found. Created default configuration file.');
             return;
         }
-        throw error;
-    }
 
-    logger.info('Validating configuration...');
-
-    try {
-        logger.debug(`Parsing configuration file...`);
-        const configData = toml.parse(configContent);
-
-        logger.debug(`Parsing configuration schema...`);
-        configSchema.parse(configData);
-    } catch (e) {
-        if (e instanceof z.ZodError) {
+        if (error instanceof z.ZodError) {
             logger.error('Configuration file is invalid:');
-            for (const issue of e.issues) {
+            for (const issue of error.issues) {
                 const issuePath = issue.path.length ? issue.path.join('.') : '<root>';
                 logger.error(`Code ${issue.code} at path [${issuePath}]: ${issue.message}`);
             }
-        } else if (e instanceof Error && e.name === 'SyntaxError') {
-            const line =
-                typeof (e as unknown as { line?: number }).line === 'number'
-                    ? (e as unknown as { line: number }).line
-                    : undefined;
-            const column =
-                typeof (e as unknown as { column?: number }).column === 'number'
-                    ? (e as unknown as { column: number }).column
-                    : undefined;
-            const pos = line && column ? ` (line ${line}, column ${column})` : '';
-
-            logger.error(`Failed to parse configuration file: ${e.message}${pos}`);
         } else {
-            logger.error('An unexpected error occurred.', [e instanceof Error ? e.message : String(e)]);
+            logger.error(`Configuration validation failed: ${error instanceof Error ? error.message : String(error)}`);
         }
-
-        if (e instanceof Error) {
-            throw e;
-        }
-
-        throw new Error(`Configuration validation failed: ${String(e)}`);
+        throw error;
     }
-
-    logger.info('Configuration file is valid.');
 };
 
 export default {

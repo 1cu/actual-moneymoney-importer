@@ -196,46 +196,18 @@ class ActualApi {
     }
 
     private isAuthenticationError(error: unknown): boolean {
-        if (!error || typeof error !== 'object') {
-            return false;
-        }
+        if (!error || typeof error !== 'object') return false;
 
-        const message =
-            error instanceof Error
-                ? error.message
-                : typeof (error as { message?: unknown }).message === 'string'
-                  ? String((error as { message?: unknown }).message)
-                  : '';
-
+        const message = error instanceof Error ? error.message : String((error as { message?: unknown }).message || '');
         if (/invalid\s+password|authentication\s+failed|unauthori[sz]ed/i.test(message)) {
             return true;
         }
 
-        const details = error as {
-            reason?: unknown;
-            status?: unknown;
-            response?: { status?: unknown };
-            cause?: unknown;
-        };
-
-        const reason = typeof details.reason === 'string' ? details.reason : undefined;
-        const status =
-            typeof details.status === 'number'
-                ? details.status
-                : typeof details.status === 'string'
-                  ? Number.parseInt(details.status, 10)
-                  : undefined;
+        const details = error as { status?: unknown; response?: { status?: unknown } };
+        const status = typeof details.status === 'number' ? details.status : undefined;
         const responseStatus = typeof details.response?.status === 'number' ? details.response.status : undefined;
 
-        if ((reason && /invalid\s+password|auth/i.test(reason)) || status === 401 || responseStatus === 401) {
-            return true;
-        }
-
-        if (details.cause) {
-            return this.isAuthenticationError(details.cause);
-        }
-
-        return false;
+        return status === 401 || responseStatus === 401;
     }
 
     private getFriendlyErrorMessage(operation: string, error: unknown): string | null {

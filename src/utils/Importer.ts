@@ -32,35 +32,19 @@ class Importer {
         to?: Date;
         isDryRun?: boolean;
     }) {
-        const importStartTime = Date.now();
         const fromDate = from ?? subMonths(new Date(), 1);
-        const earliestImportDate = this.budgetConfig.earliestImportDate
-            ? new Date(this.budgetConfig.earliestImportDate)
-            : null;
+        const earliestImportDate = this.budgetConfig.earliestImportDate ? new Date(this.budgetConfig.earliestImportDate) : null;
         const importDate = earliestImportDate && earliestImportDate > fromDate ? earliestImportDate : fromDate;
 
-        if (earliestImportDate && earliestImportDate > fromDate) {
-            this.logger.warn(
-                `Earliest import date is set to ${format(earliestImportDate, DATE_FORMAT)}. ` +
-                `Using this date instead of ${format(fromDate, DATE_FORMAT)}.`
-            );
-        }
-
-        const fetchStartTime = Date.now();
-        let monMonTransactions = await getTransactions({
-            from: importDate,
-            to: toDate,
-        });
+        let monMonTransactions = await getTransactions({ from: importDate, to: toDate });
         monMonTransactions = this.sortTransactions(monMonTransactions);
-        const fetchEndTime = Date.now();
-        this.logger.debug(`MoneyMoney transaction fetch completed in ${fetchEndTime - fetchStartTime}ms`);
 
         if (monMonTransactions.length === 0) {
             this.logger.info(`No transactions found in MoneyMoney since ${format(importDate, DATE_FORMAT)}.`);
             return;
         }
 
-        // Filter transactions
+        // Simple filtering
         if (!this.config.import.importUncheckedTransactions) {
             monMonTransactions = monMonTransactions.filter((t) => t.booked);
         }
@@ -70,30 +54,14 @@ class Importer {
             );
         }
 
-        this.logger.debug(
-            `Found ${monMonTransactions.length} total transactions in MoneyMoney since ${format(
-                importDate,
-                DATE_FORMAT
-            )}`
-        );
-
-        const monMonTransactionMap = monMonTransactions.reduce(
-            (acc, transaction) => {
-                (acc[transaction.accountUuid] ??= []).push(transaction);
-
-                return acc;
-            },
-            {} as Record<string, MonMonTransaction[]>
-        );
-
-        for (const [monMonAccountUuid, accountTransactions] of Object.entries(monMonTransactionMap)) {
-            this.logger.debug(`Found ${accountTransactions.length} transactions for account ${monMonAccountUuid}`);
-        }
+        const monMonTransactionMap = monMonTransactions.reduce((acc, transaction) => {
+            (acc[transaction.accountUuid] ??= []).push(transaction);
+            return acc;
+        }, {} as Record<string, MonMonTransaction[]>);
 
         const accountMapping = this.accountMap.getMap(accountRefs);
         let hasNewTransactions = false;
 
-        // Process each account
         for (const [monMonAccount, actualAccount] of accountMapping) {
             const accountTransactions = monMonTransactionMap[monMonAccount.uuid] ?? [];
             const processed = await this.processAccountTransactions(
@@ -106,9 +74,6 @@ class Importer {
             );
             if (processed) hasNewTransactions = true;
         }
-
-        const totalImportTime = Date.now() - importStartTime;
-        this.logger.debug(`Total import process completed in ${totalImportTime}ms`);
 
         if (!hasNewTransactions) {
             this.logger.info('No new transactions to import.');
