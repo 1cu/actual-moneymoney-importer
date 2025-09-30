@@ -495,7 +495,7 @@ end-to-end CLI tests being available.
   - Config system simplified by removing excessive default decision tracking and complex format utilities.
   - Test infrastructure streamlined by removing over-detailed fixtures and complex mock builders.
   - Dependencies reduced by removing unnecessary utility libraries and simplifying imports.
-- **Implementation Order:** 14.1 ➜ 14.2 ➜ 14.3 ➜ 14.4 ➜ 14.5.
+- **Implementation Order:** 14.1 ➜ 14.2 ➜ 14.3 ➜ 14.4 ➜ 14.5 ➜ 14.6.
 
 ### Story 14.1 – Simplify ActualApi.ts console patching and error handling
 
@@ -578,6 +578,31 @@ end-to-end CLI tests being available.
   - 14.5.d Update package.json to remove unused dependencies.
   - 14.5.e Update tests to reflect simplified dependencies.
   - 14.5.f Request code review.
+
+### Story 14.6 – Implement automated complexity prevention tooling
+
+- **User Story:** As a maintainer, I want automated tooling to prevent complexity creep so that the codebase stays maintainable and new contributors can't accidentally introduce over-engineering.
+- **Dependencies:** 14.1, 14.2, 14.3, 14.4, 14.5.
+- **Acceptance Criteria:**
+  - ESLint rules enforce file size limits (utilities max 400 lines, commands max 300 lines).
+  - Pre-commit hooks prevent commits that exceed complexity thresholds.
+  - Automated checks detect over-abstraction patterns and suggest simplifications.
+  - CI/CD pipeline fails when complexity metrics exceed agreed limits.
+  - Documentation includes complexity prevention guidelines and tooling usage.
+- **Tasks:**
+  - 14.6.a Configure ESLint rules for file size limits and cyclomatic complexity.
+  - 14.6.b Add pre-commit hooks to check file sizes and complexity metrics.
+  - 14.6.c Create automated detection for common over-engineering patterns:
+    - Complex caching with TTL and disk persistence
+    - Multiple fallback layers in error handling
+    - Generic abstractions that hide complexity
+    - Over-mocking in tests
+    - Complex configuration with too many flags
+  - 14.6.d Set up CI/CD checks that fail on complexity violations.
+  - 14.6.e Add complexity prevention documentation to AGENTS.md files.
+  - 14.6.f Create developer guidelines for avoiding over-engineering.
+  - 14.6.g Implement automated suggestions for simplifying complex code.
+  - 14.6.h Request code review.
 
 ### Epic 14 Risks & Mitigations
 
