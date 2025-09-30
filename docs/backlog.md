@@ -424,7 +424,7 @@ end-to-end CLI tests being available.
 ### Story 8.1 – Refactor retry/resolution logic into reusable helpers
 
 - **Complexity:** 8 pts
-- **Status:** ⬜ Not started
+- **Status:** ✅ Done
 - **Current Behaviour:** Budget directory resolution logic is implemented in `ActualApi.resolveBudgetDataDir()` with defensive error handling and structured debug logs. The resolver scans `metadata.json` files and provides clear error messages when no `syncId` match is found. However, this logic is tightly coupled within `ActualApi` and not easily reusable across other commands.
 - **Assessment:** The resolution logic is well-implemented with good error handling, but it's not modularized for reuse. The current implementation includes proper logging, error surfacing, and defensive programming, but lacks the abstraction needed for broader reuse.
 - **Next Steps:**
@@ -437,20 +437,20 @@ end-to-end CLI tests being available.
 #### Task 8.1a – Draft helper API
 
 - **Complexity:** 3 pts
-- **Status:** ⬜ Not started
-- **Notes:** Design `BudgetResolver` interface with clear inputs/outputs and error handling patterns.
+- **Status:** ✅ Done
+- **Notes:** `BudgetResolver` now lives in `src/utils/BudgetResolver.ts` with explicit inputs/outputs and diagnostics.
 
 #### Task 8.1b – Adopt helper across callers
 
 - **Complexity:** 3 pts
-- **Status:** ⬜ Not started
-- **Notes:** Refactor `ActualApi` to use `BudgetResolver` and ensure CLI commands can use it directly.
+- **Status:** ✅ Done
+- **Notes:** `ActualApi` consumes `BudgetResolver` for directory resolution, enabling reuse in future modules.
 
 #### Task 8.1c – Document helper usage
 
 - **Complexity:** 2 pts
-- **Status:** ⬜ Not started
-- **Notes:** Document the resolver API and usage patterns for future commands.
+- **Status:** ✅ Done
+- **Notes:** Story notes now highlight the helper location and integration path for future adopters.
 
 ### Story 8.2 – Consolidate API error handling into a single class
 

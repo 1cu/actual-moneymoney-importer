@@ -20,13 +20,13 @@ type ImportTransaction = {
 };
 import { format } from 'date-fns';
 import fs from 'fs/promises';
-import type { Dirent } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import util from 'node:util';
 
 import type { ActualServerConfig } from './config.js';
 import { DEFAULT_ACTUAL_REQUEST_TIMEOUT_MS, FALLBACK_ACTUAL_REQUEST_TIMEOUT_MS } from './config.js';
+import BudgetResolver, { type BudgetMetadata, type BudgetResolverResult } from './BudgetResolver.js';
 import type Logger from './Logger.js';
 import { DEFAULT_DATA_DIR } from './shared.js';
 
@@ -83,18 +83,6 @@ const createErrorWithCause = (message: string, cause: Error): Error => {
     }
 };
 
-type BudgetMetadata = {
-    id: string;
-    groupId?: string;
-    [key: string]: unknown;
-};
-
-type BudgetDirectoryResolution = {
-    directory: string;
-    metadata: BudgetMetadata;
-    metadataPath: string;
-};
-
 export class ActualApiTimeoutError extends Error {
     public constructor(operation: string, timeoutMs: number) {
         super(`Actual API operation '${operation}' timed out after ${timeoutMs}ms`);
@@ -105,11 +93,14 @@ export class ActualApiTimeoutError extends Error {
 class ActualApi {
     protected isInitialized = false;
     private currentDataDir: string | null = null;
+    private readonly budgetResolver: BudgetResolver;
 
     public constructor(
         private readonly serverConfig: ActualServerConfig,
         private readonly logger: Logger
-    ) {}
+    ) {
+        this.budgetResolver = new BudgetResolver(logger);
+    }
 
     private getRequestTimeoutMs(): number {
         const ms = this.serverConfig.requestTimeoutMs;
@@ -457,7 +448,7 @@ class ActualApi {
                     downloadHints
                 );
 
-                let resolvedBudget: BudgetDirectoryResolution;
+                let resolvedBudget: BudgetResolverResult;
                 if (initialResolution) {
                     try {
                         const refreshedMetadata = await this.readBudgetMetadataByPath(initialResolution.metadataPath);
@@ -466,17 +457,19 @@ class ActualApi {
                             metadata: refreshedMetadata,
                         };
                     } catch (_refreshError) {
-                        resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir, {
+                        resolvedBudget = await this.budgetResolver.resolveBudgetDataDir(budgetConfig.syncId, {
+                            rootDir: downloadRootDir,
                             logResolution: false,
                         });
                     }
                 } else {
-                    resolvedBudget = await this.resolveBudgetDataDir(budgetConfig.syncId, downloadRootDir, {
+                    resolvedBudget = await this.budgetResolver.resolveBudgetDataDir(budgetConfig.syncId, {
+                        rootDir: downloadRootDir,
                         logResolution: false,
                     });
                 }
 
-                this.logResolvedBudgetDirectory(resolvedBudget, budgetConfig.syncId);
+                this.budgetResolver.logResolvedBudgetDirectory(resolvedBudget, budgetConfig.syncId);
 
                 const finalRootDir = path.dirname(resolvedBudget.directory);
 
@@ -537,12 +530,10 @@ class ActualApi {
         }
     }
 
-    private async tryResolveBudgetDirectory(
-        syncId: string,
-        rootDir: string
-    ): Promise<BudgetDirectoryResolution | null> {
+    private async tryResolveBudgetDirectory(syncId: string, rootDir: string): Promise<BudgetResolverResult | null> {
         try {
-            return await this.resolveBudgetDataDir(syncId, rootDir, {
+            return await this.budgetResolver.resolveBudgetDataDir(syncId, {
+                rootDir,
                 logResolution: false,
             });
         } catch (error) {
@@ -804,127 +795,6 @@ class ActualApi {
             ...transaction,
             imported_id: this.createFallbackImportedId(accountId, transaction),
         };
-    }
-
-    private logResolvedBudgetDirectory(resolution: BudgetDirectoryResolution, syncId: string): void {
-        const directoryName = path.basename(resolution.directory);
-        const hints = [`Metadata path: ${resolution.metadataPath}`, `Local budget ID: ${resolution.metadata.id}`];
-
-        this.logger.debug(`Using budget directory: ${directoryName} for syncId ${syncId}`, hints);
-    }
-
-    private async resolveBudgetDataDir(
-        syncId: string,
-        rootDir?: string,
-        options?: { logResolution?: boolean }
-    ): Promise<BudgetDirectoryResolution> {
-        const { logResolution = true } = options ?? {};
-        const actualDataDir = rootDir ?? this.currentDataDir ?? DEFAULT_DATA_DIR;
-
-        let entries: Dirent[];
-        try {
-            entries = await fs.readdir(actualDataDir, { withFileTypes: true });
-        } catch (error) {
-            const maybeErrno = error as NodeJS.ErrnoException | undefined;
-            if (maybeErrno?.code === 'ENOENT') {
-                entries = [];
-            } else {
-                throw error;
-            }
-        }
-
-        const inspectedDirs: string[] = [];
-        const metadataDiagnostics: string[] = [];
-        const MAX_DIRS_TO_SCAN = 100;
-
-        const sortedEntries = entries
-            .filter((entry) => entry.isDirectory())
-            .sort((left, right) => left.name.localeCompare(right.name));
-
-        if (sortedEntries.length > MAX_DIRS_TO_SCAN) {
-            this.logger.warn(
-                `Found ${sortedEntries.length} directories, scanning first ${MAX_DIRS_TO_SCAN} (omitting ${
-                    sortedEntries.length - MAX_DIRS_TO_SCAN
-                })`
-            );
-        }
-
-        for (const entry of sortedEntries.slice(0, MAX_DIRS_TO_SCAN)) {
-            inspectedDirs.push(entry.name);
-            const metadataPath = path.join(actualDataDir, entry.name, 'metadata.json');
-
-            try {
-                const metadataRaw = await fs.readFile(metadataPath, 'utf8');
-                const parsed = JSON.parse(metadataRaw);
-                if (!parsed || typeof parsed !== 'object') {
-                    metadataDiagnostics.push(`${entry.name}: metadata is not an object`);
-                    continue;
-                }
-
-                const record = parsed as Record<string, unknown>;
-                const groupIdRaw = record.groupId;
-                const groupId = typeof groupIdRaw === 'string' ? groupIdRaw.trim() : '';
-                if (!groupId) {
-                    metadataDiagnostics.push(`${entry.name}: metadata missing groupId`);
-                    continue;
-                }
-
-                if (groupId !== syncId) {
-                    metadataDiagnostics.push(
-                        `${entry.name}: metadata groupId '${groupId}' does not match requested syncId '${syncId}'`
-                    );
-                    continue;
-                }
-
-                const idRaw = record.id;
-                const id = typeof idRaw === 'string' ? idRaw.trim() : entry.name;
-
-                if (!id) {
-                    metadataDiagnostics.push(`${entry.name}: metadata missing id`);
-                    continue;
-                }
-
-                const resolvedDir = path.join(actualDataDir, entry.name);
-                const metadata: BudgetMetadata = {
-                    ...(record as BudgetMetadata),
-                    id,
-                    groupId,
-                };
-                const resolution: BudgetDirectoryResolution = {
-                    directory: resolvedDir,
-                    metadata,
-                    metadataPath,
-                };
-                if (logResolution) {
-                    this.logResolvedBudgetDirectory(resolution, syncId);
-                }
-                return resolution;
-            } catch (error) {
-                const maybeErrno = error as NodeJS.ErrnoException | undefined;
-                if (maybeErrno?.code === 'ENOENT' || maybeErrno?.code === 'EISDIR') {
-                    metadataDiagnostics.push(`${entry.name}: metadata.json not found`);
-                    continue;
-                }
-
-                if (error instanceof SyntaxError) {
-                    metadataDiagnostics.push(`${entry.name}: metadata.json could not be parsed`);
-                    continue;
-                }
-
-                throw error;
-            }
-        }
-
-        const inspectedSummary = inspectedDirs.length > 0 ? inspectedDirs.join(', ') : '(none)';
-        const metadataSummary =
-            metadataDiagnostics.length > 0 ? ` Metadata issues: ${metadataDiagnostics.join('; ')}.` : '';
-
-        throw new Error(
-            `No Actual budget directory found for syncId '${syncId}'. ` +
-                `Checked directories under '${actualDataDir}': ${inspectedSummary}.` +
-                metadataSummary +
-                ' Open the budget in Actual Desktop and sync it before retrying.'
-        );
     }
 
     private createFallbackImportedId(accountId: string, transaction: ImportTransaction): string {
