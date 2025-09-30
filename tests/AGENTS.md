@@ -60,6 +60,22 @@ long as the critical paths continue to have protection.
 - Clear, readable test descriptions
 - Tests that fail with actionable error messages
 
+### Appropriate fixtures vs Over-engineered fixtures
+
+**Appropriate fixtures** are reusable, minimal error shapes for external failures:
+- Keep fixtures small, documented, and focused on reuse
+- Use for common failure patterns (network errors, authentication failures)
+- Example: `tests/helpers/error-fixtures.ts` provides minimal, reusable error shapes
+- Focus on essential error properties needed for testing
+
+**Over-engineered fixtures** should be avoided:
+- Complex builders with multiple setup methods
+- Excessive, brittle data that's hard to maintain
+- Comprehensive simulation that duplicates production complexity
+- Fixtures that are harder to understand than the code they test
+
+When creating fixtures, ask: "Does this fixture solve a real testing need with minimal complexity?" If the answer is no, simplify or remove it.
+
 ## Error-path fixtures
 
 - `tests/helpers/error-fixtures.ts` exposes helpers for simulating Actual API
