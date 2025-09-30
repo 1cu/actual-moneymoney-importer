@@ -34,6 +34,48 @@ Target the assertions that deliver the most value—100% coverage is neither
 expected nor desired. It is acceptable to prune or skip low-value scenarios so
 long as the critical paths continue to have protection.
 
+## Complexity Prevention in Tests
+
+**CRITICAL**: Follow complexity prevention guidelines to avoid over-engineered tests:
+
+- **Keep tests simple**: Minimal fixtures, avoid over-mocking
+- **Don't over-mock**: Mock only what's necessary
+- **Prefer integration over unit**: Test real behavior when possible
+- **Remove obsolete tests**: Delete tests for removed functionality
+- **Avoid complex test builders**: Use simple test data instead
+
+### Test anti-patterns to avoid
+
+- Complex test builders with multiple setup methods
+- Over-mocking that duplicates production code
+- Complex test fixtures with excessive detail
+- Tests that are harder to understand than the code they test
+- Obsolete tests that no longer provide value
+
+### Preferred test patterns
+
+- Simple test data that's minimal but representative
+- Mock only external services, not internal utilities
+- Focus on critical paths and edge cases
+- Clear, readable test descriptions
+- Tests that fail with actionable error messages
+
+### Appropriate fixtures vs Over-engineered fixtures
+
+**Appropriate fixtures** are reusable, minimal error shapes for external failures:
+- Keep fixtures small, documented, and focused on reuse
+- Use for common failure patterns (network errors, authentication failures)
+- Example: `tests/helpers/error-fixtures.ts` provides minimal, reusable error shapes
+- Focus on essential error properties needed for testing
+
+**Over-engineered fixtures** should be avoided:
+- Complex builders with multiple setup methods
+- Excessive, brittle data that's hard to maintain
+- Comprehensive simulation that duplicates production complexity
+- Fixtures that are harder to understand than the code they test
+
+When creating fixtures, ask: "Does this fixture solve a real testing need with minimal complexity?" If the answer is no, simplify or remove it.
+
 ## Error-path fixtures
 
 - `tests/helpers/error-fixtures.ts` exposes helpers for simulating Actual API

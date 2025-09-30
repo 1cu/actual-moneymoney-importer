@@ -43,6 +43,19 @@
 These commands are the same ones used in CI; keeping them green locally avoids
 surprises.
 
+## Complexity Prevention
+
+**CRITICAL**: Follow complexity prevention guidelines to avoid overengineering:
+
+- **File size limits**: Utility files max 400 lines, commands max 300 lines
+- **Delete over abstract**: Remove complexity instead of refactoring
+- **Inline simple functionality**: Don't create files for trivial functions
+- **Avoid over-engineering**: Question every abstraction
+- **Keep tests simple**: Minimal fixtures, avoid over-mocking
+
+See the detailed complexity prevention guidelines in the cursor rules for
+anti-patterns and examples.
+
 ### Source updates
 
 - Configuration changes require updates to:
