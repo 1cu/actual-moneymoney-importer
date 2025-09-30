@@ -101,7 +101,7 @@ To prevent future complexity creep, the project enforces strict guardrails:
 
 ### Complexity Limits
 - **Cyclomatic complexity**: Maximum 15 per function
-- **Cognitive complexity**: Maximum 20 per function  
+- **Cognitive complexity**: Maximum 20 per function
 - **Check command**: `npm run lint:complexity`
 - **Enforcement**: CI fails if any function exceeds limits
 
