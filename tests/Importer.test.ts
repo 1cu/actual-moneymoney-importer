@@ -5,7 +5,7 @@ import type ActualApi from '../src/utils/ActualApi.js';
 import type { AccountMap } from '../src/utils/AccountMap.js';
 import type PayeeTransformer from '../src/utils/PayeeTransformer.js';
 import Logger, { LogLevel } from '../src/utils/Logger.js';
-import { getTransactions as moneyMoneyTransactionsMock } from 'moneymoney';
+import { getTransactions } from 'moneymoney';
 
 vi.mock('moneymoney', () => ({
     getTransactions: vi.fn(),
@@ -84,7 +84,7 @@ describe('Importer', () => {
             },
         ];
 
-        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue(mockTransactions);
+        vi.mocked(getTransactions).mockResolvedValue(mockTransactions);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],
@@ -151,7 +151,7 @@ describe('Importer', () => {
             mockPayeeTransformer
         );
 
-        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue([]);
+        vi.mocked(getTransactions).mockResolvedValue([]);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],
@@ -232,7 +232,7 @@ describe('Importer', () => {
             },
         ];
 
-        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue(mockTransactions);
+        vi.mocked(getTransactions).mockResolvedValue(mockTransactions);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],
@@ -332,7 +332,7 @@ describe('Importer', () => {
             },
         ];
 
-        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue(mockTransactions);
+        vi.mocked(getTransactions).mockResolvedValue(mockTransactions);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],
