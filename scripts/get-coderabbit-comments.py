@@ -318,7 +318,15 @@ class CommentProcessor:
 
     def _extract_category(self, body: str) -> str:
         """Extract category from comment body"""
-        # Use faster string operations
+        # Check for summary and command patterns first (more specific)
+        if "## Walkthrough" in body:
+            return "summary"
+        if (body.strip().startswith("@coderabbit") or
+            body.strip().startswith("@CodeRabbit") or
+            body.strip().startswith("@codex")):
+            return "command"
+
+        # Then check for review comment patterns
         if "Nitpick" in body:
             return "nitpick"
         if "Potential issue" in body:
@@ -790,6 +798,27 @@ Examples:
         console.print("[green]✅ Comments processed[/green]")
     else:
         processed_comments = comment_processor.process_comments(all_comments)
+
+    # Automatically skip command and summary comments (they're not actionable review feedback)
+    command_comment_ids = [
+        comment.comment_id for comment in processed_comments
+        if comment.category == "command"
+    ]
+
+    summary_comment_ids = [
+        comment.comment_id for comment in processed_comments
+        if comment.category == "summary"
+    ]
+
+    # Skip both command and summary comments
+    auto_skip_ids = command_comment_ids + summary_comment_ids
+
+    if auto_skip_ids:
+        resolution_manager.mark_skipped(auto_skip_ids)
+        if RICH_AVAILABLE:
+            console.print(f"[yellow]⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments[/yellow]")
+        else:
+            logger.info(f"⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments")
 
     # Save comments to file - optimized serialization
     comments_data = {
