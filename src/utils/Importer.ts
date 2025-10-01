@@ -133,8 +133,10 @@ class Importer {
         toDate: Date | undefined,
         isDryRun: boolean
     ): Promise<boolean> {
-        const createTransactions: ImportTransaction[] = await Promise.all(
-            accountTransactions.map((t) => this.convertToActualTransaction(t, actualAccount.id))
+        // Convert transactions with individual error handling
+        const createTransactions = await this.convertTransactionsWithErrorHandling(
+            accountTransactions, 
+            actualAccount.id
         );
 
         const existingActualTransactions = await this.actualApi.getTransactions(actualAccount.id, {
@@ -354,11 +356,45 @@ class Importer {
     private matchesPattern(value: string | undefined, patterns?: string[]) {
         if (!value || !patterns?.length) return false;
         return patterns.some((pattern) => {
-            const regex = this.patternCache.get(pattern) || new RegExp(pattern.replace(/\*/g, '.*'), 'i');
+            const regex = this.patternCache.get(pattern) || (() => {
+                // Escape all regex special characters except * which we want to convert to .*
+                const escapedPattern = pattern
+                    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape all regex special chars
+                    .replace(/\\\*/g, '.*'); // Convert escaped * back to .*
+                
+                // Anchor the pattern to match the entire string
+                return new RegExp(`^${escapedPattern}$`, 'i');
+            })();
             this.patternCache.set(pattern, regex);
             return regex.test(value);
         });
     }
-}
 
+    private async convertTransactionsWithErrorHandling(
+        accountTransactions: MonMonTransaction[],
+        accountId: string
+    ): Promise<ImportTransaction[]> {
+        const createTransactions: ImportTransaction[] = [];
+        const conversionErrors: string[] = [];
+        
+        for (const transaction of accountTransactions) {
+            try {
+                const converted = await this.convertToActualTransaction(transaction, accountId);
+                createTransactions.push(converted);
+            } catch (error) {
+                const errorMessage = `Failed to convert transaction ${transaction.id}: ${error instanceof Error ? error.message : String(error)}`;
+                conversionErrors.push(errorMessage);
+                this.logger.warn(errorMessage, [
+                    `Transaction ID: ${transaction.id}`,
+                    `Account UUID: ${transaction.accountUuid}`,
+                    'This transaction will be skipped from the import.'
+                ]);
+            }
+        }
+        if (conversionErrors.length > 0) {
+            this.logger.warn(`Skipped ${conversionErrors.length} invalid transactions during conversion`, conversionErrors);
+        }
+        return createTransactions;
+    }
+}
 export default Importer;

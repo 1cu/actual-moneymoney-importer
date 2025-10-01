@@ -293,7 +293,7 @@ class ActualApi {
         await this.ensureInitialization();
         return await this.runActualRequest(
             `fetch transactions for account '${accountId}'`,
-            () => actual.getTransactions(accountId, startDate, endDate || startDate),
+            () => actual.getTransactions(accountId, startDate, endDate ?? undefined),
             [`Account ID: ${accountId}`]
         );
     }
