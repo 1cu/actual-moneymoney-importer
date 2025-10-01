@@ -104,8 +104,8 @@ class Importer {
 
         // Add starting balance if needed
         if (existingActualTransactions.length === 0 && createTransactions.length > 0) {
-            const lastTransaction = accountTransactions[accountTransactions.length - 1];
-            const startDate = lastTransaction?.valueDate ?? importDate;
+            const firstTransaction = accountTransactions[0];
+            const startDate = firstTransaction?.valueDate ?? importDate;
             const startTransaction: CreateTransaction = {
                 date: format(startDate, DATE_FORMAT),
                 amount: this.getStartingBalanceForAccount(monMonAccount, accountTransactions),
