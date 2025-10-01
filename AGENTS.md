@@ -33,11 +33,11 @@ Tests cover the most important paths; we do not require 100% coverage. Keep crit
 ### Source updates
 
 - Configuration changes require updates to:
-    - `src/utils/config.ts`
-    - `src/utils/shared.ts`
-    - `example-config-advanced.toml`
-    - `README.md`
-    - Relevant tests in `tests/config.test.ts`
+  - `src/utils/config.ts`
+  - `src/utils/shared.ts`
+  - `example-config-advanced.toml`
+  - `README.md`
+  - Relevant tests in `tests/config.test.ts`
 - When adding new CLI functionality, mirror the existing command pattern under `src/commands/`
 - Internal API augmentations live in `src/types/`
 

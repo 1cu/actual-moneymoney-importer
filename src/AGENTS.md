@@ -22,10 +22,10 @@
 - Require at least one Actual server in the configuration
 - Before importing, call `checkDatabaseUnlocked()` from `moneymoney` and fail fast if locked
 - For each selected server/budget combination:
-    - Create an `ActualApi` instance, call `init()`, then `loadBudget()` before performing any work, and always `shutdown()` inside a `finally` block
-    - Build an `AccountMap` and load it up front via `loadFromConfig()`
-    - Instantiate `Importer` with the resolved config, budget, API, logger, account map, and optional `PayeeTransformer`
-    - Pass `isDryRun` through to `Importer.importTransactions()`
+  - Create an `ActualApi` instance, call `init()`, then `loadBudget()` before performing any work, and always `shutdown()` inside a `finally` block
+  - Build an `AccountMap` and load it up front via `loadFromConfig()`
+  - Instantiate `Importer` with the resolved config, budget, API, logger, account map, and optional `PayeeTransformer`
+  - Pass `isDryRun` through to `Importer.importTransactions()`
 
 ### `validate.command.ts`
 

@@ -40,9 +40,9 @@ This fork includes significant enhancements over the upstream version:
 - [Dependencies](#dependencies)
 - [Developer Onboarding](#developer-onboarding)
 - [Configuration](#configuration)
-    - [Basic Configuration](#basic-configuration)
-    - [Advanced Configuration](#advanced-configuration)
-    - [Payee Transformation](#payee-transformation)
+  - [Basic Configuration](#basic-configuration)
+  - [Advanced Configuration](#advanced-configuration)
+  - [Payee Transformation](#payee-transformation)
 - [Usage](#usage)
 - [Development](#development)
 - [Account Mapping](#account-mapping)
@@ -300,11 +300,11 @@ The CLI automatically filters noisy Actual SDK console output to provide a clean
 - **Automatic Suppression**: Noisy Actual SDK output is automatically detected and suppressed
 
 - **Categorized Debug Logging**: When `--logLevel 3` (DEBUG) is enabled, suppressed messages are logged with categories:
-    - `[NETWORK:SYNC]` - Network synchronization messages
-    - `[DATA:BUDGET]` - Budget loading and saving operations
-    - `[DATA:RECONCILIATION]` - Transaction reconciliation processes
-    - `[DATA:MIGRATION]` - Database migration operations
-    - `[DATA:DEBUG]` - Debug data with structured JSON formatting
+  - `[NETWORK:SYNC]` - Network synchronization messages
+  - `[DATA:BUDGET]` - Budget loading and saving operations
+  - `[DATA:RECONCILIATION]` - Transaction reconciliation processes
+  - `[DATA:MIGRATION]` - Database migration operations
+  - `[DATA:DEBUG]` - Debug data with structured JSON formatting
 
 #### Debug Data Processing
 

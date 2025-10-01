@@ -66,12 +66,12 @@ sequenceDiagram
 ## Consequences
 
 - **Positive:**
-    - Lower cognitive complexity in `Importer.importTransactions`.
-    - Stage-level tests provide faster feedback for regressions.
-    - Future features can reuse the pipeline stages independently.
+  - Lower cognitive complexity in `Importer.importTransactions`.
+  - Stage-level tests provide faster feedback for regressions.
+  - Future features can reuse the pipeline stages independently.
 - **Negative:**
-    - Requires initial refactor investment and coordination across multiple PRs.
-    - Additional interfaces increase the number of files but improve clarity.
+  - Requires initial refactor investment and coordination across multiple PRs.
+  - Additional interfaces increase the number of files but improve clarity.
 
 ## Alternatives Considered
 

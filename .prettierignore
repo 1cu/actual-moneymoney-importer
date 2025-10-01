@@ -3,6 +3,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Markdown files (handled by markdownlint)
+*.md
+
 # Dependencies
 node_modules/
 .pnp
