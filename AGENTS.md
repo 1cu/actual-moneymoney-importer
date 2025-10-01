@@ -2,46 +2,23 @@
 
 ## Project overview
 
-- TypeScript CLI that synchronises MoneyMoney accounts and transactions into
-  Actual Budget.
-- Entry point: [`src/index.ts`](src/index.ts) wires CLI options and registers
-  command modules.
-- Distribution build: `npm run build` emits ESM output into `dist/` and is used
-  by the published binary (`bin.actual-monmon`).
+- TypeScript CLI that synchronises MoneyMoney accounts and transactions into Actual Budget
+- Entry point: `src/index.ts` wires CLI options and registers command modules
+- Distribution build: `npm run build` emits ESM output into `dist/`
 
 ## Repository layout
 
-- `src/`: CLI commands, utilities, shared constants, and internal type
-  augmentations. Use ESM-style imports that include the `.js` extension when
-  referencing other source files.
-- `tests/`: Vitest unit tests that mirror the source structure (`ActualApi`,
-  `Importer`, `PayeeTransformer`, `config`).
-- `docs/`: Engineering process notes (e.g. upstream sync, review checklists).
-  Keep them up to date if workflow changes.
-- `assets/`: Images referenced from the README. Update paths in documentation
-  when changing assets.
-- `example-config-advanced.toml`: Configuration example that must stay in sync
-  with the Zod schema in `src/utils/config.ts` and the README.
+- `src/`: CLI commands, utilities, shared constants, and internal type augmentations
+- `tests/`: Vitest unit tests that mirror the source structure
+- `example-config-advanced.toml`: Configuration example that must stay in sync with the Zod schema
 
 ## Development workflow
 
-1. Ensure Node.js **v20.9.0** or newer (see the `engines` field in
-   `package.json`).
+1. Ensure Node.js **v20.9.0** or newer
+2. Install dependencies with `npm install`
+3. Run the quality gates: `npm run lint:all && npm run typecheck && npm test`
 
-1. Install dependencies with `npm install`.
-
-1. Run the quality gates from the repository root:
-
-   ```bash
-   npm run lint:all && npm run typecheck && npm test
-   ```
-
-   Tests are meant to cover the most important paths; we do not require or aim
-   for 100% coverage. Keep the critical scenarios healthy and feel free to trim
-   suites that provide little value.
-
-These commands are the same ones used in CI; keeping them green locally avoids
-surprises.
+Tests cover the most important paths; we do not require 100% coverage. Keep critical scenarios healthy.
 
 ## Complexity Prevention
 
@@ -53,9 +30,6 @@ surprises.
 - **Avoid over-engineering**: Question every abstraction
 - **Keep tests simple**: Minimal fixtures, avoid over-mocking
 
-See the detailed complexity prevention guidelines in the cursor rules for
-anti-patterns and examples.
-
 ### Source updates
 
 - Configuration changes require updates to:
@@ -64,52 +38,21 @@ anti-patterns and examples.
   - `example-config-advanced.toml`
   - `README.md`
   - Relevant tests in `tests/config.test.ts`
-- When adding new CLI functionality, mirror the existing command pattern under
-  `src/commands/` and provide coverage in the corresponding `tests/` file.
-- Internal API augmentations live in `src/types/`. Update them if the Actual SDK
-  surface area changes.
+- When adding new CLI functionality, mirror the existing command pattern under `src/commands/`
+- Internal API augmentations live in `src/types/`
 
 ### Documentation
 
-- The README documents installation, configuration, and command usage. Update it
-  whenever behaviour changes.
-- Process documentation in `docs/` should continue to describe the actual
-  workflow (upstream sync process, review expectations, etc.).
-- Markdown formatting is enforced with `mdformat` (CodeRabbit runs it
-  automatically). Run `mdformat <files>` locally when updating docs so diffs
-  align with review suggestions.
+- Update README when behaviour changes
+- Markdown formatting is enforced with `mdformat`
 
 ## Commit messages
 
-- Follow the [Conventional Commits](https://www.conventionalcommits.org/)
-  specification so that commitlint accepts new commits.
+- Follow [Conventional Commits](https://www.conventionalcommits.org/) specification
 - Start messages with a valid **type** (e.g., `feat`, `fix`, `docs`, `chore`)
-  followed by an imperative subject (e.g., `fix: add budget syncing retries`).
-- Keep the subject under 72 characters and avoid ending it with a period.
-- Husky runs `npx --no commitlint --edit "$1"` via the `commit-msg` hook to
-  enforce the format locally. If the hook blocks a commit, fix the message and
-  recommit rather than bypassing the hook.
+- Keep the subject under 72 characters and avoid ending it with a period
 
-## Complexity Prevention Guardrails
-
-To prevent future complexity creep, the project enforces strict guardrails:
-
-### File Length Limits
-
-- **Source files** (`src/**/*.ts`): 400 lines max (utility files, core logic)
-- **Entry points & commands** (`src/index.ts`, `src/commands/*.ts`): 300 lines max (should be focused)
-- **Configuration files** (`src/utils/config.ts`): 200 lines max (should be simple)
-- **Test files** (`tests/**/*.ts`): 500 lines max (more lenient for test fixtures)
-- **Enforcement**: CI fails if any file exceeds its category limit
-
-### Complexity Limits
-
-- **Cyclomatic complexity**: Maximum 15 per function
-- **Cognitive complexity**: Maximum 20 per function
-- **Check command**: `npm run lint:all`
-- **Enforcement**: CI fails if any function exceeds limits
-
-### Quality Gates
+## Quality Gates
 
 All changes must pass:
 
@@ -117,7 +60,7 @@ All changes must pass:
 - `npm run typecheck` - TypeScript compilation
 - `npm test` - All tests passing
 
-### Complexity Prevention Principles
+## Complexity Prevention Principles
 
 - **DELETE over ABSTRACT** - Remove complexity instead of refactoring
 - **SIMPLIFY over OPTIMIZE** - Simple approaches work better than complex ones
