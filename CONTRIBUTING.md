@@ -12,19 +12,19 @@ Thanks for helping improve Actual-MoneyMoney! This guide explains how to get set
 
 1. Clone and install dependencies:
 
-   ```bash
-   git clone https://github.com/1cu/actual-moneymoney.git
-   cd actual-moneymoney
-   npm install
-   ```
+    ```bash
+    git clone https://github.com/1cu/actual-moneymoney.git
+    cd actual-moneymoney
+    npm install
+    ```
 
 2. Copy or create a configuration file as needed (see `example-config-advanced.toml`)
 
 3. Run the quality gates:
 
-   ```bash
-   npm run lint:all && npm run typecheck && npm test
-   ```
+    ```bash
+    npm run lint:all && npm run typecheck && npm test
+    ```
 
 ## Development Workflow
 
@@ -39,6 +39,7 @@ Thanks for helping improve Actual-MoneyMoney! This guide explains how to get set
 ## Configuration Updates
 
 Configuration changes usually involve:
+
 - `src/utils/config.ts`
 - `src/utils/shared.ts`
 - `example-config-advanced.toml`
@@ -47,13 +48,13 @@ Configuration changes usually involve:
 
 ## Helpful npm Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `npm run lint:all` | Run all linters (ESLint, complexity, file length, Prettier) |
-| `npm run lint:prettier:fix` | Automatically format files with Prettier |
-| `npm run typecheck` | Perform a strict TypeScript type check |
-| `npm run build` | Compile the CLI for distribution |
-| `npm test` | Execute the Vitest suite |
+| Script                      | Purpose                                                     |
+| --------------------------- | ----------------------------------------------------------- |
+| `npm run lint:all`          | Run all linters (ESLint, complexity, file length, Prettier) |
+| `npm run lint:prettier:fix` | Automatically format files with Prettier                    |
+| `npm run typecheck`         | Perform a strict TypeScript type check                      |
+| `npm run build`             | Compile the CLI for distribution                            |
+| `npm test`                  | Execute the Vitest suite                                    |
 
 ## Style and Tooling
 

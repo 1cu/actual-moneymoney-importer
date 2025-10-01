@@ -33,11 +33,11 @@ Tests cover the most important paths; we do not require 100% coverage. Keep crit
 ### Source updates
 
 - Configuration changes require updates to:
-  - `src/utils/config.ts`
-  - `src/utils/shared.ts`
-  - `example-config-advanced.toml`
-  - `README.md`
-  - Relevant tests in `tests/config.test.ts`
+    - `src/utils/config.ts`
+    - `src/utils/shared.ts`
+    - `example-config-advanced.toml`
+    - `README.md`
+    - Relevant tests in `tests/config.test.ts`
 - When adding new CLI functionality, mirror the existing command pattern under `src/commands/`
 - Internal API augmentations live in `src/types/`
 
@@ -74,25 +74,25 @@ All changes must pass:
 ### **Evaluation Framework**
 
 1. **🔴 CRITICAL - Must Fix:**
-   - Security vulnerabilities (credential exposure, data leaks)
-   - Data integrity issues (silent data loss, corruption)
-   - System stability (crashes, infinite loops)
+    - Security vulnerabilities (credential exposure, data leaks)
+    - Data integrity issues (silent data loss, corruption)
+    - System stability (crashes, infinite loops)
 
 2. **🟠 MAJOR - Should Fix:**
-   - Missing error handling for external service calls
-   - Resilience improvements with simple fallback mechanisms
-   - User experience improvements (clear error messages)
+    - Missing error handling for external service calls
+    - Resilience improvements with simple fallback mechanisms
+    - User experience improvements (clear error messages)
 
 3. **🟡 MINOR - Nice to Have:**
-   - Error message clarity improvements
-   - Documentation and code comments
-   - Additional debug logging (when valuable)
+    - Error message clarity improvements
+    - Documentation and code comments
+    - Additional debug logging (when valuable)
 
 4. **🔵 TRIVIAL - Skip:**
-   - Style suggestions (unless project standards)
-   - Over-engineering simple problems
-   - Premature optimization without proven need
-   - Unnecessary complexity additions
+    - Style suggestions (unless project standards)
+    - Over-engineering simple problems
+    - Premature optimization without proven need
+    - Unnecessary complexity additions
 
 ### **Decision Process**
 

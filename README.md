@@ -40,9 +40,9 @@ This fork includes significant enhancements over the upstream version:
 - [Dependencies](#dependencies)
 - [Developer Onboarding](#developer-onboarding)
 - [Configuration](#configuration)
-  - [Basic Configuration](#basic-configuration)
-  - [Advanced Configuration](#advanced-configuration)
-  - [Payee Transformation](#payee-transformation)
+    - [Basic Configuration](#basic-configuration)
+    - [Advanced Configuration](#advanced-configuration)
+    - [Payee Transformation](#payee-transformation)
 - [Usage](#usage)
 - [Development](#development)
 - [Account Mapping](#account-mapping)
@@ -78,16 +78,16 @@ ready:
 
 1. Install dependencies after cloning the repository:
 
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 
 1. Run the quality gates to ensure linting, type checks, the build, and tests
    all pass:
 
-   ```bash
-   npm run lint:all && npm run typecheck && npm test
-   ```
+    ```bash
+    npm run lint:all && npm run typecheck && npm test
+    ```
 
 1. Read through the detailed [contributor guide](./CONTRIBUTING.md) for workflow
    expectations, helpful scripts, and documentation requirements.
@@ -233,22 +233,22 @@ your environment restricts model listing requests.
 
 When configuration values are not explicitly set, the following defaults are used:
 
-| Configuration Key | Default Value | Description |
-|------------------|---------------|-------------|
-| `payeeTransformation.enabled` | `false` | Disable AI payee transformation by default |
-| `payeeTransformation.openAiModel` | `"gpt-4o-mini"` | Use cost-effective model for transformations |
-| `payeeTransformation.cacheTransformedPayees` | `true` | Cache transformations to avoid repeated API calls |
-| `importSettings.uncheckedTransactions` | `true` | Import transactions as unchecked by default |
-| `importSettings.clearedTransactions` | `false` | Import transactions as uncleared by default |
-| `importSettings.maskPayeesInLogs` | `true` | Mask payee names in logs for privacy |
-| `importSettings.importSince` | `null` | No date filter by default (import all transactions) |
-| `importSettings.importUntil` | `null` | No end date filter by default |
-| `importSettings.ignorePatterns.comments` | `[]` | No comment patterns to ignore |
-| `importSettings.ignorePatterns.payees` | `[]` | No payee patterns to ignore |
-| `importSettings.ignorePatterns.purposes` | `[]` | No purpose patterns to ignore |
-| `actualServers` | `[]` | No servers configured by default |
-| `actualServers[].budgets[].e2eEncryption.enabled` | `false` | No encryption by default |
-| `actualServers[].budgets[].e2eEncryption.password` | `null` | No encryption password by default |
+| Configuration Key                                  | Default Value   | Description                                         |
+| -------------------------------------------------- | --------------- | --------------------------------------------------- |
+| `payeeTransformation.enabled`                      | `false`         | Disable AI payee transformation by default          |
+| `payeeTransformation.openAiModel`                  | `"gpt-4o-mini"` | Use cost-effective model for transformations        |
+| `payeeTransformation.cacheTransformedPayees`       | `true`          | Cache transformations to avoid repeated API calls   |
+| `importSettings.uncheckedTransactions`             | `true`          | Import transactions as unchecked by default         |
+| `importSettings.clearedTransactions`               | `false`         | Import transactions as uncleared by default         |
+| `importSettings.maskPayeesInLogs`                  | `true`          | Mask payee names in logs for privacy                |
+| `importSettings.importSince`                       | `null`          | No date filter by default (import all transactions) |
+| `importSettings.importUntil`                       | `null`          | No end date filter by default                       |
+| `importSettings.ignorePatterns.comments`           | `[]`            | No comment patterns to ignore                       |
+| `importSettings.ignorePatterns.payees`             | `[]`            | No payee patterns to ignore                         |
+| `importSettings.ignorePatterns.purposes`           | `[]`            | No purpose patterns to ignore                       |
+| `actualServers`                                    | `[]`            | No servers configured by default                    |
+| `actualServers[].budgets[].e2eEncryption.enabled`  | `false`         | No encryption by default                            |
+| `actualServers[].budgets[].e2eEncryption.password` | `null`          | No encryption password by default                   |
 
 **Debug Configuration**: Use `--logLevel 3` to see the full effective configuration.
 
@@ -300,12 +300,11 @@ The CLI automatically filters noisy Actual SDK console output to provide a clean
 - **Automatic Suppression**: Noisy Actual SDK output is automatically detected and suppressed
 
 - **Categorized Debug Logging**: When `--logLevel 3` (DEBUG) is enabled, suppressed messages are logged with categories:
-
-  - `[NETWORK:SYNC]` - Network synchronization messages
-  - `[DATA:BUDGET]` - Budget loading and saving operations
-  - `[DATA:RECONCILIATION]` - Transaction reconciliation processes
-  - `[DATA:MIGRATION]` - Database migration operations
-  - `[DATA:DEBUG]` - Debug data with structured JSON formatting
+    - `[NETWORK:SYNC]` - Network synchronization messages
+    - `[DATA:BUDGET]` - Budget loading and saving operations
+    - `[DATA:RECONCILIATION]` - Transaction reconciliation processes
+    - `[DATA:MIGRATION]` - Database migration operations
+    - `[DATA:DEBUG]` - Debug data with structured JSON formatting
 
 #### Debug Data Processing
 

@@ -19,24 +19,24 @@
 
 The roadmap table only lists epics that still require planning or delivery work. When an epic lands, move its row to the [epic archive](#epic-archive) so this view stays focused on upcoming priorities. Every entry links to the detailed write-up below for additional context.
 
-| Order | Epic | State | Notes |
-| --- | --- | --- | --- |
-| 2 | [**Epic 8 – Code quality and maintainability**](#epic-8-code-quality-and-maintainability) | ⏳ Blocked | Starts once Epic 14 delivers the orchestration and module boundaries that other refactors can plug into. |
-| 3 | [**Epic 7 – CLI UX**](#epic-7-cli-ux) | 🚧 Not started | Improve discoverability and error messaging after the complexity foundations and refactors land, ensuring UX changes are measurable and well-instrumented. |
-| 4 | [**Epic 10 – Multi-budget support with observability**](#epic-10-multi-budget-support-with-observability) | 🧭 Discovery mode | Prototype configuration ergonomics, cache invalidation, and logging before attempting multi-budget imports so we do not regress the session lifecycle work. |
-| 5 | [**Epic 11 – Configurable data directory override**](#epic-11-configurable-data-directory-override) | 🧭 Discovery mode | Align schema, CLI parsing, and docs around a data-directory override once importer refactors land, keeping diagnostics trustworthy. |
-| 6 | [**Epic 12 – Off-budget balance synchronisation**](#epic-12-off-budget-balance-synchronisation) | 🧭 Discovery mode | Model reconciliation workflows that update off-budget accounts without spamming Actual, coordinating with importer refactors for determinism. |
-| 7 | [**Epic 13 – MoneyMoney category translation**](#epic-13-moneymoney-category-translation) | 🧭 Discovery mode | Validate identifier stability and config ergonomics before translating categories so imports remain auditable. |
+| Order | Epic                                                                                                      | State             | Notes                                                                                                                                                       |
+| ----- | --------------------------------------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2     | [**Epic 8 – Code quality and maintainability**](#epic-8-code-quality-and-maintainability)                 | ⏳ Blocked        | Starts once Epic 14 delivers the orchestration and module boundaries that other refactors can plug into.                                                    |
+| 3     | [**Epic 7 – CLI UX**](#epic-7-cli-ux)                                                                     | 🚧 Not started    | Improve discoverability and error messaging after the complexity foundations and refactors land, ensuring UX changes are measurable and well-instrumented.  |
+| 4     | [**Epic 10 – Multi-budget support with observability**](#epic-10-multi-budget-support-with-observability) | 🧭 Discovery mode | Prototype configuration ergonomics, cache invalidation, and logging before attempting multi-budget imports so we do not regress the session lifecycle work. |
+| 5     | [**Epic 11 – Configurable data directory override**](#epic-11-configurable-data-directory-override)       | 🧭 Discovery mode | Align schema, CLI parsing, and docs around a data-directory override once importer refactors land, keeping diagnostics trustworthy.                         |
+| 6     | [**Epic 12 – Off-budget balance synchronisation**](#epic-12-off-budget-balance-synchronisation)           | 🧭 Discovery mode | Model reconciliation workflows that update off-budget accounts without spamming Actual, coordinating with importer refactors for determinism.               |
+| 7     | [**Epic 13 – MoneyMoney category translation**](#epic-13-moneymoney-category-translation)                 | 🧭 Discovery mode | Validate identifier stability and config ergonomics before translating categories so imports remain auditable.                                              |
 
 ### Epic archive
 
-| Order | Epic | State | Notes |
-| --- | --- | --- | --- |
-| 1 | [**Epic 4 – CLI usability and coverage**](#epic-4-cli-usability-and-coverage) | ✅ Done | The CLI harness, option validation, and failure propagation stories shipped, so downstream work can assume end-to-end coverage already exists for anything that touches the command surface. |
-| 2 | [**Epic 2 – Importer determinism and guard rails**](#epic-2-importer-determinism-and-guard-rails) | ✅ Done | CLI coverage and mapping failure guards ship together, so imports now fail fast when configuration drifts instead of proceeding with partial coverage. |
-| 3 | [**Epic 6 – Testing & reliability**](#epic-6-testing--reliability) | ✅ Done | Error-path fixtures, malformed export guards, and structured logging are complete, keeping the CLI observable and resilient under test. |
-| 4 | [**Epic 5 – Observability and developer experience**](#epic-5-observability-and-developer-experience) | ✅ Done | Smoke coverage, default logging, and contributor docs are live, giving follow-on epics the observability and workflow guard rails they depend on. |
-| 5 | [**Epic 9 – Integration and tooling**](#epic-9-integration-and-tooling) | ✅ Done | Lint/format coverage and onboarding improvements shipped alongside cognitive-complexity checks so the refactored code stays within agreed budgets. |
+| Order | Epic                                                                                                  | State   | Notes                                                                                                                                                                                        |
+| ----- | ----------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | [**Epic 4 – CLI usability and coverage**](#epic-4-cli-usability-and-coverage)                         | ✅ Done | The CLI harness, option validation, and failure propagation stories shipped, so downstream work can assume end-to-end coverage already exists for anything that touches the command surface. |
+| 2     | [**Epic 2 – Importer determinism and guard rails**](#epic-2-importer-determinism-and-guard-rails)     | ✅ Done | CLI coverage and mapping failure guards ship together, so imports now fail fast when configuration drifts instead of proceeding with partial coverage.                                       |
+| 3     | [**Epic 6 – Testing & reliability**](#epic-6-testing--reliability)                                    | ✅ Done | Error-path fixtures, malformed export guards, and structured logging are complete, keeping the CLI observable and resilient under test.                                                      |
+| 4     | [**Epic 5 – Observability and developer experience**](#epic-5-observability-and-developer-experience) | ✅ Done | Smoke coverage, default logging, and contributor docs are live, giving follow-on epics the observability and workflow guard rails they depend on.                                            |
+| 5     | [**Epic 9 – Integration and tooling**](#epic-9-integration-and-tooling)                               | ✅ Done | Lint/format coverage and onboarding improvements shipped alongside cognitive-complexity checks so the refactored code stays within agreed budgets.                                           |
 
 ## Epic 1: Actual session lifecycle resilience
 
@@ -181,11 +181,11 @@ The roadmap table only lists epics that still require planning or delivery work.
 - **Current Behaviour:** The importer logs total transformation duration but not
   structured timing hints. There is no schema for downstream consumers to parse.
 - **Next Steps:**
-  - Extend `Logger` usage to emit a consistent object (e.g., start/end
-    timestamps and elapsed ms) when `transformPayees` runs.
-  - Add assertions in `tests/PayeeTransformer.test.ts` that log shape remains
-    backward compatible.
-  - Consider adding a metrics hook to bubble timing to CLI-level logs.
+    - Extend `Logger` usage to emit a consistent object (e.g., start/end
+      timestamps and elapsed ms) when `transformPayees` runs.
+    - Add assertions in `tests/PayeeTransformer.test.ts` that log shape remains
+      backward compatible.
+    - Consider adding a metrics hook to bubble timing to CLI-level logs.
 - **Key Files:** `src/utils/PayeeTransformer.ts`, `src/utils/Logger.ts`,
   `tests/PayeeTransformer.test.ts`.
 
@@ -326,14 +326,14 @@ end-to-end CLI tests being available.
   failures via shared fixtures, and the importer rejects malformed MoneyMoney
   exports with actionable errors.
 - **Evidence:**
-  - `tests/helpers/error-fixtures.ts` centralises failure fixtures for reuse in
-    `tests/ActualApi.test.ts`.
-  - `tests/ActualApi.test.ts` covers friendly messaging when initialisation
-    fails due to network or credential issues.
-  - `tests/Importer.test.ts` asserts the importer surfaces guidance when
-    MoneyMoney exports omit critical transaction fields.
-  - Testing guidelines in `tests/AGENTS.md` outline how to extend the fixtures
-    when new failure scenarios surface.
+    - `tests/helpers/error-fixtures.ts` centralises failure fixtures for reuse in
+      `tests/ActualApi.test.ts`.
+    - `tests/ActualApi.test.ts` covers friendly messaging when initialisation
+      fails due to network or credential issues.
+    - `tests/Importer.test.ts` asserts the importer surfaces guidance when
+      MoneyMoney exports omit critical transaction fields.
+    - Testing guidelines in `tests/AGENTS.md` outline how to extend the fixtures
+      when new failure scenarios surface.
 - **Next Steps:** Monitor for additional failure shapes (e.g., TLS errors) to
   expand the fixture catalog as they surface.
 - **Key Files:** `tests/helpers/`, `tests/Importer.test.ts`, `tests/AGENTS.md`.
@@ -367,12 +367,12 @@ end-to-end CLI tests being available.
   observability tools receive a consistent schema while keeping colourful text
   output as the default experience.
 - **Evidence:**
-  - `src/utils/Logger.ts` accepts a `structuredLogs` flag and serialises
-    messages, timestamps, and normalised hints into JSON payloads.
-  - CLI global options expose `--structuredLogs`, flowing through
-    `src/index.ts`, command handlers, and CLI harness tests.
-  - `tests/utils/Logger.test.ts` asserts the JSON envelope while
-    `tests/commands/cli-options.command.test.ts` verifies the new CLI switch.
+    - `src/utils/Logger.ts` accepts a `structuredLogs` flag and serialises
+      messages, timestamps, and normalised hints into JSON payloads.
+    - CLI global options expose `--structuredLogs`, flowing through
+      `src/index.ts`, command handlers, and CLI harness tests.
+    - `tests/utils/Logger.test.ts` asserts the JSON envelope while
+      `tests/commands/cli-options.command.test.ts` verifies the new CLI switch.
 - **Next Steps:** Monitor downstream tooling for additional fields (e.g.,
   request identifiers) that might warrant schema extensions.
 - **Key Files:** `src/utils/Logger.ts`, `src/index.ts`,
@@ -384,11 +384,11 @@ end-to-end CLI tests being available.
 - **Status:** ✅ Done
 - **Outcome:** Console filtering system now provides intelligent suppression of noisy Actual SDK output with categorized debug logging, performance optimizations, and comprehensive test coverage.
 - **Evidence:**
-  - `src/utils/ActualApi.ts` includes enhanced pattern matching with regex support, categorization, and performance caching
-  - Console interceptor supports granular log level control with category filtering
-  - Debug data processing handles complex objects with proper JSON serialization and circular reference handling
-  - Performance optimizations include pattern caching and memory management
-  - `tests/ActualApi.test.ts` includes comprehensive test coverage for edge cases, categorization, and performance scenarios
+    - `src/utils/ActualApi.ts` includes enhanced pattern matching with regex support, categorization, and performance caching
+    - Console interceptor supports granular log level control with category filtering
+    - Debug data processing handles complex objects with proper JSON serialization and circular reference handling
+    - Performance optimizations include pattern caching and memory management
+    - `tests/ActualApi.test.ts` includes comprehensive test coverage for edge cases, categorization, and performance scenarios
 - **Next Steps:** Monitor for additional SDK output patterns that may need filtering as the Actual SDK evolves.
 - **Key Files:** `src/utils/ActualApi.ts`, `tests/ActualApi.test.ts`, `README.md`.
 
@@ -400,12 +400,12 @@ end-to-end CLI tests being available.
 - **Business Value:** Faster self-serve adoption lowers maintainer support load
   while increasing successful imports from first-run users.
 - **Success Criteria:**
-  - Help output includes at least one vetted example per command and is covered
-    by golden tests.
-  - 90% of CLI errors triggered in integration tests display translated,
-    user-friendly guidance.
-  - CLI telemetry (existing structured logs) exposes a stable
-    `cliHelpShown`/`friendlyError` marker to measure adoption.
+    - Help output includes at least one vetted example per command and is covered
+      by golden tests.
+    - 90% of CLI errors triggered in integration tests display translated,
+      user-friendly guidance.
+    - CLI telemetry (existing structured logs) exposes a stable
+      `cliHelpShown`/`friendlyError` marker to measure adoption.
 
 ### Story 7.1 – Contextual help and examples
 
@@ -414,20 +414,20 @@ end-to-end CLI tests being available.
   reading the source.
 - **Status:** ⬜ Not started
 - **Acceptance Criteria:**
-  - Every top-level command lists at least one example illustrating common
-    options.
-  - `npm test -- tests/commands/help.command.test.ts` snapshots the rendered
-    help output.
-  - README command snippets stay consistent with the updated help text.
+    - Every top-level command lists at least one example illustrating common
+      options.
+    - `npm test -- tests/commands/help.command.test.ts` snapshots the rendered
+      help output.
+    - README command snippets stay consistent with the updated help text.
 - **Depends on:** Epic 14 (complexity foundations) and Epic 8 (refactoring) must be complete first.
 - **Sequence:** 7.1 should ship before 7.2 to lock down help formatting.
 - **Tasks:**
-  - Update `src/index.ts` and command modules with `.example()` metadata.
-  - Add or refresh CLI help snapshot tests in `tests/commands/help.command.test.ts`.
-  - Sync README usage sections with the new examples.
-  - Add telemetry marker implementation: define `cliHelpShown` boolean field in structured logging schema and emit when help/guidance is displayed.
-  - Add unit tests asserting `cliHelpShown` marker is emitted with expected schema.
-  - Run linting/test suite and request review.
+    - Update `src/index.ts` and command modules with `.example()` metadata.
+    - Add or refresh CLI help snapshot tests in `tests/commands/help.command.test.ts`.
+    - Sync README usage sections with the new examples.
+    - Add telemetry marker implementation: define `cliHelpShown` boolean field in structured logging schema and emit when help/guidance is displayed.
+    - Add unit tests asserting `cliHelpShown` marker is emitted with expected schema.
+    - Run linting/test suite and request review.
 
 ### Story 7.2 – Guardrail validation for common mistakes
 
@@ -436,19 +436,19 @@ end-to-end CLI tests being available.
   immediate, actionable feedback.
 - **Status:** ⬜ Not started
 - **Acceptance Criteria:**
-  - CLI validates presence of required config paths and incompatible flags,
-    returning exit code 1 with guidance.
-  - Integration tests cover at least two validation failures with snapshot
-    output.
-  - Documentation lists validation guardrails and troubleshooting tips.
+    - CLI validates presence of required config paths and incompatible flags,
+      returning exit code 1 with guidance.
+    - Integration tests cover at least two validation failures with snapshot
+      output.
+    - Documentation lists validation guardrails and troubleshooting tips.
 - **Depends on:** Epic 14 (complexity foundations), Epic 8 (refactoring), and 7.1 (reuse updated help scaffolding).
 - **Sequence:** Implement after 7.1 to reuse improved help text references.
 - **Tasks:**
-  - Extend command option parsing to perform upfront validation checks.
-  - Add integration tests in `tests/commands/import.command.test.ts` for invalid flag and missing
-    config scenarios (following the pattern established in Story 4.1).
-  - Document validation behaviour in README troubleshooting section.
-  - Update changelog/backlog entry and request review.
+    - Extend command option parsing to perform upfront validation checks.
+    - Add integration tests in `tests/commands/import.command.test.ts` for invalid flag and missing
+      config scenarios (following the pattern established in Story 4.1).
+    - Document validation behaviour in README troubleshooting section.
+    - Update changelog/backlog entry and request review.
 
 ### Story 7.3 – Friendly translation of backend errors
 
@@ -457,21 +457,21 @@ end-to-end CLI tests being available.
   how to resolve the problem.
 - **Status:** ⬜ Not started
 - **Acceptance Criteria:**
-  - Common Actual API error codes map to curated CLI messages with remediation
-    steps.
-  - Integration tests assert message translations stay in sync with
-    `ActualApi.getFriendlyErrorMessage`.
-  - Structured logs flag translated errors via a `friendlyError` field.
+    - Common Actual API error codes map to curated CLI messages with remediation
+      steps.
+    - Integration tests assert message translations stay in sync with
+      `ActualApi.getFriendlyErrorMessage`.
+    - Structured logs flag translated errors via a `friendlyError` field.
 - **Depends on:** Epic 14 (complexity foundations), Epic 8 (refactoring), 7.2 (shares validation utilities), and Epics 1 & 2 error handling foundations.
 - **Sequence:** Ship after 7.2 to avoid duplicating validation copy updates.
 - **Tasks:**
-  - Implement an error translation helper consumed by CLI commands.
-  - Backfill integration tests for each translated error scenario.
-  - Add documentation on common errors and recovery paths.
-  - Add telemetry marker implementation: define `friendlyError` boolean field in structured logging schema and emit when translated user-friendly error is presented (include context like command, errorCode, and minimal user-safe details).
-  - Add unit tests asserting `friendlyError` marker is emitted with expected schema and update telemetry ingestion/test fixtures.
-  - Update metrics/telemetry dashboards and changelog to reflect the new markers.
-  - Ensure structured logging includes telemetry flag and request review.
+    - Implement an error translation helper consumed by CLI commands.
+    - Backfill integration tests for each translated error scenario.
+    - Add documentation on common errors and recovery paths.
+    - Add telemetry marker implementation: define `friendlyError` boolean field in structured logging schema and emit when translated user-friendly error is presented (include context like command, errorCode, and minimal user-safe details).
+    - Add unit tests asserting `friendlyError` marker is emitted with expected schema and update telemetry ingestion/test fixtures.
+    - Update metrics/telemetry dashboards and changelog to reflect the new markers.
+    - Ensure structured logging includes telemetry flag and request review.
 
 ### Risks & Mitigations
 
@@ -489,15 +489,15 @@ end-to-end CLI tests being available.
 - **Epic Goal:** Build a shared roadmap for shrinking the codebase's highest-friction modules without regressing behaviour or losing observability.
 - **Business Value / User Benefit:** Targeted refactors shorten ramp-up time for new contributors, reduce bug surface area, and unblock downstream feature work that depends on clearer module boundaries.
 - **Key Learnings from Stories 14.2-14.3:**
-  - **DELETE over ABSTRACT** - Removing over-engineered systems entirely works better than refactoring them
-  - **SIMPLIFY over OPTIMIZE** - Simple approaches often work better than complex ones
-  - **QUESTION every abstraction** - Many "helpers" and "utilities" are actually over-engineering
-  - **Achieved 670+ lines removed** through deletion and simplification rather than extraction
+    - **DELETE over ABSTRACT** - Removing over-engineered systems entirely works better than refactoring them
+    - **SIMPLIFY over OPTIMIZE** - Simple approaches often work better than complex ones
+    - **QUESTION every abstraction** - Many "helpers" and "utilities" are actually over-engineering
+    - **Achieved 670+ lines removed** through deletion and simplification rather than extraction
 - **Success Criteria:**
-  - Complexity audit captures baseline metrics (file length, cyclomatic complexity, runtime hot spots) for `ActualApi`, `Importer`, config helpers, and shared test utilities.
-  - Follow-up stories land incremental refactors with unchanged public behaviour and green regression suites.
-  - Documentation (README, AGENTS.md, ADRs) reflects new module boundaries and expectations for future contributors.
-  - Complexity guardrails (lint/type/test) continue to pass with no new waivers.
+    - Complexity audit captures baseline metrics (file length, cyclomatic complexity, runtime hot spots) for `ActualApi`, `Importer`, config helpers, and shared test utilities.
+    - Follow-up stories land incremental refactors with unchanged public behaviour and green regression suites.
+    - Documentation (README, AGENTS.md, ADRs) reflects new module boundaries and expectations for future contributors.
+    - Complexity guardrails (lint/type/test) continue to pass with no new waivers.
 - **Implementation Order:** 14.1 ➜ 14.2 ➜ 14.3 ➜ 14.4 ➜ 14.5 ➜ 14.6 ➜ 14.7 ➜ 14.8 ➜ 14.9 ➜ 14.10 ➜ 14.11.
 - **CRITICAL CONSTRAINT:** All complexity reduction must maintain 100% core functionality - no behavioral changes allowed. The goal is to simplify implementation while preserving all existing behavior.
 
@@ -510,10 +510,10 @@ end-to-end CLI tests being available.
 - **Evidence:** [`docs/adr/complexity-audit.md`](./adr/complexity-audit.md) now records the metrics tables, dependency notes, and prioritized refactor slices feeding Stories 14.2–14.6, giving each follow-up an explicit success metric and risk plan.
 - **Future Work:** Groom Stories 14.2–14.6 using the documented slices and tighten estimates once extraction strategies are validated against the audit.
 - **Tasks:**
-  - 14.1.a ✅ Captured tooling output (`npm run lint:complexity`, `npm run lint:eslint`, `npm run typecheck`, strict `max-lines` run, cyclomatic scan) with line-count baselines.
-  - 14.1.b ✅ Documented coupling and pattern analysis for console interception, retries, fixture indirection, error handling, and configuration nesting.
-  - 14.1.c ✅ Sized candidate refactor slices (effort, risk, dependencies, success metrics) aligned with Epic 14 follow-ups.
-  - 14.1.d ✅ Published `docs/adr/complexity-audit.md` and linked roadmap adjustments for downstream stories.
+    - 14.1.a ✅ Captured tooling output (`npm run lint:complexity`, `npm run lint:eslint`, `npm run typecheck`, strict `max-lines` run, cyclomatic scan) with line-count baselines.
+    - 14.1.b ✅ Documented coupling and pattern analysis for console interception, retries, fixture indirection, error handling, and configuration nesting.
+    - 14.1.c ✅ Sized candidate refactor slices (effort, risk, dependencies, success metrics) aligned with Epic 14 follow-ups.
+    - 14.1.d ✅ Published `docs/adr/complexity-audit.md` and linked roadmap adjustments for downstream stories.
 
 ### Story 14.2 – Right-size Actual API orchestration
 
@@ -521,16 +521,16 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want `ActualApi` responsibilities split into composable utilities so that timeout handling, console interception, and session lifecycle concerns evolve independently.
 - **Dependencies:** 14.1 audit insights.
 - **Acceptance Criteria:**
-  - Extract console interception and timeout helpers into neighbouring modules without changing public `ActualApi` signatures.
-  - Preserve structured logging, retries, and shutdown safety nets with updated unit/integration coverage.
-  - Keep new helpers under complexity budgets (\<150 lines) and document extension points in module headers.
-  - Update ADR/backlog entries summarising the new layering.
+    - Extract console interception and timeout helpers into neighbouring modules without changing public `ActualApi` signatures.
+    - Preserve structured logging, retries, and shutdown safety nets with updated unit/integration coverage.
+    - Keep new helpers under complexity budgets (\<150 lines) and document extension points in module headers.
+    - Update ADR/backlog entries summarising the new layering.
 - **Evidence:** Reduced `ActualApi.ts` from 1,267 lines to 842 lines (-425 lines, ~34% reduction) by simplifying console filtering, timeout handling, and budget directory resolution. Achieved target of ≤845 lines through deletion and simplification rather than extraction.
 - **Tasks:**
-  - 14.2.a ✅ Simplified console filtering logic - removed complex categorization and caching
-  - 14.2.b ✅ Simplified timeout handling - removed complex shutdown logic within timeout handlers
-  - 14.2.c ✅ Simplified budget directory resolution - removed extensive diagnostic logging
-  - 14.2.d ✅ Inlined simple utility methods and removed unused imports
+    - 14.2.a ✅ Simplified console filtering logic - removed complex categorization and caching
+    - 14.2.b ✅ Simplified timeout handling - removed complex shutdown logic within timeout handlers
+    - 14.2.c ✅ Simplified budget directory resolution - removed extensive diagnostic logging
+    - 14.2.d ✅ Inlined simple utility methods and removed unused imports
 
 ### Story 14.3 – Simplify configuration decision flow
 
@@ -538,16 +538,16 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want configuration parsing and defaulting logic to be transparent so that new options can be added without cross-cutting rewrites.
 - **Dependencies:** 14.1 for baseline notes.
 - **Acceptance Criteria:**
-  - Identify unused or redundant decision tracking and either prune it or document why it must remain.
-  - Split default-resolution helpers into smaller utilities with focused unit tests (\<80 lines each).
-  - Ensure `example-config-advanced.toml`, README, and tests continue to mirror the schema.
-  - Document the resulting flow (diagram or step list) for future contributors.
+    - Identify unused or redundant decision tracking and either prune it or document why it must remain.
+    - Split default-resolution helpers into smaller utilities with focused unit tests (\<80 lines each).
+    - Ensure `example-config-advanced.toml`, README, and tests continue to mirror the schema.
+    - Document the resulting flow (diagram or step list) for future contributors.
 - **Evidence:** Completely removed over-engineered configuration decision tracking system. Deleted `config-format.ts` (161 lines) and reduced `config.ts` from 272 lines to 188 lines (-84 lines, ~31% reduction). Total reduction: 245+ lines of unnecessary complexity.
 - **Tasks:**
-  - 14.3.a ✅ Audited decision tracking system and found it was over-engineered
-  - 14.3.b ✅ Removed entire decision tracking system instead of refactoring
-  - 14.3.c ✅ Updated import command to remove decision tracking usage
-  - 14.3.d ✅ No follow-up needed - system significantly simplified
+    - 14.3.a ✅ Audited decision tracking system and found it was over-engineered
+    - 14.3.b ✅ Removed entire decision tracking system instead of refactoring
+    - 14.3.c ✅ Updated import command to remove decision tracking usage
+    - 14.3.d ✅ No follow-up needed - system significantly simplified
 
 ### Story 14.4 – Trim shared test infrastructure
 
@@ -555,17 +555,17 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want our shared fixtures and helpers to stay lean so that writing new coverage is fast and intention-revealing.
 - **Dependencies:** 14.1.
 - **Acceptance Criteria:**
-  - **DELETE** over-engineered test infrastructure (361-line cli-mock-loader.mjs, 174-line cli.ts)
-  - Replace complex mock loaders with simple inline mocks where possible
-  - Remove unnecessary test helpers that add more complexity than value
-  - Ensure CLI and importer integration suites remain green with simplified fixtures
-  - Document guidance in `tests/AGENTS.md` reflecting the streamlined approach
+    - **DELETE** over-engineered test infrastructure (361-line cli-mock-loader.mjs, 174-line cli.ts)
+    - Replace complex mock loaders with simple inline mocks where possible
+    - Remove unnecessary test helpers that add more complexity than value
+    - Ensure CLI and importer integration suites remain green with simplified fixtures
+    - Document guidance in `tests/AGENTS.md` reflecting the streamlined approach
 - **Evidence:** Dramatically simplified test infrastructure by removing over-engineered systems. Deleted cli-mock-loader.mjs (361 lines), cli.helper.test.ts (171 lines), and complex CLI tests (800+ lines). Simplified cli.ts from 174 to 56 lines. Total reduction: 1,000+ lines removed (~89% reduction).
 - **Tasks:**
-  - 14.4.a ✅ **DELETED** cli-mock-loader.mjs (361 lines) - over-engineered module loader
-  - 14.4.b ✅ **SIMPLIFIED** cli.ts (174 lines) - removed complex build management
-  - 14.4.c ✅ **DELETED** unnecessary test helpers - kept only essential ones
-  - 14.4.d ✅ **DELETED** over-engineered CLI tests - removed complex mock behavior testing
+    - 14.4.a ✅ **DELETED** cli-mock-loader.mjs (361 lines) - over-engineered module loader
+    - 14.4.b ✅ **SIMPLIFIED** cli.ts (174 lines) - removed complex build management
+    - 14.4.c ✅ **DELETED** unnecessary test helpers - kept only essential ones
+    - 14.4.d ✅ **DELETED** over-engineered CLI tests - removed complex mock behavior testing
 
 ### Story 14.5 – Dependency and import hygiene
 
@@ -573,15 +573,15 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want a lightweight dependency surface so that updates stay manageable and security scans remain quiet.
 - **Dependencies:** 14.1 findings and any refactors that introduce new modules.
 - **Acceptance Criteria:**
-  - **AUDIT** current dependencies - many may be unnecessary after test infrastructure simplification
-  - **REMOVE** unused dev dependencies (semantic-release, complex tooling)
-  - Replace custom utilities with built-ins where ergonomics do not regress (document exceptions)
-  - Keep `npm audit` clean; capture results in the PR description
+    - **AUDIT** current dependencies - many may be unnecessary after test infrastructure simplification
+    - **REMOVE** unused dev dependencies (semantic-release, complex tooling)
+    - Replace custom utilities with built-ins where ergonomics do not regress (document exceptions)
+    - Keep `npm audit` clean; capture results in the PR description
 - **Evidence:** Simplified dependencies by removing over-engineered tooling. Removed eslint-plugin-sonarjs (complex linting rules), ENABLE_COMPLEXITY_RULES environment variable, and simplified ESLint configuration. Fixed TypeScript errors in test helpers. All remaining dependencies are essential and actively used.
 - **Tasks:**
-  - 14.5.a ✅ **AUDITED** package.json - removed eslint-plugin-sonarjs, simplified dev dependencies
-  - 14.5.b ✅ **SIMPLIFIED** import graphs - cleaned up unused imports in config.test.ts
-  - 14.5.c ✅ **REMOVED** unnecessary tooling - focused on essential dependencies only
+    - 14.5.a ✅ **AUDITED** package.json - removed eslint-plugin-sonarjs, simplified dev dependencies
+    - 14.5.b ✅ **SIMPLIFIED** import graphs - cleaned up unused imports in config.test.ts
+    - 14.5.c ✅ **REMOVED** unnecessary tooling - focused on essential dependencies only
 
 ### Story 14.6 – Lock in complexity guardrails
 
@@ -589,16 +589,16 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want automation that catches complexity regressions early so that future contributors can safely iterate without manual policing.
 - **Dependencies:** Outputs from Stories 14.1–14.5.
 - **Acceptance Criteria:**
-  - **SIMPLIFY** complexity rules - remove `ENABLE_COMPLEXITY_RULES` environment variable (already done in 14.2)
-  - **FOCUS** on essential guardrails: file length limits, basic complexity checks
-  - **REMOVE** over-engineered complexity tooling - keep it simple and fast
-  - Update AGENTS.md and README contributor sections describing the simplified guardrails
+    - **SIMPLIFY** complexity rules - remove `ENABLE_COMPLEXITY_RULES` environment variable (already done in 14.2)
+    - **FOCUS** on essential guardrails: file length limits, basic complexity checks
+    - **REMOVE** over-engineered complexity tooling - keep it simple and fast
+    - Update AGENTS.md and README contributor sections describing the simplified guardrails
 - **Evidence:** Implemented comprehensive complexity prevention guardrails. Added cyclomatic complexity (max 15) and cognitive complexity (max 20) checks. Added file length limits (max 400 lines). Simplified CI from 12 jobs to 2 jobs using Node 24 only. Updated ESLint config with sonarjs plugin. Added complexity and file length checks to CI and release workflows. Documented approach in AGENTS.md.
 - **Tasks:**
-  - 14.6.a ✅ **REINTRODUCED** complexity checks with cyclomatic complexity - prevent future bloat
-  - 14.6.b ✅ **SIMPLIFIED** CI to Node 24 only - removed complex matrix strategy
-  - 14.6.c ✅ **ADDED** file length limits and complexity guardrails
-  - 14.6.d ✅ **DOCUMENTED** complexity prevention approach
+    - 14.6.a ✅ **REINTRODUCED** complexity checks with cyclomatic complexity - prevent future bloat
+    - 14.6.b ✅ **SIMPLIFIED** CI to Node 24 only - removed complex matrix strategy
+    - 14.6.c ✅ **ADDED** file length limits and complexity guardrails
+    - 14.6.d ✅ **DOCUMENTED** complexity prevention approach
 
 ### Story 14.7 – Simplify Importer complexity hotspot
 
@@ -606,17 +606,17 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want the Importer.importTransactions method to be simple and focused so that transaction processing is easy to understand and debug.
 - **Dependencies:** 14.6 complexity guardrails.
 - **Acceptance Criteria:**
-  - **MAINTAIN** all core import functionality - no behavioral changes
-  - **DELETE** complex logic from `importTransactions` (complexity 33, cognitive 46)
-  - **SIMPLIFY** to orchestration wrapper under 120 lines
-  - **REMOVE** over-engineered transaction processing logic while preserving functionality
-  - **FOCUS** on essential import functionality only
+    - **MAINTAIN** all core import functionality - no behavioral changes
+    - **DELETE** complex logic from `importTransactions` (complexity 33, cognitive 46)
+    - **SIMPLIFY** to orchestration wrapper under 120 lines
+    - **REMOVE** over-engineered transaction processing logic while preserving functionality
+    - **FOCUS** on essential import functionality only
 - **Evidence:** Dramatically simplified Importer complexity hotspot. Reduced file length from 454 to 341 lines (-113 lines, ~25% reduction). Reduced complexity from 33 to 17 (target: 15). Extracted processAccountTransactions method to reduce main method complexity. Simplified pattern filtering, payee transformation, and logging logic. Removed unused obfuscation method and createHash import. Maintained all core functionality.
 - **Tasks:**
-  - 14.7.a ✅ **ANALYZED** importTransactions method - identified over-engineered sections
-  - 14.7.b ✅ **DELETED** complex transaction processing logic - kept only essential functionality
-  - 14.7.c ✅ **SIMPLIFIED** to orchestration wrapper - delegated to simple helpers
-  - 14.7.d ✅ **VERIFIED** complexity limits pass - reduced from 33 to 17 (target: 15)
+    - 14.7.a ✅ **ANALYZED** importTransactions method - identified over-engineered sections
+    - 14.7.b ✅ **DELETED** complex transaction processing logic - kept only essential functionality
+    - 14.7.c ✅ **SIMPLIFIED** to orchestration wrapper - delegated to simple helpers
+    - 14.7.d ✅ **VERIFIED** complexity limits pass - reduced from 33 to 17 (target: 15)
 
 ### Story 14.8 – Simplify ActualApi loadBudget complexity
 
@@ -624,17 +624,17 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want the ActualApi.loadBudget method to be simple and focused so that budget loading is easy to understand and debug.
 - **Dependencies:** 14.7.
 - **Acceptance Criteria:**
-  - **MAINTAIN** all core budget loading functionality - no behavioral changes
-  - **DELETE** complex logic from `loadBudget` (complexity 26, cognitive 36)
-  - **SIMPLIFY** to essential budget loading functionality
-  - **REMOVE** over-engineered error handling and retry logic while preserving functionality
-  - **FOCUS** on core budget loading only
+    - **MAINTAIN** all core budget loading functionality - no behavioral changes
+    - **DELETE** complex logic from `loadBudget` (complexity 26, cognitive 36)
+    - **SIMPLIFY** to essential budget loading functionality
+    - **REMOVE** over-engineered error handling and retry logic while preserving functionality
+    - **FOCUS** on core budget loading only
 - **Evidence:** Dramatically simplified ActualApi loadBudget complexity. Reduced file length from 842 to 745 lines (-97 lines, ~12% reduction). Reduced complexity from 26 to under 15 (achieved target). Removed complex retry logic with attempt tracking and error pattern matching. Removed complex budget directory resolution with fallback logic. Removed over-engineered directory access and metadata validation. Simplified to direct budget download, resolution, validation, and loading. Maintained all core functionality.
 - **Tasks:**
-  - 14.8.a ✅ **ANALYZED** loadBudget method - identified over-engineered sections
-  - 14.8.b ✅ **DELETED** complex error handling and retry logic - kept only essential functionality
-  - 14.8.c ✅ **SIMPLIFIED** to core budget loading - removed unnecessary complexity
-  - 14.8.d ✅ **VERIFIED** complexity limits pass - reduced from 26 to under 15
+    - 14.8.a ✅ **ANALYZED** loadBudget method - identified over-engineered sections
+    - 14.8.b ✅ **DELETED** complex error handling and retry logic - kept only essential functionality
+    - 14.8.c ✅ **SIMPLIFIED** to core budget loading - removed unnecessary complexity
+    - 14.8.d ✅ **VERIFIED** complexity limits pass - reduced from 26 to under 15
 
 ### Story 14.9 – Simplify PayeeTransformer complexity and file length
 
@@ -642,17 +642,17 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want the PayeeTransformer to be simple and focused so that payee transformation is easy to understand and debug.
 - **Dependencies:** 14.8.
 - **Acceptance Criteria:**
-  - **MAINTAIN** all core payee transformation functionality - no behavioral changes
-  - **DELETE** complex logic from `transformPayees` (complexity 25, cognitive 27)
-  - **DELETE** complex logic from `makeOpenAIRequest` (complexity 18)
-  - **REDUCE** file length from 540 lines to under 400 lines
-  - **SIMPLIFY** to essential payee transformation functionality while preserving functionality
+    - **MAINTAIN** all core payee transformation functionality - no behavioral changes
+    - **DELETE** complex logic from `transformPayees` (complexity 25, cognitive 27)
+    - **DELETE** complex logic from `makeOpenAIRequest` (complexity 18)
+    - **REDUCE** file length from 540 lines to under 400 lines
+    - **SIMPLIFY** to essential payee transformation functionality while preserving functionality
 - **Evidence:** Dramatically simplified PayeeTransformer complexity and file length. Reduced file length from 540 to 353 lines (-187 lines, ~35% reduction). Reduced complexity from 25 to under 15 (transformPayees) and from 18 to under 15 (makeOpenAIRequest). Removed complex error handling with finish reason validation and hash logging. Removed complex JSON parsing with duplicate key detection and validation. Removed complex retry logic with exponential backoff and jitter. Removed complex model capabilities detection and caching. Removed over-engineered model validation with disk/memory caching. Simplified to direct API calls with basic error handling. Maintained all core functionality.
 - **Tasks:**
-  - 14.9.a ✅ **ANALYZED** PayeeTransformer.ts - identified over-engineered sections
-  - 14.9.b ✅ **DELETED** complex transformation logic - kept only essential functionality
-  - 14.9.c ✅ **SIMPLIFIED** OpenAI request handling - removed unnecessary complexity
-  - 14.9.d ✅ **VERIFIED** file length and complexity limits pass - achieved targets
+    - 14.9.a ✅ **ANALYZED** PayeeTransformer.ts - identified over-engineered sections
+    - 14.9.b ✅ **DELETED** complex transformation logic - kept only essential functionality
+    - 14.9.c ✅ **SIMPLIFIED** OpenAI request handling - removed unnecessary complexity
+    - 14.9.d ✅ **VERIFIED** file length and complexity limits pass - achieved targets
 
 ### Story 14.10 – Simplify remaining complexity hotspots
 
@@ -660,20 +660,20 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want all remaining complexity hotspots to be simple and focused so that the codebase is easy to understand and maintain.
 - **Dependencies:** 14.9.
 - **Acceptance Criteria:**
-  - **MAINTAIN** all core functionality - no behavioral changes
-  - **DELETE** complex logic from AccountMap.loadFromConfig (complexity 19, cognitive 23)
-  - **DELETE** complex logic from validate.command.ts (complexity 20, cognitive 45)
-  - **DELETE** complex logic from ActualApi.isAuthenticationError (complexity 16)
-  - **DELETE** complex logic from index.ts (cognitive 21)
-  - **VERIFY** all complexity limits pass
+    - **MAINTAIN** all core functionality - no behavioral changes
+    - **DELETE** complex logic from AccountMap.loadFromConfig (complexity 19, cognitive 23)
+    - **DELETE** complex logic from validate.command.ts (complexity 20, cognitive 45)
+    - **DELETE** complex logic from ActualApi.isAuthenticationError (complexity 16)
+    - **DELETE** complex logic from index.ts (cognitive 21)
+    - **VERIFY** all complexity limits pass
 - **Evidence:** Successfully simplified all remaining complexity hotspots. Achieved 0 complexity violations across the entire codebase. Reduced AccountMap.loadFromConfig complexity from 19 to under 15. Reduced validate.command.ts complexity from 20 to under 15. Reduced ActualApi.isAuthenticationError complexity from 16 to under 15. Reduced index.ts cognitive complexity from 21 to under 20. Reduced Importer.importTransactions complexity from 17 to under 15. Removed complex error handling with detailed logging and error analysis. Removed complex argument parsing with flag detection and boolean parsing. Removed complex error analysis with recursive cause checking. Removed over-engineered timing and performance logging. Simplified to direct error throwing and basic validation. Extracted complex logic into helper methods to reduce complexity. Maintained all core functionality.
 - **Tasks:**
-  - 14.10.a ✅ **ANALYZED** remaining complexity hotspots - identified over-engineered sections
-  - 14.10.b ✅ **DELETED** complex logic from AccountMap.loadFromConfig - kept only essential functionality
-  - 14.10.c ✅ **DELETED** complex logic from validate.command.ts - simplified validation
-  - 14.10.d ✅ **DELETED** complex logic from ActualApi.isAuthenticationError - simplified error detection
-  - 14.10.e ✅ **DELETED** complex logic from index.ts - simplified CLI orchestration
-  - 14.10.f ✅ **VERIFIED** all complexity limits pass - achieved 0 complexity violations
+    - 14.10.a ✅ **ANALYZED** remaining complexity hotspots - identified over-engineered sections
+    - 14.10.b ✅ **DELETED** complex logic from AccountMap.loadFromConfig - kept only essential functionality
+    - 14.10.c ✅ **DELETED** complex logic from validate.command.ts - simplified validation
+    - 14.10.d ✅ **DELETED** complex logic from ActualApi.isAuthenticationError - simplified error detection
+    - 14.10.e ✅ **DELETED** complex logic from index.ts - simplified CLI orchestration
+    - 14.10.f ✅ **VERIFIED** all complexity limits pass - achieved 0 complexity violations
 
 ### Story 14.11 – Post-Epic 14 cleanup and linter improvements
 
@@ -681,20 +681,20 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want the codebase to be clean and maintainable after Epic 14's complexity reduction so that future development is smooth and efficient.
 - **Dependencies:** 14.10 completion.
 - **Acceptance Criteria:**
-  - **MAINTAIN** all core functionality - no behavioral changes
-  - **CLEAN UP** unused variables and methods from simplified files
-  - **FIX** TypeScript errors and linting issues
-  - **REDUCE** test file lengths to under 400 lines
-  - **STREAMLINE** linter configuration and CI/CD workflows
-  - **UPDATE** documentation to reflect changes
+    - **MAINTAIN** all core functionality - no behavioral changes
+    - **CLEAN UP** unused variables and methods from simplified files
+    - **FIX** TypeScript errors and linting issues
+    - **REDUCE** test file lengths to under 400 lines
+    - **STREAMLINE** linter configuration and CI/CD workflows
+    - **UPDATE** documentation to reflect changes
 - **Evidence:** Successfully completed comprehensive post-Epic 14 cleanup. Removed unused variables and methods from PayeeTransformer.ts and ActualApi.ts. Fixed TypeScript errors in Importer.ts. Reduced ActualApi.ts from 648 to 399 lines. Reduced tests/ActualApi.test.ts from 1270 to 224 lines. Reduced tests/Importer.test.ts from 1517 to 289 lines. Fixed Prettier formatting issues. Streamlined linter configuration by removing redundant scripts and adding lint:all command. Updated CI/CD workflows to use simplified linting. Updated documentation (AGENTS.md, README.md, CONTRIBUTING.md) to reflect linter changes. Achieved 0 complexity violations and all files under 400 lines.
 - **Tasks:**
-  - 14.11.a ✅ **CLEANED UP** unused variables and methods from PayeeTransformer.ts and ActualApi.ts
-  - 14.11.b ✅ **FIXED** TypeScript errors in Importer.ts and other files
-  - 14.11.c ✅ **REDUCED** test file lengths to under 400 lines
-  - 14.11.d ✅ **STREAMLINED** linter configuration and CI/CD workflows
-  - 14.11.e ✅ **UPDATED** documentation to reflect linter changes
-  - 14.11.f ✅ **VERIFIED** all quality gates pass - 0 complexity violations, all files under 400 lines
+    - 14.11.a ✅ **CLEANED UP** unused variables and methods from PayeeTransformer.ts and ActualApi.ts
+    - 14.11.b ✅ **FIXED** TypeScript errors in Importer.ts and other files
+    - 14.11.c ✅ **REDUCED** test file lengths to under 400 lines
+    - 14.11.d ✅ **STREAMLINED** linter configuration and CI/CD workflows
+    - 14.11.e ✅ **UPDATED** documentation to reflect linter changes
+    - 14.11.f ✅ **VERIFIED** all quality gates pass - 0 complexity violations, all files under 400 lines
 
 ### Epic 14 Risks & Mitigations
 
@@ -707,10 +707,10 @@ end-to-end CLI tests being available.
 - **Epic Goal:** Reduce the cognitive complexity and coupling across the importer, Actual API wrapper, and CLI orchestration so new roadmap features (multi-budget sync, category translation) can be implemented safely and quickly.
 - **Business Value / User Benefit:** A modular codebase accelerates feature delivery, decreases regression risk for operators importing data, and keeps contributor onboarding time low.
 - **Success Criteria:**
-  - `Importer.importTransactions` shrinks to an orchestration wrapper under 120 lines with stage helpers capped at 80 lines each and `npm run lint:complexity` passes without new suppressions.
-  - `ActualApi.runActualRequest` delegates timeout and console patching to dedicated utilities with unit tests covering timeout, retry, and shutdown flows.
-  - `import.command.ts` delegates parsing/orchestration to helpers, keeping the command handler below 60 lines and exercising new flows through CLI integration tests.
-  - Error handling surfaces consistent messages through a shared helper verified by updated tests and docs.
+    - `Importer.importTransactions` shrinks to an orchestration wrapper under 120 lines with stage helpers capped at 80 lines each and `npm run lint:complexity` passes without new suppressions.
+    - `ActualApi.runActualRequest` delegates timeout and console patching to dedicated utilities with unit tests covering timeout, retry, and shutdown flows.
+    - `import.command.ts` delegates parsing/orchestration to helpers, keeping the command handler below 60 lines and exercising new flows through CLI integration tests.
+    - Error handling surfaces consistent messages through a shared helper verified by updated tests and docs.
 - **Implementation Order:** 8.1 ➜ 8.2 ➜ 8.3 ➜ 8.4 ➜ 8.5.
 
 ### Story 8.1 – Establish importer pipeline scaffolding
@@ -718,81 +718,81 @@ end-to-end CLI tests being available.
 - **User Story:** As a maintainer, I want the transaction importer to run through composable stage interfaces so that future changes can be isolated, tested, and shipped without rewriting the whole method.
 - **Dependencies:** Epic 14 (complexity foundations must be in place first).
 - **Acceptance Criteria:**
-  - A `TransactionImportPipeline` (or similarly named) orchestrator composes stage interfaces for fetch, filter, transform, reconcile, and persist steps while preserving current behaviour.
-  - Unit tests cover the orchestrator happy path using spies/fakes for each stage.
-  - The importer entry point delegates to the orchestrator, reducing the legacy method to ≤120 lines.
+    - A `TransactionImportPipeline` (or similarly named) orchestrator composes stage interfaces for fetch, filter, transform, reconcile, and persist steps while preserving current behaviour.
+    - Unit tests cover the orchestrator happy path using spies/fakes for each stage.
+    - The importer entry point delegates to the orchestrator, reducing the legacy method to ≤120 lines.
 - **Architecture Reference:** [Transaction Import Pipeline ADR](./adr/transaction-import-pipeline.md)
 - **Tasks:**
-  - 8.1.a Draft `docs/adr/transaction-import-pipeline.md` capturing the importer pipeline architecture overview, naming rationale, stage contracts, and migration notes, then link this backlog entry to the note for reviewer context.
-  - 8.1.b Add TypeScript interfaces for each stage in `src/utils/Importer/` with clear input/output contracts.
-  - 8.1.c Implement the orchestrator shell that wires existing logic through the new interfaces without changing external behaviour.
-  - 8.1.d Write unit tests for the orchestrator using Vitest mocks to assert stage invocation order and error propagation.
-  - 8.1.e Update importer-related docs/backlog entries to reference the stage pipeline and note migration considerations.
-  - 8.1.f Request code review.
+    - 8.1.a Draft `docs/adr/transaction-import-pipeline.md` capturing the importer pipeline architecture overview, naming rationale, stage contracts, and migration notes, then link this backlog entry to the note for reviewer context.
+    - 8.1.b Add TypeScript interfaces for each stage in `src/utils/Importer/` with clear input/output contracts.
+    - 8.1.c Implement the orchestrator shell that wires existing logic through the new interfaces without changing external behaviour.
+    - 8.1.d Write unit tests for the orchestrator using Vitest mocks to assert stage invocation order and error propagation.
+    - 8.1.e Update importer-related docs/backlog entries to reference the stage pipeline and note migration considerations.
+    - 8.1.f Request code review.
 
 ### Story 8.2 – Move data retrieval and filtering into stage helpers
 
 - **User Story:** As a maintainer, I want fetching, sorting, and ignore filtering handled by dedicated helpers so that upstream MoneyMoney changes or new filters can be added without editing the full pipeline.
 - **Dependencies:** 8.1.
 - **Acceptance Criteria:**
-  - Fetch/filter logic lives in dedicated modules (e.g., `TransactionFetcher`, `TransactionFilter`) with exported pure functions or classes.
-  - Unit tests cover ignored transactions, deterministic sort order, and earliest-import-date handling via the new helpers.
-  - Pipeline integration tests confirm dry-run/live modes still produce identical transaction batches before persistence.
+    - Fetch/filter logic lives in dedicated modules (e.g., `TransactionFetcher`, `TransactionFilter`) with exported pure functions or classes.
+    - Unit tests cover ignored transactions, deterministic sort order, and earliest-import-date handling via the new helpers.
+    - Pipeline integration tests confirm dry-run/live modes still produce identical transaction batches before persistence.
 - **Tasks:**
-  - 8.2.a Extract the existing MoneyMoney fetch and sort code into `TransactionFetcher` with dependency injection for the API client and logger.
-  - 8.2.b Extract ignore-rule filtering and unchecked transaction handling into `TransactionFilter` with focused unit tests.
-  - 8.2.c Update the orchestrator to consume the new helpers and remove duplicate logic from `Importer.importTransactions`.
-  - 8.2.d Extend `tests/Importer.test.ts` (or new files) to cover fetch/filter edge cases using fixtures.
-  - 8.2.e Run `npm run lint:complexity` to ensure complexity budgets are met and capture results in the PR description.
-  - 8.2.f Request code review.
+    - 8.2.a Extract the existing MoneyMoney fetch and sort code into `TransactionFetcher` with dependency injection for the API client and logger.
+    - 8.2.b Extract ignore-rule filtering and unchecked transaction handling into `TransactionFilter` with focused unit tests.
+    - 8.2.c Update the orchestrator to consume the new helpers and remove duplicate logic from `Importer.importTransactions`.
+    - 8.2.d Extend `tests/Importer.test.ts` (or new files) to cover fetch/filter edge cases using fixtures.
+    - 8.2.e Run `npm run lint:complexity` to ensure complexity budgets are met and capture results in the PR description.
+    - 8.2.f Request code review.
 
 ### Story 8.3 – Modularise transformation and reconciliation stages
 
 - **User Story:** As a maintainer, I want conversion, payee transformation, and reconciliation handled by isolated stages so that new features (e.g., category translation, off-budget sync) can reuse them without regression risk.
 - **Dependencies:** 8.1 and 8.2.
 - **Acceptance Criteria:**
-  - Conversion and reconciliation logic lives in modules such as `TransactionConverter` and `TransactionReconciler` that expose deterministic outputs with dependency injection for PayeeTransformer and configuration.
-  - Stage unit tests cover payee transformation fallbacks, start-balance adjustments, and deduplication scenarios.
-  - The importer pipeline offers a dry-run summary object and live persistence path validated by integration tests.
+    - Conversion and reconciliation logic lives in modules such as `TransactionConverter` and `TransactionReconciler` that expose deterministic outputs with dependency injection for PayeeTransformer and configuration.
+    - Stage unit tests cover payee transformation fallbacks, start-balance adjustments, and deduplication scenarios.
+    - The importer pipeline offers a dry-run summary object and live persistence path validated by integration tests.
 - **Tasks:**
-  - 8.3.a Extract conversion utilities into a `TransactionConverter` module with pure functions where possible.
-  - 8.3.b Create a `TransactionReconciler` module that encapsulates balance adjustments and deduplication rules with targeted tests.
-  - 8.3.c Update pipeline wiring to use the new modules and expose a typed result object for downstream stories.
-  - 8.3.d Expand importer tests to cover payee transformer fallbacks and dry-run summaries.
-  - 8.3.e Update README/backlog snippets describing importer flow to reference the staged architecture.
-  - 8.3.f Request code review.
+    - 8.3.a Extract conversion utilities into a `TransactionConverter` module with pure functions where possible.
+    - 8.3.b Create a `TransactionReconciler` module that encapsulates balance adjustments and deduplication rules with targeted tests.
+    - 8.3.c Update pipeline wiring to use the new modules and expose a typed result object for downstream stories.
+    - 8.3.d Expand importer tests to cover payee transformer fallbacks and dry-run summaries.
+    - 8.3.e Update README/backlog snippets describing importer flow to reference the staged architecture.
+    - 8.3.f Request code review.
 
 ### Story 8.4 – Extract Actual API run utilities
 
 - **User Story:** As a maintainer, I want timeout and console-patching logic encapsulated in reusable utilities so that API requests remain resilient while the wrapper stays readable.
 - **Dependencies:** Independent, but finishing after 8.1 reduces merge conflicts in shared files.
 - **Acceptance Criteria:**
-  - New utilities (e.g., `TimeoutManager`, `ConsolePatcher`) manage lifecycle concerns with unit tests covering timeout expiry, shutdown retries, and log restoration.
-  - `ActualApi.runActualRequest` focuses on invoking callbacks, delegating to utilities, and returning results with ≤60 lines of code.
-  - Error messages remain unchanged or are covered by updated snapshot/unit tests.
+    - New utilities (e.g., `TimeoutManager`, `ConsolePatcher`) manage lifecycle concerns with unit tests covering timeout expiry, shutdown retries, and log restoration.
+    - `ActualApi.runActualRequest` focuses on invoking callbacks, delegating to utilities, and returning results with ≤60 lines of code.
+    - Error messages remain unchanged or are covered by updated snapshot/unit tests.
 - **Tasks:**
-  - 8.4.a Implement `TimeoutManager` with configurable durations and cancellation hooks plus dedicated tests using fake timers.
-  - 8.4.b Implement `ConsolePatcher` that suppresses Actual SDK noise with depth-aware patch/unpatch logic and tests.
-  - 8.4.c Refactor `runActualRequest` to compose the utilities and update related tests to use the new abstractions.
-  - 8.4.d Add regression tests for timeout, retry, and shutdown scenarios in `tests/ActualApi.test.ts`.
-  - 8.4.e Update documentation/backlog to describe the new utilities and their extension points.
-  - 8.4.f Request code review.
+    - 8.4.a Implement `TimeoutManager` with configurable durations and cancellation hooks plus dedicated tests using fake timers.
+    - 8.4.b Implement `ConsolePatcher` that suppresses Actual SDK noise with depth-aware patch/unpatch logic and tests.
+    - 8.4.c Refactor `runActualRequest` to compose the utilities and update related tests to use the new abstractions.
+    - 8.4.d Add regression tests for timeout, retry, and shutdown scenarios in `tests/ActualApi.test.ts`.
+    - 8.4.e Update documentation/backlog to describe the new utilities and their extension points.
+    - 8.4.f Request code review.
 
 ### Story 8.5 – Standardise CLI orchestration and error handling
 
 - **User Story:** As a CLI maintainer, I want command parsing, orchestration, and error messaging standardized so that future flags or workflows can ship without duplicating boilerplate.
 - **Dependencies:** 8.1–8.3 (reuses importer pipeline output) and optionally 8.4 for shared error helpers.
 - **Acceptance Criteria:**
-  - `import.command.ts` delegates parsing to helpers (e.g., `CliFilterParser`) and orchestration to a thin coordinator under 60 lines.
-  - Error handling uses shared helpers (e.g., `CommandErrorFormatter`) yielding consistent user-facing messages verified by tests.
-  - CLI integration tests cover success, validation failure, and API failure flows using the refactored pipeline.
+    - `import.command.ts` delegates parsing to helpers (e.g., `CliFilterParser`) and orchestration to a thin coordinator under 60 lines.
+    - Error handling uses shared helpers (e.g., `CommandErrorFormatter`) yielding consistent user-facing messages verified by tests.
+    - CLI integration tests cover success, validation failure, and API failure flows using the refactored pipeline.
 - **Tasks:**
-  - 8.5.a Extract parsing/validation helpers for dates, servers, budgets, and accounts with unit tests exercising edge cases.
-  - 8.5.b Implement an `ImportOrchestrator` that coordinates importer execution, logging, and dry-run/live toggles.
-  - 8.5.c Introduce a shared error formatting helper reused by CLI and API callers, updating affected modules.
-  - 8.5.d Expand `tests/commands/import.command.test.ts` to cover the refactored flows and shared error messages.
-  - 8.5.e Update README/backlog CLI sections to reflect the new orchestration and documented error outputs.
-  - 8.5.f Request code review.
+    - 8.5.a Extract parsing/validation helpers for dates, servers, budgets, and accounts with unit tests exercising edge cases.
+    - 8.5.b Implement an `ImportOrchestrator` that coordinates importer execution, logging, and dry-run/live toggles.
+    - 8.5.c Introduce a shared error formatting helper reused by CLI and API callers, updating affected modules.
+    - 8.5.d Expand `tests/commands/import.command.test.ts` to cover the refactored flows and shared error messages.
+    - 8.5.e Update README/backlog CLI sections to reflect the new orchestration and documented error outputs.
+    - 8.5.f Request code review.
 
 ### Epic 8 Risks & Mitigations
 

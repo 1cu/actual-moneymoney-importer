@@ -4,10 +4,10 @@
 
 - Vitest powers the automated tests. Run the full suite with `npm test`
 - Tests live under `tests/` and mirror the structure of `src/`:
-  - `ActualApi.test.ts` covers timeout handling, console suppression, and the lifecycle of the Actual API wrapper
-  - `Importer.test.ts` verifies MoneyMoney transaction filtering, deduplication, and dry-run behaviour
-  - `PayeeTransformer.test.ts` exercises OpenAI integration, caching, and logging safeguards
-  - `config.test.ts` validates the Zod schema, earliest import date parsing, and encryption requirements
+    - `ActualApi.test.ts` covers timeout handling, console suppression, and the lifecycle of the Actual API wrapper
+    - `Importer.test.ts` verifies MoneyMoney transaction filtering, deduplication, and dry-run behaviour
+    - `PayeeTransformer.test.ts` exercises OpenAI integration, caching, and logging safeguards
+    - `config.test.ts` validates the Zod schema, earliest import date parsing, and encryption requirements
 
 ## Writing and maintaining tests
 
@@ -66,8 +66,8 @@ When creating fixtures, ask: "Does this fixture solve a real testing need with m
 ## Error-path fixtures
 
 - `tests/helpers/error-fixtures.ts` exposes helpers for simulating Actual API failures:
-  - `makeNetworkDisconnectError` models network disconnects/`ECONNREFUSED` scenarios and chains the cause metadata that `runActualRequest` inspects
-  - `makeInvalidCredentialsError` produces authentication failures, allowing suites to assert the friendly messaging emitted by the CLI
+    - `makeNetworkDisconnectError` models network disconnects/`ECONNREFUSED` scenarios and chains the cause metadata that `runActualRequest` inspects
+    - `makeInvalidCredentialsError` produces authentication failures, allowing suites to assert the friendly messaging emitted by the CLI
 - The fixtures are consumed by `tests/ActualApi.test.ts` to verify `ActualApi.init()` guidance when connectivity or password issues occur
 - Extend the module with additional helpers (e.g., TLS errors) as new failure shapes surface
 

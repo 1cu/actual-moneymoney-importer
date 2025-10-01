@@ -34,7 +34,7 @@ class Importer {
     }) {
         const importDate = this.calculateImportDate(from);
         const monMonTransactions = await this.fetchAndFilterTransactions(importDate, toDate);
-        
+
         if (monMonTransactions.length === 0) {
             this.logger.info(`No transactions found in MoneyMoney since ${format(importDate, DATE_FORMAT)}.`);
             return;
@@ -74,7 +74,7 @@ class Importer {
             }
             throw error;
         }
-        
+
         monMonTransactions = this.sortTransactions(monMonTransactions);
 
         // Apply filters

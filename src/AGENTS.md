@@ -22,10 +22,10 @@
 - Require at least one Actual server in the configuration
 - Before importing, call `checkDatabaseUnlocked()` from `moneymoney` and fail fast if locked
 - For each selected server/budget combination:
-  - Create an `ActualApi` instance, call `init()`, then `loadBudget()` before performing any work, and always `shutdown()` inside a `finally` block
-  - Build an `AccountMap` and load it up front via `loadFromConfig()`
-  - Instantiate `Importer` with the resolved config, budget, API, logger, account map, and optional `PayeeTransformer`
-  - Pass `isDryRun` through to `Importer.importTransactions()`
+    - Create an `ActualApi` instance, call `init()`, then `loadBudget()` before performing any work, and always `shutdown()` inside a `finally` block
+    - Build an `AccountMap` and load it up front via `loadFromConfig()`
+    - Instantiate `Importer` with the resolved config, budget, API, logger, account map, and optional `PayeeTransformer`
+    - Pass `isDryRun` through to `Importer.importTransactions()`
 
 ### `validate.command.ts`
 
@@ -124,25 +124,25 @@
 ### **Evaluation Framework**
 
 1. **🔴 CRITICAL - Must Fix:**
-   - Security vulnerabilities (credential exposure, data leaks)
-   - Data integrity issues (silent data loss, corruption)
-   - System stability (crashes, infinite loops)
+    - Security vulnerabilities (credential exposure, data leaks)
+    - Data integrity issues (silent data loss, corruption)
+    - System stability (crashes, infinite loops)
 
 2. **🟠 MAJOR - Should Fix:**
-   - Missing error handling for external service calls
-   - Resilience improvements with simple fallback mechanisms
-   - User experience improvements (clear error messages)
+    - Missing error handling for external service calls
+    - Resilience improvements with simple fallback mechanisms
+    - User experience improvements (clear error messages)
 
 3. **🟡 MINOR - Nice to Have:**
-   - Error message clarity improvements
-   - Documentation and code comments
-   - Additional debug logging (when valuable)
+    - Error message clarity improvements
+    - Documentation and code comments
+    - Additional debug logging (when valuable)
 
 4. **🔵 TRIVIAL - Skip:**
-   - Style suggestions (unless project standards)
-   - Over-engineering simple problems
-   - Premature optimization without proven need
-   - Unnecessary complexity additions
+    - Style suggestions (unless project standards)
+    - Over-engineering simple problems
+    - Premature optimization without proven need
+    - Unnecessary complexity additions
 
 ### **Decision Process**
 
