@@ -49,7 +49,11 @@ class PayeeTransformer {
             }
 
             const output = response.choices[0].message.content;
-            const parsed = JSON.parse(output) as Record<string, string>;
+            const parsed = this.extractFirstJsonObject(output);
+            if (!parsed) {
+                this.logger.error('Failed to parse model output as JSON');
+                return null;
+            }
 
             // Simple validation and caching
             for (const [original, transformed] of Object.entries(parsed)) {
@@ -199,6 +203,43 @@ Input: ""
 Output: {}
 
 CRITICAL: Return ONLY valid JSON. No explanations or additional text.`;
+    }
+
+    private extractFirstJsonObject(text: string): Record<string, string> | null {
+        // Fast path: pure JSON
+        const trimmed = text.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+            try {
+                return JSON.parse(trimmed) as Record<string, string>;
+            } catch {
+                // Fall through to extraction logic
+            }
+        }
+
+        // Extract first JSON object from text
+        const jsonStart = text.indexOf('{');
+        if (jsonStart === -1) return null;
+
+        let braceCount = 0;
+        let jsonEnd = -1;
+        for (let i = jsonStart; i < text.length; i++) {
+            if (text[i] === '{') braceCount++;
+            else if (text[i] === '}') braceCount--;
+
+            if (braceCount === 0) {
+                jsonEnd = i;
+                break;
+            }
+        }
+
+        if (jsonEnd === -1) return null;
+
+        try {
+            const jsonStr = text.slice(jsonStart, jsonEnd + 1);
+            return JSON.parse(jsonStr) as Record<string, string>;
+        } catch {
+            return null;
+        }
     }
 
     private buildResponse(payees: Array<string>): Record<string, string> {

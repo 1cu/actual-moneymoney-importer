@@ -119,13 +119,21 @@ class GitHubAPI:
                 logger.info(f"🔍 Detected repository: {self.owner}/{self.repo}")
             else:
                 raise ValueError("Not a GitHub repository")
-        except (subprocess.CalledProcessError, ValueError, FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
+        except (
+            subprocess.CalledProcessError,
+            ValueError,
+            FileNotFoundError,
+            subprocess.TimeoutExpired,
+            OSError,
+        ) as e:
             logger.error(f"❌ Error detecting repository: {e}")
             # Fallback for CI: GITHUB_REPOSITORY="owner/repo"
             repo_env = os.getenv("GITHUB_REPOSITORY")
             if repo_env and "/" in repo_env:
                 self.owner, self.repo = repo_env.split("/", 1)
-                logger.info(f"🔍 Detected repository from GITHUB_REPOSITORY: {self.owner}/{self.repo}")
+                logger.info(
+                    f"🔍 Detected repository from GITHUB_REPOSITORY: {self.owner}/{self.repo}"
+                )
                 return
             # Try gh CLI as fallback
             try:
@@ -136,19 +144,33 @@ class GitHubAPI:
                     check=True,
                     timeout=5,
                 )
-                import json
                 repo_data = json.loads(result.stdout)
                 self.owner = repo_data["owner"]["login"]
                 self.repo = repo_data["name"]
-                logger.info(f"🔍 Detected repository from gh CLI: {self.owner}/{self.repo}")
+                logger.info(
+                    f"🔍 Detected repository from gh CLI: {self.owner}/{self.repo}"
+                )
                 return
-            except (subprocess.CalledProcessError, ValueError, FileNotFoundError, subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as gh_error:
+            except (
+                subprocess.CalledProcessError,
+                ValueError,
+                FileNotFoundError,
+                subprocess.TimeoutExpired,
+                OSError,
+                json.JSONDecodeError,
+            ) as gh_error:
                 logger.error(f"❌ gh CLI fallback also failed: {gh_error}")
             sys.exit(1)
 
     def fetch_comments(self, pr_number: int) -> Tuple[List[Comment], List[Comment]]:
         """Fetch comments from GitHub API"""
         import concurrent.futures
+
+        if RICH_AVAILABLE:
+            console = Console()
+            console.print("[bold blue]Fetching comments...[/bold blue]")
+        else:
+            logger.info(f"Fetching comments for PR #{pr_number}...")
 
         # Fetch both in parallel for better performance
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -160,11 +182,8 @@ class GitHubAPI:
             pr_comments = pr_future.result()
 
         if RICH_AVAILABLE:
-            console = Console()
-            console.print("[bold blue]Fetching comments...[/bold blue]")
             console.print("[green]✅ Comments fetched[/green]")
         else:
-            logger.info(f"Fetching comments for PR #{pr_number}...")
             logger.info("✅ Comments fetched")
 
         return review_threads, pr_comments
@@ -217,7 +236,11 @@ class GitHubAPI:
 
             data = json.loads(result.stdout)
             return self._parse_review_threads(data)
-        except (subprocess.CalledProcessError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
+        except (
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as e:
             logger.error(f"❌ Error fetching review threads: {e}")
             return []
 
@@ -263,7 +286,11 @@ class GitHubAPI:
 
             data = json.loads(result.stdout)
             return self._parse_pr_comments(data)
-        except (subprocess.CalledProcessError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
+        except (
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as e:
             logger.error(f"❌ Error fetching PR comments: {e}")
             return []
 
@@ -321,6 +348,7 @@ class CommentProcessor:
 
     def __init__(self):
         import re
+
         self._file_patterns = [
             re.compile(r"In ([^\s]+) around lines?"),
             re.compile(r"In ([^\s]+) at lines?"),
@@ -391,7 +419,10 @@ class CommentProcessor:
             comment.priority == "trivial"
             and comment.category == "nitpick"
             and comment.file_path
-            and any(ext in comment.file_path for ext in ['.yaml', '.yml', '.json', '.gitignore', '.prettierignore'])
+            and any(
+                ext in comment.file_path
+                for ext in [".yaml", ".yml", ".json", ".gitignore", ".prettierignore"]
+            )
         ):
             return "🟢 Review: Simple config file fix - likely worth addressing"
 
@@ -563,7 +594,9 @@ class StatusDisplay:
         self.resolution_manager = resolution_manager
         self.console = Console() if RICH_AVAILABLE else None
 
-    def _create_unified_table(self, comments, title="📝 Comments", show_summary=True, show_assessment=False):
+    def _create_unified_table(
+        self, comments, title="📝 Comments", show_summary=True, show_assessment=False
+    ):
         """Create a unified table for displaying comments with optional filtering"""
         if not comments:
             if self.console:
@@ -707,7 +740,10 @@ class StatusDisplay:
             unresolved_comments = [c for c in comments if not c.is_resolved]
             if unresolved_comments:
                 self._create_unified_table(
-                    unresolved_comments, "❌ Unresolved Comments", show_summary=False, show_assessment=show_assessment
+                    unresolved_comments,
+                    "❌ Unresolved Comments",
+                    show_summary=False,
+                    show_assessment=show_assessment,
                 )
             else:
                 if self.console:
@@ -747,7 +783,9 @@ Examples:
         "--status-unresolved", action="store_true", help="Show only unresolved comments"
     )
     parser.add_argument(
-        "--assess", action="store_true", help="Show assessment guidance for unresolved comments"
+        "--assess",
+        action="store_true",
+        help="Show assessment guidance for unresolved comments",
     )
     parser.add_argument(
         "--cleanup",

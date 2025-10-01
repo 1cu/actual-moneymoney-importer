@@ -57,7 +57,7 @@ describe('Importer', () => {
         } as unknown as AccountMap;
 
         const mockPayeeTransformer = {
-            transformPayees: vi.fn().mockResolvedValue([]),
+            transformPayees: vi.fn().mockResolvedValue({}),
         } as unknown as PayeeTransformer;
 
         const importer = new Importer(
@@ -151,7 +151,7 @@ describe('Importer', () => {
         } as unknown as AccountMap;
 
         const mockPayeeTransformer = {
-            transformPayees: vi.fn().mockResolvedValue([]),
+            transformPayees: vi.fn().mockResolvedValue({}),
         } as unknown as PayeeTransformer;
 
         const importer = new Importer(
@@ -320,7 +320,7 @@ describe('Importer', () => {
         } as unknown as AccountMap;
 
         const mockPayeeTransformer = {
-            transformPayees: vi.fn().mockResolvedValue([]),
+            transformPayees: vi.fn().mockResolvedValue({}),
         } as unknown as PayeeTransformer;
 
         const importer = new Importer(
