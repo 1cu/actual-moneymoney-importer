@@ -1,0 +1,22 @@
+{
+  "resolved_comments": [
+    "PRRC_kwDOOQ6Yxs6OmiEJ"
+  ],
+  "skipped_comments": [
+    "IC_kwDOOQ6Yxs7H34rx"
+  ],
+  "resolution_history": [
+    {
+      "comment_id": "IC_kwDOOQ6Yxs7H34rx",
+      "resolution_type": "skipped",
+      "resolved_at": "2025-10-01T20:11:29.291530+00:00",
+      "resolved_by": "ai"
+    },
+    {
+      "comment_id": "PRRC_kwDOOQ6Yxs6OmiEJ",
+      "resolution_type": "resolved",
+      "resolved_at": "2025-10-01T20:11:29.293509+00:00",
+      "resolved_by": "ai"
+    }
+  ]
+}

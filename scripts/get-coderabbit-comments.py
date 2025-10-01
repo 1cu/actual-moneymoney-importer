@@ -576,7 +576,7 @@ class GitHubAPI:
                         url=review["url"],
                     )
                     comments.append(comment)
-                
+
                 # Add individual review comments
                 for comment_data in review["comments"]["nodes"]:
                     comment = Comment(
@@ -602,11 +602,19 @@ class CommentProcessor:
             re.compile(r"In ([^\s]+) around lines?"),
             re.compile(r"In ([^\s]+) at lines?"),
             re.compile(r"([^\s]+\.(ts|js|json|md|txt|yml|yaml)) around lines?"),
+            # Pattern for review comments: <summary>filename.ext (count)</summary>
+            re.compile(r"<summary>([^\s<>()]+\.(ts|js|json|md|txt|yml|yaml|py|sh)) \(\d+\)</summary>"),
+            # Pattern for review comments: <summary>filename.ext</summary>
+            re.compile(r"<summary>([^\s<>()]+\.(ts|js|json|md|txt|yml|yaml|py|sh))</summary>"),
+            # Pattern for review comments: <summary>filename (count)</summary> - for files without extensions
+            re.compile(r"<summary>([^\s<>()]+) \(\d+\)</summary>"),
+            # Pattern for review comments: <summary>filename</summary> - for files without extensions
+            re.compile(r"<summary>([^\s<>()]+)</summary>"),
         ]
 
         # Pre-compile priority and category patterns
         self._priority_patterns = {
-            "major": re.compile(r"(Major|P1)", re.IGNORECASE),
+            "major": re.compile(r"(Major|P1|⚠️|CAUTION)", re.IGNORECASE),
             "minor": re.compile(r"Minor", re.IGNORECASE),
             "trivial": re.compile(r"Trivial", re.IGNORECASE),
         }
@@ -617,8 +625,9 @@ class CommentProcessor:
                 r"^@(coderabbit|CodeRabbit|codex)", re.IGNORECASE | re.MULTILINE
             ),
             "nitpick": re.compile(r"Nitpick"),
-            "issue": re.compile(r"Potential issue"),
-            "refactor": re.compile(r"Refactor"),
+            "issue": re.compile(r"Potential issue|⚠️|CAUTION"),
+            "refactor": re.compile(r"Refactor|♻️|Duplicate comments"),
+            "outside_diff": re.compile(r"Outside diff range|outside the diff"),
         }
 
     def process_comments(self, comments: List[Comment]) -> List[Comment]:
