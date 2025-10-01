@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from rich.console import Console
@@ -165,8 +166,6 @@ class GitHubAPI:
 
     def fetch_comments(self, pr_number: int) -> Tuple[List[Comment], List[Comment]]:
         """Fetch comments from GitHub API"""
-        import concurrent.futures
-
         if RICH_AVAILABLE:
             console = Console()
             console.print("[bold blue]Fetching comments...[/bold blue]")
@@ -174,7 +173,7 @@ class GitHubAPI:
             logger.info(f"Fetching comments for PR #{pr_number}...")
 
         # Fetch both in parallel for better performance
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             review_future = executor.submit(self._fetch_review_threads, pr_number)
             pr_future = executor.submit(self._fetch_pr_comments, pr_number)
 
@@ -348,51 +347,75 @@ class CommentProcessor:
     """Processes and analyzes comments"""
 
     def __init__(self):
+        # Pre-compile regex patterns for better performance
         self._file_patterns = [
             re.compile(r"In ([^\s]+) around lines?"),
             re.compile(r"In ([^\s]+) at lines?"),
             re.compile(r"([^\s]+\.(ts|js|json|md|txt|yml|yaml)) around lines?"),
         ]
 
+        # Pre-compile priority and category patterns
+        self._priority_patterns = {
+            "major": re.compile(r"(Major|P1)", re.IGNORECASE),
+            "minor": re.compile(r"Minor", re.IGNORECASE),
+            "trivial": re.compile(r"Trivial", re.IGNORECASE),
+        }
+
+        self._category_patterns = {
+            "summary": re.compile(r"## Walkthrough"),
+            "command": re.compile(
+                r"^@(coderabbit|CodeRabbit|codex)", re.IGNORECASE | re.MULTILINE
+            ),
+            "nitpick": re.compile(r"Nitpick"),
+            "issue": re.compile(r"Potential issue"),
+            "refactor": re.compile(r"Refactor"),
+        }
+
     def process_comments(self, comments: List[Comment]) -> List[Comment]:
-        """Process comments and extract metadata"""
-        for comment in comments:
-            comment.priority = self._extract_priority(comment.body)
-            comment.category = self._extract_category(comment.body)
-            if not comment.file_path:
-                comment.file_path = self._extract_file_path(comment.body)
-        return comments
+        """Process comments and extract metadata with parallel processing"""
+        if not comments:
+            return comments
+
+        # Use parallel processing for large comment sets
+        if len(comments) > 10:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                # Submit all comment processing tasks
+                futures = []
+                for comment in comments:
+                    future = executor.submit(self._process_single_comment, comment)
+                    futures.append(future)
+
+                # Wait for all to complete
+                processed_comments = [future.result() for future in futures]
+        else:
+            # For small comment sets, process sequentially
+            processed_comments = [
+                self._process_single_comment(comment) for comment in comments
+            ]
+
+        return processed_comments
+
+    def _process_single_comment(self, comment: Comment) -> Comment:
+        """Process a single comment and extract metadata"""
+        comment.priority = self._extract_priority(comment.body)
+        comment.category = self._extract_category(comment.body)
+        if not comment.file_path:
+            comment.file_path = self._extract_file_path(comment.body)
+        return comment
 
     def _extract_priority(self, body: str) -> str:
-        """Extract priority from comment body"""
-        # Use faster string operations instead of multiple if statements
-        if "Major" in body or "P1" in body:
-            return "major"
-        if "Minor" in body:
-            return "minor"
-        if "Trivial" in body:
-            return "trivial"
+        """Extract priority from comment body using pre-compiled patterns"""
+        for priority, pattern in self._priority_patterns.items():
+            if pattern.search(body):
+                return priority
         return "unknown"
 
     def _extract_category(self, body: str) -> str:
-        """Extract category from comment body"""
-        # Check for summary and command patterns first (more specific)
-        if "## Walkthrough" in body:
-            return "summary"
-        if (
-            body.strip().startswith("@coderabbit")
-            or body.strip().startswith("@CodeRabbit")
-            or body.strip().startswith("@codex")
-        ):
-            return "command"
-
-        # Then check for review comment patterns
-        if "Nitpick" in body:
-            return "nitpick"
-        if "Potential issue" in body:
-            return "issue"
-        if "Refactor" in body:
-            return "refactor"
+        """Extract category from comment body using pre-compiled patterns"""
+        # Check patterns in order of specificity
+        for category, pattern in self._category_patterns.items():
+            if pattern.search(body):
+                return category
         return "other"
 
     def _extract_file_path(self, body: str) -> Optional[str]:
@@ -447,19 +470,20 @@ class ResolutionManager:
         Path(".local").mkdir(exist_ok=True)
 
     def load_resolution_state(self) -> ResolutionState:
-        """Load resolution state from file"""
+        """Load resolution state from file with optimized error handling"""
         if not self.resolution_file.exists():
             return ResolutionState([], [], [])
 
         try:
             with open(self.resolution_file, "r") as f:
                 data = json.load(f)
+            # Use get with defaults to avoid KeyError
             return ResolutionState(
                 resolved_comments=data.get("resolved_comments", []),
                 skipped_comments=data.get("skipped_comments", []),
                 resolution_history=data.get("resolution_history", []),
             )
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError, OSError) as e:
             logger.error(f"❌ Error loading resolution state: {e}")
             return ResolutionState([], [], [])
 
@@ -535,7 +559,7 @@ class ResolutionManager:
             logger.info(f"⏭️ {len(comment_ids)} comments marked as skipped (ignored)")
 
     def load_comments(self) -> List[Comment]:
-        """Load comments from file"""
+        """Load comments from file with optimized field mapping"""
         if not self.comments_file.exists():
             return []
 
@@ -544,29 +568,46 @@ class ResolutionManager:
                 data = json.load(f)
 
             comments = []
-            for comment_data in data.get("comments", []):
-                # Map field names to match our dataclass
-                mapped_comment = {
-                    "comment_id": comment_data.get("comment_id"),
-                    "body": comment_data.get("body"),
-                    "author": comment_data.get("author"),
-                    "created_at": comment_data.get("createdAt"),
-                    "updated_at": comment_data.get("updatedAt"),
-                    "file_path": comment_data.get("file_path"),
-                    "position": comment_data.get("position"),
-                    "url": comment_data.get("url", ""),
-                    "is_resolved": comment_data.get("is_resolved", False),
-                    "resolution_type": comment_data.get("resolution_type"),
-                    "priority": comment_data.get("priority", "unknown"),
-                    "category": comment_data.get("category", "other"),
-                    "type": comment_data.get("type"),
-                    "path": comment_data.get("path"),
-                    "line_range": comment_data.get("line_range"),
-                    "has_code_changes": comment_data.get("has_code_changes", False),
-                }
+            comments_data = data.get("comments", [])
+
+            # Pre-define field mapping for better performance
+            field_mapping = {
+                "comment_id": "comment_id",
+                "body": "body",
+                "author": "author",
+                "created_at": "createdAt",
+                "updated_at": "updatedAt",
+                "file_path": "file_path",
+                "position": "position",
+                "url": "url",
+                "is_resolved": "is_resolved",
+                "resolution_type": "resolution_type",
+                "priority": "priority",
+                "category": "category",
+                "type": "type",
+                "path": "path",
+                "line_range": "line_range",
+                "has_code_changes": "has_code_changes",
+            }
+
+            # Default values to avoid repeated dict lookups
+            defaults = {
+                "url": "",
+                "is_resolved": False,
+                "priority": "unknown",
+                "category": "other",
+                "has_code_changes": False,
+            }
+
+            for comment_data in comments_data:
+                # Build mapped comment with defaults
+                mapped_comment = {}
+                for field, key in field_mapping.items():
+                    mapped_comment[field] = comment_data.get(key, defaults.get(field))
+
                 comments.append(Comment(**mapped_comment))
             return comments
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError, OSError) as e:
             logger.error(f"❌ Error loading comments: {e}")
             return []
 
@@ -894,10 +935,15 @@ Examples:
     if RICH_AVAILABLE:
         console = Console()
         console.print("[bold green]Processing comments...[/bold green]")
-        processed_comments = comment_processor.process_comments(all_comments)
+    else:
+        logger.info("Processing comments...")
+
+    processed_comments = comment_processor.process_comments(all_comments)
+
+    if RICH_AVAILABLE:
         console.print("[green]✅ Comments processed[/green]")
     else:
-        processed_comments = comment_processor.process_comments(all_comments)
+        logger.info("✅ Comments processed")
 
     # Automatically skip command and summary comments (they're not actionable review feedback)
     command_comment_ids = [
