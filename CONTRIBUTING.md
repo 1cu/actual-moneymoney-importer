@@ -4,7 +4,7 @@ Thanks for helping improve Actual-MoneyMoney! This guide explains how to get set
 
 ## Prerequisites
 
-- **Node.js v20.9.0 or newer**
+- **Node.js v24.0.0 or newer**
 - **npm** (ships with Node)
 - **MoneyMoney (macOS)** - only required when testing against a real database
 
