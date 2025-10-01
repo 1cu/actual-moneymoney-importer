@@ -219,7 +219,7 @@ describe('Importer', () => {
         const mockPayeeTransformer = {
             transformPayees: vi.fn().mockResolvedValue({
                 'Test Transaction': 'Transformed Test Transaction',
-                'Starting balance': 'Starting balance'
+                'Starting balance': 'Starting balance',
             }),
         } as unknown as PayeeTransformer;
 
