@@ -346,7 +346,7 @@ actual-monmon --help
 For detailed workflows, see [CONTRIBUTING.md](./CONTRIBUTING.md). Helpful npm
 scripts when working on the project:
 
-- `npm run lint:all` – run all linters (ESLint, complexity, file length, Prettier).
+- `npm run lint:all` – run all linters (ESLint, Prettier, Markdown).
 - `npm run lint:complexity` – enforce the cyclomatic (max 40) and cognitive (max
   60\) complexity budgets for the source tree.
 - `npm run lint:prettier` – check formatting with Prettier.
@@ -360,8 +360,8 @@ Run `mdformat <files>` locally when updating docs to keep diffs clean.
 
 The repository includes Husky hooks to keep the working tree clean:
 
-- `pre-commit` runs `npm run lint:all` and
-  `npm run lint:complexity` to block formatting, lint, or complexity violations.
+- `pre-commit` runs `npm run lint:all`, `npm run lint:eslint`,
+  `npm run typecheck`, `npm run test:typecheck`, and `npm test` to block formatting, lint, type, or test violations.
 - `pre-push` runs the quality gates so that pushes only succeed when the entire
   local CI suite is green.
 

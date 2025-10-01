@@ -11,6 +11,20 @@ vi.mock('moneymoney', () => ({
     getTransactions: vi.fn(),
 }));
 
+const createMockTransaction = (overrides = {}) => ({
+    id: 1,
+    accountUuid: 'mm-account-1',
+    name: 'Test Transaction',
+    amount: 100,
+    valueDate: new Date('2024-01-15'),
+    bookingDate: new Date('2024-01-15'),
+    booked: true,
+    checkmark: true,
+    categoryUuid: 'test-category',
+    currency: 'EUR',
+    ...overrides,
+});
+
 describe('Importer', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -69,20 +83,7 @@ describe('Importer', () => {
             mockPayeeTransformer
         );
 
-        const mockTransactions = [
-            {
-                id: 1,
-                accountUuid: 'mm-account-1',
-                name: 'Test Transaction',
-                amount: 100,
-                valueDate: new Date('2024-01-15'),
-                bookingDate: new Date('2024-01-15'),
-                booked: true,
-                checkmark: true,
-                categoryUuid: 'test-category',
-                currency: 'EUR',
-            },
-        ];
+        const mockTransactions = [createMockTransaction()];
 
         vi.mocked(getTransactions).mockResolvedValue(mockTransactions);
 
@@ -232,20 +233,7 @@ describe('Importer', () => {
             mockPayeeTransformer
         );
 
-        const mockTransactions = [
-            {
-                id: 1,
-                accountUuid: 'mm-account-1',
-                name: 'Test Transaction',
-                amount: 100,
-                valueDate: new Date('2024-01-15'),
-                bookingDate: new Date('2024-01-15'),
-                booked: true,
-                checkmark: true,
-                categoryUuid: 'test-category',
-                currency: 'EUR',
-            },
-        ];
+        const mockTransactions = [createMockTransaction()];
 
         vi.mocked(getTransactions).mockResolvedValue(mockTransactions);
 
@@ -332,20 +320,7 @@ describe('Importer', () => {
             mockPayeeTransformer
         );
 
-        const mockTransactions = [
-            {
-                id: 1,
-                accountUuid: 'mm-account-1',
-                name: 'Test Transaction',
-                amount: 100,
-                valueDate: new Date('2024-01-15'),
-                bookingDate: new Date('2024-01-15'),
-                booked: true,
-                checkmark: true,
-                categoryUuid: 'test-category',
-                currency: 'EUR',
-            },
-        ];
+        const mockTransactions = [createMockTransaction()];
 
         vi.mocked(getTransactions).mockResolvedValue(mockTransactions);
 

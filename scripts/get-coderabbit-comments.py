@@ -23,6 +23,7 @@ Examples:
 import argparse
 import json
 import os
+import re
 import sys
 import subprocess
 import logging
@@ -55,7 +56,7 @@ class Comment:
     author: str
     created_at: str
     updated_at: str
-    file_path: Optional[str] = None
+    file_path: Optional[str] = None  # Primary field for file path
     position: Optional[int] = None
     url: str = ""
     is_resolved: bool = False
@@ -63,7 +64,7 @@ class Comment:
     priority: str = "unknown"
     category: str = "other"
     type: Optional[str] = None  # For compatibility with existing data
-    path: Optional[str] = None  # For compatibility with existing data
+    path: Optional[str] = None  # Legacy field, prefer file_path
     line_range: Optional[str] = None  # For compatibility with existing data
     has_code_changes: bool = False  # For compatibility with existing data
 
@@ -347,8 +348,6 @@ class CommentProcessor:
     """Processes and analyzes comments"""
 
     def __init__(self):
-        import re
-
         self._file_patterns = [
             re.compile(r"In ([^\s]+) around lines?"),
             re.compile(r"In ([^\s]+) at lines?"),
