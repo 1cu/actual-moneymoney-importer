@@ -71,6 +71,45 @@ All changes must pass:
 
 **CRITICAL**: Not all Coderabbit suggestions are necessary or beneficial. Follow these guidelines:
 
+### **Automated Comment Processing**
+
+The project includes a sophisticated comment processing script (`scripts/get-coderabbit-comments.py`) that:
+
+- **Fetches comments** from GitHub PRs using the GitHub CLI
+- **Categorizes comments** by type (issue, refactor, nitpick, command, summary)
+- **Extracts metadata** (priority, file path, author, dates)
+- **Provides assessment guidance** for unresolved comments
+- **Manages resolution state** (resolved, skipped, unresolved)
+
+### **Usage Commands**
+
+```bash
+# Show all comments with status
+python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --status
+
+# Show only unresolved comments
+python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --status-unresolved
+
+# Show assessment guidance for unresolved comments
+python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --assess
+
+# Mark comments as resolved (fixed)
+python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --resolve <COMMENT_ID1>,<COMMENT_ID2>
+
+# Mark comments as skipped (ignored)
+python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --skip <COMMENT_ID1>,<COMMENT_ID2>
+```
+
+### **Assessment Guidance System**
+
+The script provides intelligent assessment guidance:
+
+- **🔴 Should address: High priority issue** - Major issues that need fixing
+- **🟡 Should address: Minor issue** - Minor issues usually worth addressing
+- **🟢 Review: Simple config file fix** - Trivial nitpicks on config files (often simple)
+- **🔵 Review: Trivial nitpick** - Code nitpicks that need evaluation
+- **⚪ Review: Evaluate based on content** - Other categories need manual review
+
 ### **Evaluation Framework**
 
 1. **🔴 CRITICAL - Must Fix:**
@@ -88,18 +127,19 @@ All changes must pass:
     - Documentation and code comments
     - Additional debug logging (when valuable)
 
-1. **🔵 TRIVIAL - Skip:**
-    - Style suggestions (unless project standards)
-    - Over-engineering simple problems
-    - Premature optimization without proven need
-    - Unnecessary complexity additions
+1. **🔵 TRIVIAL - Evaluate:**
+    - Configuration file improvements (often simple fixes)
+    - Code style suggestions (evaluate based on content)
+    - Documentation updates (assess value vs. effort)
 
 ### **Decision Process**
 
-1. **Question every suggestion** - Is this fix truly necessary?
-1. **Consider complexity** - Does it add unnecessary complexity?
-1. **Look for simpler solutions** - Can this be solved more simply?
-1. **Follow project guidelines** - Does it align with complexity prevention?
+1. **Read the comment content** - Don't skip based on priority alone
+2. **Use assessment guidance** - The script provides intelligent recommendations
+3. **Question every suggestion** - Is this fix truly necessary?
+4. **Consider complexity** - Does it add unnecessary complexity?
+5. **Look for simpler solutions** - Can this be solved more simply?
+6. **Follow project guidelines** - Does it align with complexity prevention?
 
 ### **Anti-Patterns to Avoid**
 
@@ -108,6 +148,7 @@ All changes must pass:
 - Excessive logging and debugging infrastructure
 - Complex configuration with too many options
 - Over-mocking in tests
+- **Bulk skipping comments** without reading content
 
 ### **Preferred Patterns**
 
@@ -116,6 +157,7 @@ All changes must pass:
 - Single-purpose utilities with focused interfaces
 - Simple test data and minimal fixtures
 - Direct API calls without unnecessary abstraction layers
+- **Evaluate each comment individually** based on content and context
 
 **Remember**: The best code is code that doesn't exist. Delete over refactor, inline over abstract, simplify over optimize.
 

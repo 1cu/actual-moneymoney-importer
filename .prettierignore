@@ -83,7 +83,6 @@ coverage/
 .npm
 
 # Optional eslint cache
-.eslintcache
 
 # Microbundle cache
 .rpt2_cache/

@@ -32,34 +32,37 @@ reviews:
               # Basic formatting
               All character sets need to be in UTF-8.
               Lines need to end with LF (line feed).
-              Spaces for indentation instead of tabs.
+              Use spaces (2) for indentation; no tabs.
               A newline must be inserted at the end of the file.
               Trim all trailing whitespaces.
-              Maximum line length must be 120 characters.
-              Remove any console.log statements.
-              Handle leftover TODOs in the code.
+              Respect the repo's Prettier printWidth; do not hand-enforce line length outside tooling.
+              Avoid console.log in src/**; tests may log behind a debug flag.
+              No TODO/FIXME/XXX without an issue link; otherwise resolve before merge.
 
               # Complexity prevention
               Follow the YAGNI Principle: 'You aren't gonna need it' - don't add functionality until necessary.
               Keep code simple and focused on essential functionality.
               Avoid over-engineering and premature optimization.
-              Delete over abstract - remove complexity instead of refactoring.
+              Prefer deletion over unnecessary abstraction; remove unused layers rather than refactoring them.
+              Do not delete domain concepts that provide safety or clarity.
               Inline simple functionality instead of creating wrappers.
               Question every abstraction - does it solve a real problem?
 
               # macOS-only project
-              This is a macOS-only project. Use native macOS tools and syntax.
+              Target platform is macOS (MoneyMoney). Use macOS paths in docs, but keep CI and project scripts POSIX-portable; avoid macOS-only shellisms.
 
               # Testing
               Write focused, readable tests that cover essential functionality.
-              Avoid over-testing edge cases and micro-optimizations.
-              Keep tests simple with minimal fixtures.
+              Avoid over-testing trivia, but retain edge-case tests for critical flows (timeouts, duplicates, rounding/locales).
+              Keep tests simple with minimal fixtures; prefer E2E smoke tests for core import/sync paths.
 
               # Code quality
               Follow existing Prettier and ESLint configurations.
               Keep functions simple and focused on single responsibilities.
               Prefer explicit over implicit, but don't over-abstract.
               Use meaningful names and clear structure.
+              Align with ESLint complexity/max-lines rules to avoid guideline drift.
+              Prefer explicit types at module boundaries; allow inference internally.
 chat:
     auto_reply: true
 knowledge_base:

@@ -150,26 +150,22 @@ class GitHubAPI:
         """Fetch comments from GitHub API"""
         import concurrent.futures
 
+        # Fetch both in parallel for better performance
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            review_future = executor.submit(self._fetch_review_threads, pr_number)
+            pr_future = executor.submit(self._fetch_pr_comments, pr_number)
+
+            # Wait for both to complete
+            review_threads = review_future.result()
+            pr_comments = pr_future.result()
+
         if RICH_AVAILABLE:
             console = Console()
             console.print("[bold blue]Fetching comments...[/bold blue]")
-
-            # Fetch both in parallel for better performance
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                review_future = executor.submit(self._fetch_review_threads, pr_number)
-                pr_future = executor.submit(self._fetch_pr_comments, pr_number)
-
-                # Wait for both to complete
-                review_threads = review_future.result()
-                pr_comments = pr_future.result()
-
             console.print("[green]✅ Comments fetched[/green]")
         else:
             logger.info(f"Fetching comments for PR #{pr_number}...")
-            # Fetch review threads
-            review_threads = self._fetch_review_threads(pr_number)
-            # Fetch PR comments
-            pr_comments = self._fetch_pr_comments(pr_number)
+            logger.info("✅ Comments fetched")
 
         return review_threads, pr_comments
 
@@ -216,11 +212,12 @@ class GitHubAPI:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=30,
             )
 
             data = json.loads(result.stdout)
             return self._parse_review_threads(data)
-        except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+        except (subprocess.CalledProcessError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
             logger.error(f"❌ Error fetching review threads: {e}")
             return []
 
@@ -261,11 +258,12 @@ class GitHubAPI:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=30,
             )
 
             data = json.loads(result.stdout)
             return self._parse_pr_comments(data)
-        except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+        except (subprocess.CalledProcessError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
             logger.error(f"❌ Error fetching PR comments: {e}")
             return []
 
@@ -277,6 +275,7 @@ class GitHubAPI:
                 "nodes"
             ]
             for thread in threads:
+                thread_resolved = bool(thread.get("isResolved", False))
                 for comment_data in thread["comments"]["nodes"]:
                     comment = Comment(
                         comment_id=comment_data["id"],
@@ -287,6 +286,8 @@ class GitHubAPI:
                         file_path=comment_data.get("path"),
                         position=comment_data.get("position"),
                         url=comment_data["url"],
+                        is_resolved=thread_resolved,
+                        resolution_type=("resolved" if thread_resolved else None),
                     )
                     comments.append(comment)
         except (KeyError, TypeError) as e:
@@ -319,7 +320,12 @@ class CommentProcessor:
     """Processes and analyzes comments"""
 
     def __init__(self):
-        pass
+        import re
+        self._file_patterns = [
+            re.compile(r"In ([^\s]+) around lines?"),
+            re.compile(r"In ([^\s]+) at lines?"),
+            re.compile(r"([^\s]+\.(ts|js|json|md|txt|yml|yaml)) around lines?"),
+        ]
 
     def process_comments(self, comments: List[Comment]) -> List[Comment]:
         """Process comments and extract metadata"""
@@ -364,21 +370,35 @@ class CommentProcessor:
 
     def _extract_file_path(self, body: str) -> Optional[str]:
         """Extract file path from comment body"""
-        import re
-
-        # Compile regex patterns once for better performance
-        if not hasattr(self, "_file_patterns"):
-            self._file_patterns = [
-                re.compile(r"In ([^\s]+) around lines?"),
-                re.compile(r"In ([^\s]+) at lines?"),
-                re.compile(r"([^\s]+\.(ts|js|json|md|txt|yml|yaml)) around lines?"),
-            ]
-
         for pattern in self._file_patterns:
             match = pattern.search(body)
             if match:
                 return match.group(1)
         return None
+
+    def assess_comment_for_action(self, comment: Comment) -> str:
+        """Provide guidance on whether a comment should be addressed"""
+        # High priority issues should always be addressed
+        if comment.priority == "major" and comment.category in ["issue", "refactor"]:
+            return "🔴 Should address: High priority issue"
+
+        # Minor issues are usually worth addressing
+        if comment.priority == "minor" and comment.category == "issue":
+            return "🟡 Should address: Minor issue"
+
+        # Trivial nitpicks on configuration files are often simple fixes
+        if (comment.priority == "trivial" and
+            comment.category == "nitpick" and
+            comment.file_path and
+            any(ext in comment.file_path for ext in ['.yaml', '.yml', '.json', '.gitignore', '.prettierignore'])):
+            return "🟢 Review: Simple config file fix - likely worth addressing"
+
+        # Trivial nitpicks on code files need evaluation
+        if comment.priority == "trivial" and comment.category == "nitpick":
+            return "🔵 Review: Trivial nitpick - evaluate based on content"
+
+        # Other categories need manual review
+        return "⚪ Review: Evaluate based on content and context"
 
 
 class ResolutionManager:
@@ -541,7 +561,7 @@ class StatusDisplay:
         self.resolution_manager = resolution_manager
         self.console = Console() if RICH_AVAILABLE else None
 
-    def _create_unified_table(self, comments, title="📝 Comments", show_summary=True):
+    def _create_unified_table(self, comments, title="📝 Comments", show_summary=True, show_assessment=False):
         """Create a unified table for displaying comments with optional filtering"""
         if not comments:
             if self.console:
@@ -636,6 +656,13 @@ class StatusDisplay:
 
                     file_path = comment.file_path or "General"
                     date_str = comment.created_at.split("T")[0]  # Just the date part
+
+                    # Add assessment guidance for unresolved comments
+                    if status == "❌ Unresolved" and show_assessment:
+                        processor = CommentProcessor()
+                        assessment = processor.assess_comment_for_action(comment)
+                        file_path = f"{file_path}\n[dim]{assessment}[/dim]"
+
                     table.add_row(
                         comment.comment_id,
                         f"[{status_color}]{status}[/{status_color}]",
@@ -656,7 +683,7 @@ class StatusDisplay:
                         f"  {status} {comment.comment_id} - {file_path} - {comment.author} - {date_str}"
                     )
 
-    def show_status(self, unresolved_only: bool = False):
+    def show_status(self, unresolved_only: bool = False, show_assessment: bool = False):
         """Show resolution status"""
         comments = self.resolution_manager.load_comments()
         if not comments:
@@ -678,7 +705,7 @@ class StatusDisplay:
             unresolved_comments = [c for c in comments if not c.is_resolved]
             if unresolved_comments:
                 self._create_unified_table(
-                    unresolved_comments, "❌ Unresolved Comments", show_summary=False
+                    unresolved_comments, "❌ Unresolved Comments", show_summary=False, show_assessment=show_assessment
                 )
             else:
                 if self.console:
@@ -716,6 +743,9 @@ Examples:
     parser.add_argument("--status", action="store_true", help="Show resolution status")
     parser.add_argument(
         "--status-unresolved", action="store_true", help="Show only unresolved comments"
+    )
+    parser.add_argument(
+        "--assess", action="store_true", help="Show assessment guidance for unresolved comments"
     )
     parser.add_argument(
         "--cleanup",
@@ -791,9 +821,13 @@ Examples:
         return
 
     # Handle status commands
-    if args.status or args.status_unresolved:
+    if args.status or args.status_unresolved or args.assess:
         status_display = StatusDisplay(resolution_manager)
-        status_display.show_status(unresolved_only=args.status_unresolved)
+        if args.assess:
+            # Show assessment guidance for unresolved comments
+            status_display.show_status(unresolved_only=True, show_assessment=True)
+        else:
+            status_display.show_status(unresolved_only=args.status_unresolved)
         return
 
     # Default: fetch and display comments

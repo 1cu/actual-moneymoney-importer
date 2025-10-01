@@ -92,6 +92,14 @@ class ActualApi {
     protected isInitialized = false;
     private currentDataDir: string | null = null;
     private static consolePatchDepth = 0;
+    private static originalConsole:
+        | null
+        | {
+              log: typeof console.log;
+              info: typeof console.info;
+              debug: typeof console.debug;
+              warn: typeof console.warn;
+          } = null;
 
     public constructor(
         private readonly serverConfig: ActualServerConfig,
@@ -357,34 +365,36 @@ class ActualApi {
         ActualApi.consolePatchDepth++;
 
         if (ActualApi.consolePatchDepth === 1) {
-            // Only patch on first call
-            const originalLog = console.log;
-            const originalInfo = console.info;
-            const originalDebug = console.debug;
-            const originalWarn = console.warn;
-
-            console.log = createConsoleInterceptor(originalLog);
-            console.info = createConsoleInterceptor(originalInfo);
-            console.debug = createConsoleInterceptor(originalDebug);
-            console.warn = createConsoleInterceptor(originalWarn);
-
-            return () => {
-                ActualApi.consolePatchDepth--;
-                if (ActualApi.consolePatchDepth === 0) {
-                    // Only restore on last unpatch
-                    console.log = originalLog;
-                    console.info = originalInfo;
-                    console.debug = originalDebug;
-                    console.warn = originalWarn;
-                }
+            // Only patch on first call - store originals in static state
+            ActualApi.originalConsole = {
+                log: console.log,
+                info: console.info,
+                debug: console.debug,
+                warn: console.warn,
             };
-        } else {
-            // Already patched, just track depth
-            return () => {
-                ActualApi.consolePatchDepth--;
-            };
+
+            console.log = createConsoleInterceptor(ActualApi.originalConsole.log);
+            console.info = createConsoleInterceptor(ActualApi.originalConsole.info);
+            console.debug = createConsoleInterceptor(ActualApi.originalConsole.debug);
+            console.warn = createConsoleInterceptor(ActualApi.originalConsole.warn);
         }
+
+        return () => {
+            // Guard against underflow
+            if (ActualApi.consolePatchDepth === 0) {
+                return;
+            }
+            ActualApi.consolePatchDepth--;
+
+            if (ActualApi.consolePatchDepth === 0 && ActualApi.originalConsole) {
+                const { log, info, debug, warn } = ActualApi.originalConsole;
+                console.log = log;
+                console.info = info;
+                console.debug = debug;
+                console.warn = warn;
+                ActualApi.originalConsole = null;
+            }
+        };
     }
 }
-
 export default ActualApi;
