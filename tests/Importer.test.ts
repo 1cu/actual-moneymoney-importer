@@ -96,6 +96,12 @@ describe('Importer', () => {
 
         // Verify the method was called with correct parameters
         expect(mockAccountMap.getMap).toHaveBeenCalledWith(['mm-account-1']);
+        expect(getTransactions).toHaveBeenCalledWith(
+            expect.objectContaining({
+                from: new Date('2024-01-01'),
+                to: new Date('2024-01-31'),
+            })
+        );
         expect(mockPayeeTransformer.transformPayees).not.toHaveBeenCalled();
         expect(mockActualApi.importTransactions).toHaveBeenCalledTimes(1);
         expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
@@ -106,6 +112,7 @@ describe('Importer', () => {
                     amount: 10000,
                     payee_name: 'Test Transaction',
                     cleared: true,
+                    imported_id: expect.any(String),
                 }),
             ])
         );
@@ -173,6 +180,12 @@ describe('Importer', () => {
             isDryRun: false,
         });
 
+        expect(getTransactions).toHaveBeenCalledWith(
+            expect.objectContaining({
+                from: new Date('2024-01-01'),
+                to: new Date('2024-01-31'),
+            })
+        );
         expect(mockActualApi.importTransactions).not.toHaveBeenCalled();
         expect(mockPayeeTransformer.transformPayees).not.toHaveBeenCalled();
     });
@@ -262,6 +275,7 @@ describe('Importer', () => {
                     amount: 10000, // MoneyMoney uses cents
                     payee_name: 'Transformed Test Transaction',
                     cleared: true,
+                    imported_id: expect.any(String),
                 }),
             ])
         );
@@ -332,6 +346,12 @@ describe('Importer', () => {
         });
 
         expect(mockAccountMap.getMap).toHaveBeenCalledWith(['mm-account-1']);
+        expect(getTransactions).toHaveBeenCalledWith(
+            expect.objectContaining({
+                from: new Date('2024-01-01'),
+                to: new Date('2024-01-31'),
+            })
+        );
         expect(mockActualApi.importTransactions).not.toHaveBeenCalled();
         expect(mockPayeeTransformer.transformPayees).not.toHaveBeenCalled();
     });

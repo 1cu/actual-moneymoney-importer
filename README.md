@@ -238,14 +238,14 @@ When configuration values are not explicitly set, the following defaults are use
 | `payeeTransformation.enabled`                      | `false`         | Disable AI payee transformation by default          |
 | `payeeTransformation.openAiModel`                  | `"gpt-4o-mini"` | Use cost-effective model for transformations        |
 | `payeeTransformation.cacheTransformedPayees`       | `true`          | Cache transformations to avoid repeated API calls   |
-| `importSettings.uncheckedTransactions`             | `true`          | Import transactions as unchecked by default         |
-| `importSettings.clearedTransactions`               | `false`         | Import transactions as uncleared by default         |
-| `importSettings.maskPayeesInLogs`                  | `true`          | Mask payee names in logs for privacy                |
-| `importSettings.importSince`                       | `null`          | No date filter by default (import all transactions) |
-| `importSettings.importUntil`                       | `null`          | No end date filter by default                       |
-| `importSettings.ignorePatterns.comments`           | `[]`            | No comment patterns to ignore                       |
-| `importSettings.ignorePatterns.payees`             | `[]`            | No payee patterns to ignore                         |
-| `importSettings.ignorePatterns.purposes`           | `[]`            | No purpose patterns to ignore                       |
+| `import.uncheckedTransactions`                     | `true`          | Import transactions as unchecked by default         |
+| `import.clearedTransactions`                       | `false`         | Import transactions as uncleared by default         |
+| `import.maskPayeesInLogs`                         | `true`          | Mask payee names in logs for privacy                |
+| `import.importSince`                              | `null`          | No date filter by default (import all transactions) |
+| `import.importUntil`                              | `null`          | No end date filter by default                       |
+| `import.ignorePatterns.comments`                 | `[]`            | No comment patterns to ignore                       |
+| `import.ignorePatterns.payees`                    | `[]`            | No payee patterns to ignore                         |
+| `import.ignorePatterns.purposes`                  | `[]`            | No purpose patterns to ignore                       |
 | `actualServers`                                    | `[]`            | No servers configured by default                    |
 | `actualServers[].budgets[].e2eEncryption.enabled`  | `false`         | No encryption by default                            |
 | `actualServers[].budgets[].e2eEncryption.password` | `null`          | No encryption password by default                   |

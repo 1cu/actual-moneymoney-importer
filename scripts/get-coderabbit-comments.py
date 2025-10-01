@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from rich.console import Console
@@ -190,7 +191,58 @@ class GitHubAPI:
         return review_threads, pr_comments
 
     def _fetch_review_threads(self, pr_number: int) -> List[Comment]:
-        """Fetch review threads using GitHub CLI"""
+        """Fetch review threads using GitHub CLI with batch processing for large PRs"""
+        # First, check if this is a large PR
+        count_query = """
+        query($owner:String!, $name:String!, $number:Int!) {
+          repository(owner:$owner, name:$name) {
+            pullRequest(number:$number) {
+              reviewThreads(first:1) { totalCount }
+            }
+          }
+        }
+        """
+
+        try:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "-F",
+                    f"query={count_query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )
+
+            data = json.loads(result.stdout)
+            total_count = data["data"]["repository"]["pullRequest"]["reviewThreads"][
+                "totalCount"
+            ]
+
+            if total_count > 50:
+                logger.warning(
+                    f"⚠️ Large PR detected: {total_count} review threads. Using batch processing..."
+                )
+                return self._fetch_review_threads_batched(pr_number, total_count)
+            else:
+                return self._fetch_review_threads_single(pr_number)
+
+        except Exception as e:
+            logger.warning(f"⚠️ Could not check PR size, using single fetch: {e}")
+            return self._fetch_review_threads_single(pr_number)
+
+    def _fetch_review_threads_single(self, pr_number: int) -> List[Comment]:
+        """Fetch review threads in a single query (for smaller PRs)"""
         query = """
         query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
           repository(owner:$owner, name:$name) {
@@ -244,6 +296,104 @@ class GitHubAPI:
         ) as e:
             logger.error(f"❌ Error fetching review threads: {e}")
             return []
+
+    def _fetch_review_threads_batched(
+        self, pr_number: int, total_count: int
+    ) -> List[Comment]:
+        """Fetch review threads in batches for large PRs"""
+        all_comments: List[Comment] = []
+        batch_size = 20
+        cursor = None
+
+        logger.info(
+            f"📦 Fetching {total_count} review threads in batches of {batch_size}..."
+        )
+
+        while len(all_comments) < total_count:
+            query = """
+            query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
+              repository(owner:$owner, name:$name) {
+                pullRequest(number:$number) {
+                  reviewThreads(first:20, after:$cursor) {
+                    pageInfo { hasNextPage endCursor }
+                    nodes {
+                      isResolved
+                      comments(first:10) {
+                        nodes {
+                          id
+                          body path position url createdAt updatedAt
+                          author { login }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+
+            try:
+                cmd = [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "-F",
+                    f"query={query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ]
+                if cursor:
+                    cmd.extend(["-F", f"cursor={cursor}"])
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30,
+                )
+
+                data = json.loads(result.stdout)
+                threads = data["data"]["repository"]["pullRequest"]["reviewThreads"][
+                    "nodes"
+                ]
+                page_info = data["data"]["repository"]["pullRequest"]["reviewThreads"][
+                    "pageInfo"
+                ]
+
+                # Parse this batch
+                batch_comments = self._parse_review_threads(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {"reviewThreads": {"nodes": threads}}
+                            }
+                        }
+                    }
+                )
+                all_comments.extend(batch_comments)
+
+                logger.info(
+                    f"📦 Fetched {len(batch_comments)} comments from batch ({len(all_comments)}/{total_count} total)"
+                )
+
+                if not page_info["hasNextPage"]:
+                    break
+
+                cursor = page_info["endCursor"]
+
+            except Exception as e:
+                logger.error(f"❌ Error in batch processing: {e}")
+                break
+
+        logger.info(
+            f"✅ Batch processing complete: {len(all_comments)} comments fetched"
+        )
+        return all_comments
 
     def _fetch_pr_comments(self, pr_number: int) -> List[Comment]:
         """Fetch PR comments using GitHub CLI"""
@@ -348,51 +498,75 @@ class CommentProcessor:
     """Processes and analyzes comments"""
 
     def __init__(self):
+        # Pre-compile regex patterns for better performance
         self._file_patterns = [
             re.compile(r"In ([^\s]+) around lines?"),
             re.compile(r"In ([^\s]+) at lines?"),
             re.compile(r"([^\s]+\.(ts|js|json|md|txt|yml|yaml)) around lines?"),
         ]
 
+        # Pre-compile priority and category patterns
+        self._priority_patterns = {
+            "major": re.compile(r"(Major|P1)", re.IGNORECASE),
+            "minor": re.compile(r"Minor", re.IGNORECASE),
+            "trivial": re.compile(r"Trivial", re.IGNORECASE),
+        }
+
+        self._category_patterns = {
+            "summary": re.compile(r"## Walkthrough"),
+            "command": re.compile(
+                r"^@(coderabbit|CodeRabbit|codex)", re.IGNORECASE | re.MULTILINE
+            ),
+            "nitpick": re.compile(r"Nitpick"),
+            "issue": re.compile(r"Potential issue"),
+            "refactor": re.compile(r"Refactor"),
+        }
+
     def process_comments(self, comments: List[Comment]) -> List[Comment]:
-        """Process comments and extract metadata"""
-        for comment in comments:
-            comment.priority = self._extract_priority(comment.body)
-            comment.category = self._extract_category(comment.body)
-            if not comment.file_path:
-                comment.file_path = self._extract_file_path(comment.body)
-        return comments
+        """Process comments and extract metadata with parallel processing"""
+        if not comments:
+            return comments
+
+        # Use parallel processing for large comment sets
+        if len(comments) > 10:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                # Submit all comment processing tasks
+                futures = []
+                for comment in comments:
+                    future = executor.submit(self._process_single_comment, comment)
+                    futures.append(future)
+
+                # Wait for all to complete
+                processed_comments = [future.result() for future in futures]
+        else:
+            # For small comment sets, process sequentially
+            processed_comments = [
+                self._process_single_comment(comment) for comment in comments
+            ]
+
+        return processed_comments
+
+    def _process_single_comment(self, comment: Comment) -> Comment:
+        """Process a single comment and extract metadata"""
+        comment.priority = self._extract_priority(comment.body)
+        comment.category = self._extract_category(comment.body)
+        if not comment.file_path:
+            comment.file_path = self._extract_file_path(comment.body)
+        return comment
 
     def _extract_priority(self, body: str) -> str:
-        """Extract priority from comment body"""
-        # Use faster string operations instead of multiple if statements
-        if "Major" in body or "P1" in body:
-            return "major"
-        if "Minor" in body:
-            return "minor"
-        if "Trivial" in body:
-            return "trivial"
+        """Extract priority from comment body using pre-compiled patterns"""
+        for priority, pattern in self._priority_patterns.items():
+            if pattern.search(body):
+                return priority
         return "unknown"
 
     def _extract_category(self, body: str) -> str:
-        """Extract category from comment body"""
-        # Check for summary and command patterns first (more specific)
-        if "## Walkthrough" in body:
-            return "summary"
-        if (
-            body.strip().startswith("@coderabbit")
-            or body.strip().startswith("@CodeRabbit")
-            or body.strip().startswith("@codex")
-        ):
-            return "command"
-
-        # Then check for review comment patterns
-        if "Nitpick" in body:
-            return "nitpick"
-        if "Potential issue" in body:
-            return "issue"
-        if "Refactor" in body:
-            return "refactor"
+        """Extract category from comment body using pre-compiled patterns"""
+        # Check patterns in order of specificity
+        for category, pattern in self._category_patterns.items():
+            if pattern.search(body):
+                return category
         return "other"
 
     def _extract_file_path(self, body: str) -> Optional[str]:
@@ -452,7 +626,7 @@ class ResolutionManager:
             return ResolutionState([], [], [])
 
         try:
-            with open(self.resolution_file, "r") as f:
+            with open(self.resolution_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return ResolutionState(
                 resolved_comments=data.get("resolved_comments", []),
@@ -535,38 +709,55 @@ class ResolutionManager:
             logger.info(f"⏭️ {len(comment_ids)} comments marked as skipped (ignored)")
 
     def load_comments(self) -> List[Comment]:
-        """Load comments from file"""
+        """Load comments from file with optimized field mapping"""
         if not self.comments_file.exists():
             return []
 
         try:
-            with open(self.comments_file, "r") as f:
+            with open(self.comments_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             comments = []
-            for comment_data in data.get("comments", []):
-                # Map field names to match our dataclass
-                mapped_comment = {
-                    "comment_id": comment_data.get("comment_id"),
-                    "body": comment_data.get("body"),
-                    "author": comment_data.get("author"),
-                    "created_at": comment_data.get("createdAt"),
-                    "updated_at": comment_data.get("updatedAt"),
-                    "file_path": comment_data.get("file_path"),
-                    "position": comment_data.get("position"),
-                    "url": comment_data.get("url", ""),
-                    "is_resolved": comment_data.get("is_resolved", False),
-                    "resolution_type": comment_data.get("resolution_type"),
-                    "priority": comment_data.get("priority", "unknown"),
-                    "category": comment_data.get("category", "other"),
-                    "type": comment_data.get("type"),
-                    "path": comment_data.get("path"),
-                    "line_range": comment_data.get("line_range"),
-                    "has_code_changes": comment_data.get("has_code_changes", False),
-                }
+            comments_data = data.get("comments", [])
+
+            # Pre-define field mapping for better performance
+            field_mapping = {
+                "comment_id": "comment_id",
+                "body": "body",
+                "author": "author",
+                "created_at": "createdAt",
+                "updated_at": "updatedAt",
+                "file_path": "file_path",
+                "position": "position",
+                "url": "url",
+                "is_resolved": "is_resolved",
+                "resolution_type": "resolution_type",
+                "priority": "priority",
+                "category": "category",
+                "type": "type",
+                "path": "path",
+                "line_range": "line_range",
+                "has_code_changes": "has_code_changes",
+            }
+
+            # Default values to avoid repeated dict lookups
+            defaults = {
+                "url": "",
+                "is_resolved": False,
+                "priority": "unknown",
+                "category": "other",
+                "has_code_changes": False,
+            }
+
+            for comment_data in comments_data:
+                # Build mapped comment with defaults
+                mapped_comment = {}
+                for field, key in field_mapping.items():
+                    mapped_comment[field] = comment_data.get(key, defaults.get(field))
+
                 comments.append(Comment(**mapped_comment))
             return comments
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError, OSError) as e:
             logger.error(f"❌ Error loading comments: {e}")
             return []
 
@@ -956,7 +1147,7 @@ Examples:
 
     # Save to file
     resolution_manager.comments_file.parent.mkdir(exist_ok=True)
-    with open(resolution_manager.comments_file, "w") as f:
+    with open(resolution_manager.comments_file, "w", encoding="utf-8") as f:
         json.dump(comments_data, f, indent=2)
 
     # Complete processing
