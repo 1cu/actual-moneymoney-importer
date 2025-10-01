@@ -112,7 +112,7 @@ describe('Importer', () => {
                     amount: 10000,
                     payee_name: 'Test Transaction',
                     cleared: true,
-                    imported_id: expect.any(String),
+                    imported_id: expect.any(String) as string,
                 }),
             ])
         );
@@ -275,7 +275,7 @@ describe('Importer', () => {
                     amount: 10000, // MoneyMoney uses cents
                     payee_name: 'Transformed Test Transaction',
                     cleared: true,
-                    imported_id: expect.any(String),
+                    imported_id: expect.any(String) as string,
                 }),
             ])
         );
