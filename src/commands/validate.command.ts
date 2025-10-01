@@ -46,7 +46,13 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
             throw tomlError;
         }
 
-        configSchema.parse(configData);
+        const config = configSchema.parse(configData);
+
+        // Debug: Log effective configuration at debug level
+        if (logLevel >= LogLevel.DEBUG) {
+            logger.debug('Effective configuration loaded', JSON.stringify(config, null, 2));
+        }
+
         logger.info('Configuration is valid.');
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {

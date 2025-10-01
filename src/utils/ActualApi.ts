@@ -61,10 +61,9 @@ const shouldSuppressConsoleOutput = (args: unknown[]): boolean => {
 
 // Simple console interceptor - just suppress or pass through
 const createConsoleInterceptor =
-    <TArgs extends unknown[]>(_logger: Logger, original: (...args: TArgs) => void) =>
+    <TArgs extends unknown[]>(original: (...args: TArgs) => void) =>
     (...args: TArgs): void => {
         if (shouldSuppressConsoleOutput(args)) {
-            // Just suppress - no complex logging logic needed
             return;
         }
         original.apply(console, args);
@@ -366,10 +365,10 @@ class ActualApi {
             const originalDebug = console.debug;
             const originalWarn = console.warn;
 
-            console.log = createConsoleInterceptor(this.logger, originalLog);
-            console.info = createConsoleInterceptor(this.logger, originalInfo);
-            console.debug = createConsoleInterceptor(this.logger, originalDebug);
-            console.warn = createConsoleInterceptor(this.logger, originalWarn);
+            console.log = createConsoleInterceptor(originalLog);
+            console.info = createConsoleInterceptor(originalInfo);
+            console.debug = createConsoleInterceptor(originalDebug);
+            console.warn = createConsoleInterceptor(originalWarn);
 
             return () => {
                 ActualApi.consolePatchDepth--;

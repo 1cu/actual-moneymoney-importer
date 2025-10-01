@@ -160,6 +160,11 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
 
     const { config } = await loadConfig(argv);
 
+    // Debug: Log effective configuration at debug level
+    if (logLevel >= LogLevel.DEBUG) {
+        logger.debug('Effective configuration loaded', JSON.stringify(config, null, 2));
+    }
+
     const payeeTransformer = config.payeeTransformation.enabled
         ? new PayeeTransformer(config.payeeTransformation, logger)
         : undefined;
