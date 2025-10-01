@@ -1,7 +1,7 @@
 import actual from '@actual-app/api';
-// Type for transaction import - matches the ImportTransaction interface
-type ImportTransaction = {
-    account?: string;
+// Type for transaction import - matches the ImportTransactionEntity interface
+export type ImportTransaction = {
+    account: string; // Required for ImportTransactionEntity
     date: string;
     amount?: number;
     payee?: string;
@@ -293,10 +293,7 @@ class ActualApi {
         await this.ensureInitialization();
         return await this.runActualRequest(
             `fetch transactions for account '${accountId}'`,
-            () =>
-                endDate
-                    ? actual.getTransactions(accountId, startDate, endDate)
-                    : actual.getTransactions(accountId, startDate),
+            () => actual.getTransactions(accountId, startDate, endDate || startDate),
             [`Account ID: ${accountId}`]
         );
     }

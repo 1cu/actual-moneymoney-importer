@@ -30,7 +30,7 @@ vi.mock('openai', () => ({
 let dataDir: string;
 
 vi.mock('../src/utils/shared.js', async () => {
-    const actual = await vi.importActual<typeof import('../src/utils/shared.js')>('../src/utils/shared.js');
+    const actual = await vi.importActual('../src/utils/shared.js');
 
     return {
         ...actual,
@@ -64,13 +64,14 @@ beforeEach(async () => {
         let userMessage = '';
         for (let i = config.messages.length - 1; i >= 0; i--) {
             const message = config.messages[i];
-            if (message.role === 'user') {
+            if (message && message.role === 'user') {
                 userMessage = message.content;
                 break;
             }
         }
         if (!userMessage && config.messages.length > 0) {
-            userMessage = config.messages[config.messages.length - 1]?.content ?? '';
+            const lastMessage = config.messages[config.messages.length - 1];
+            userMessage = lastMessage?.content ?? '';
         }
         const payees: string[] = userMessage.split('\n').filter(Boolean);
         const result: Record<string, string> = Object.fromEntries(

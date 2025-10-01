@@ -1,5 +1,5 @@
 import { format, subMonths } from 'date-fns';
-import type { CreateTransaction } from '@actual-app/api';
+import type { ImportTransaction } from './ActualApi.js';
 import type { Account as MonMonAccount, Transaction as MonMonTransaction } from 'moneymoney';
 import { getTransactions } from 'moneymoney';
 import { AccountMap } from './AccountMap.js';
@@ -93,8 +93,8 @@ class Importer {
         toDate: Date | undefined,
         isDryRun: boolean
     ): Promise<boolean> {
-        const createTransactions: CreateTransaction[] = await Promise.all(
-            accountTransactions.map((t) => this.convertToActualTransaction(t))
+        const createTransactions: ImportTransaction[] = await Promise.all(
+            accountTransactions.map((t) => this.convertToActualTransaction(t, actualAccount.id))
         );
 
         const existingActualTransactions = await this.actualApi.getTransactions(actualAccount.id, {
@@ -106,7 +106,8 @@ class Importer {
         if (existingActualTransactions.length === 0 && createTransactions.length > 0) {
             const firstTransaction = accountTransactions[0];
             const startDate = firstTransaction?.valueDate ?? importDate;
-            const startTransaction: CreateTransaction = {
+            const startTransaction: ImportTransaction = {
+                account: actualAccount.id,
                 date: format(startDate, DATE_FORMAT),
                 amount: this.getStartingBalanceForAccount(monMonAccount, accountTransactions),
                 imported_id: `${monMonAccount.uuid}-start`,
@@ -206,10 +207,14 @@ class Importer {
         return time;
     }
 
-    private async convertToActualTransaction(transaction: MonMonTransaction): Promise<CreateTransaction> {
+    private async convertToActualTransaction(
+        transaction: MonMonTransaction,
+        accountId: string
+    ): Promise<ImportTransaction> {
         this.assertValidTransaction(transaction);
 
         return {
+            account: accountId,
             date: format(transaction.valueDate, DATE_FORMAT),
             amount: Math.round(transaction.amount * 100),
             imported_id: this.getIdForMoneyMoneyTransaction(transaction),

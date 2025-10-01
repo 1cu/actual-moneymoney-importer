@@ -5,11 +5,11 @@ import { ZodError } from 'zod';
 
 import { EXAMPLE_CONFIG } from '../../src/utils/shared.js';
 
-const readFileMock = vi.fn<(typeof import('node:fs/promises'))['readFile']>();
-const writeFileMock = vi.fn<(typeof import('node:fs/promises'))['writeFile']>();
-const mkdirMock = vi.fn<(typeof import('node:fs/promises'))['mkdir']>();
+const readFileMock = vi.fn();
+const writeFileMock = vi.fn();
+const mkdirMock = vi.fn();
 
-const tomlParseMock = vi.fn<(typeof import('toml'))['parse']>();
+const tomlParseMock = vi.fn();
 
 vi.mock('node:fs/promises', () => ({
     __esModule: true,
@@ -30,7 +30,7 @@ vi.mock('toml', () => ({
     },
 }));
 
-const getConfigFileMock = vi.fn<(typeof import('../../src/utils/config.js'))['getConfigFile']>();
+const getConfigFileMock = vi.fn();
 const configSchemaParseMock = vi.fn();
 
 vi.mock('../../src/utils/config.js', () => ({
@@ -86,7 +86,7 @@ describe('validate command', () => {
 
         getConfigFileMock.mockResolvedValue(configPath);
         readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-        writeFileMock.mockResolvedValue();
+        writeFileMock.mockResolvedValue(undefined);
         mkdirMock.mockResolvedValue(undefined);
 
         const { default: commandModule } = await import('../../src/commands/validate.command.js');
@@ -115,7 +115,7 @@ describe('validate command', () => {
 
         getConfigFileMock.mockResolvedValue(configPath);
         readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-        writeFileMock.mockResolvedValue();
+        writeFileMock.mockResolvedValue(undefined);
         mkdirMock.mockResolvedValue(undefined);
 
         const { default: commandModule } = await import('../../src/commands/validate.command.js');

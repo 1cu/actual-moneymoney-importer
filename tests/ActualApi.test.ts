@@ -3,7 +3,7 @@ import { makeInvalidCredentialsError, makeNetworkDisconnectError } from './helpe
 
 // Type for transaction import - matches the ImportTransaction interface
 type ImportTransaction = {
-    account?: string;
+    account: string; // Required for ImportTransactionEntity
     date: string;
     amount?: number;
     payee?: string;
@@ -80,6 +80,7 @@ const makeServerConfig = (budgetId: string): ActualServerConfig => ({
             e2eEncryption: {
                 enabled: false,
             },
+            accountMapping: {},
         },
     ],
 });
@@ -166,6 +167,7 @@ describe('ActualApi', () => {
 
         const transactions: ImportTransaction[] = [
             {
+                account: 'test-account-id',
                 date: '2024-01-01',
                 amount: 100,
                 payee: 'Test Payee',

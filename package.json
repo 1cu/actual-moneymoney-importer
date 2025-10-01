@@ -14,7 +14,8 @@
         "lint:all": "npm run lint:eslint && npm run lint:prettier",
         "prepare": "husky",
         "test": "npm run build && vitest run",
-        "test:typecheck": "tsc --noEmit -p tsconfig.test.json"
+        "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
+        "ci:local": "npm run lint:all && npm run typecheck && npm run test:typecheck && npm test"
     },
     "type": "module",
     "keywords": [

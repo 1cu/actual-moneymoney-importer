@@ -1,37 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { configSchema } from '../src/utils/config.js';
 
-const _buildBaseConfig = () => ({
-    payeeTransformation: {
-        enabled: false,
-    },
-    import: {
-        importUncheckedTransactions: true,
-    },
-    actualServers: [
-        {
-            serverUrl: 'http://localhost:5006',
-            serverPassword: 'test-password',
-            budgets: [
-                {
-                    syncId: 'test-sync-id',
-                    e2eEncryption: {
-                        enabled: false,
-                        password: '',
-                    },
-                    accountMapping: {
-                        'test-account': 'actual-account-id',
-                    },
-                },
-            ],
-        },
-    ],
-});
-
-const _tmpPrefix = path.join(os.tmpdir(), 'actual-monmon-config-tests-');
+// Removed unused helper functions
 const createdTempDirs: string[] = [];
 
 afterEach(async () => {

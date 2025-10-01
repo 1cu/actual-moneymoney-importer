@@ -3,7 +3,7 @@
     "compilerOptions": {
         "noUnusedLocals": false,
         "noUnusedParameters": false,
-        "strict": false,
+        "strict": true,
         "skipLibCheck": true
     },
     "include": ["tests/**/*.ts"],

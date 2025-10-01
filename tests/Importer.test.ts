@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Importer from '../src/utils/Importer.js';
 import type { Config, ActualBudgetConfig } from '../src/utils/config.js';
-import type { ActualApi } from '../src/utils/ActualApi.js';
+import type ActualApi from '../src/utils/ActualApi.js';
 import type { AccountMap } from '../src/utils/AccountMap.js';
-import type { PayeeTransformer } from '../src/utils/PayeeTransformer.js';
+import type PayeeTransformer from '../src/utils/PayeeTransformer.js';
 import Logger, { LogLevel } from '../src/utils/Logger.js';
 import { getTransactions as moneyMoneyTransactionsMock } from 'moneymoney';
 
@@ -33,6 +33,7 @@ describe('Importer', () => {
         const budgetConfig: ActualBudgetConfig = {
             syncId: 'test-budget',
             e2eEncryption: { enabled: false },
+            accountMapping: {},
         };
 
         const mockActualApi = {
@@ -70,18 +71,20 @@ describe('Importer', () => {
 
         const mockTransactions = [
             {
-                id: 'transaction-1',
-                uuid: 'transaction-1',
+                id: 1,
                 accountUuid: 'mm-account-1',
                 name: 'Test Transaction',
                 amount: 100,
                 valueDate: new Date('2024-01-15'),
+                bookingDate: new Date('2024-01-15'),
                 booked: true,
-                cleared: true,
+                checkmark: true,
+                categoryUuid: 'test-category',
+                currency: 'EUR',
             },
         ];
 
-        moneyMoneyTransactionsMock.mockResolvedValue(mockTransactions);
+        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue(mockTransactions);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],
@@ -112,6 +115,7 @@ describe('Importer', () => {
         const budgetConfig: ActualBudgetConfig = {
             syncId: 'test-budget',
             e2eEncryption: { enabled: false },
+            accountMapping: {},
         };
 
         const mockActualApi = {
@@ -147,7 +151,7 @@ describe('Importer', () => {
             mockPayeeTransformer
         );
 
-        moneyMoneyTransactionsMock.mockResolvedValue([]);
+        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue([]);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],
@@ -177,6 +181,7 @@ describe('Importer', () => {
         const budgetConfig: ActualBudgetConfig = {
             syncId: 'test-budget',
             e2eEncryption: { enabled: false },
+            accountMapping: {},
         };
 
         const mockActualApi = {
@@ -214,18 +219,20 @@ describe('Importer', () => {
 
         const mockTransactions = [
             {
-                id: 'transaction-1',
-                uuid: 'transaction-1',
+                id: 1,
                 accountUuid: 'mm-account-1',
                 name: 'Test Transaction',
                 amount: 100,
                 valueDate: new Date('2024-01-15'),
+                bookingDate: new Date('2024-01-15'),
                 booked: true,
-                cleared: true,
+                checkmark: true,
+                categoryUuid: 'test-category',
+                currency: 'EUR',
             },
         ];
 
-        moneyMoneyTransactionsMock.mockResolvedValue(mockTransactions);
+        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue(mockTransactions);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],
@@ -240,8 +247,8 @@ describe('Importer', () => {
         expect(mockActualApi.getTransactions).toHaveBeenCalledWith(
             'actual-account-1',
             expect.objectContaining({
-                from: expect.any(Date),
-                to: expect.any(Date),
+                from: expect.any(Date) as Date,
+                to: expect.any(Date) as Date,
             })
         );
         expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
@@ -274,6 +281,7 @@ describe('Importer', () => {
         const budgetConfig: ActualBudgetConfig = {
             syncId: 'test-budget',
             e2eEncryption: { enabled: false },
+            accountMapping: {},
         };
 
         const mockActualApi = {
@@ -311,18 +319,20 @@ describe('Importer', () => {
 
         const mockTransactions = [
             {
-                id: 'transaction-1',
-                uuid: 'transaction-1',
+                id: 1,
                 accountUuid: 'mm-account-1',
                 name: 'Test Transaction',
                 amount: 100,
                 valueDate: new Date('2024-01-15'),
+                bookingDate: new Date('2024-01-15'),
                 booked: true,
-                cleared: true,
+                checkmark: true,
+                categoryUuid: 'test-category',
+                currency: 'EUR',
             },
         ];
 
-        moneyMoneyTransactionsMock.mockResolvedValue(mockTransactions);
+        vi.mocked(moneyMoneyTransactionsMock).mockResolvedValue(mockTransactions);
 
         await importer.importTransactions({
             accountRefs: ['mm-account-1'],

@@ -114,11 +114,15 @@ export default defineConfig(
             ...sharedRules,
             // Test files: 500 lines max (more lenient for test fixtures)
             'max-lines': ['error', 500],
-            '@typescript-eslint/no-unsafe-member-access': 'off',
-            '@typescript-eslint/no-unsafe-call': 'off',
-            '@typescript-eslint/no-unsafe-assignment': 'off',
-            '@typescript-eslint/no-unsafe-return': 'off',
-            '@typescript-eslint/no-unsafe-argument': 'off',
+            // Keep some safety rules for tests to catch import/type errors
+            '@typescript-eslint/no-unsafe-member-access': 'warn',
+            '@typescript-eslint/no-unsafe-call': 'warn',
+            '@typescript-eslint/no-unsafe-assignment': 'warn',
+            '@typescript-eslint/no-unsafe-return': 'warn',
+            '@typescript-eslint/no-unsafe-argument': 'warn',
+            // Add rules to catch import/export issues
+            '@typescript-eslint/consistent-type-imports': 'error',
+            '@typescript-eslint/no-import-type-side-effects': 'error',
         },
     })
 );
