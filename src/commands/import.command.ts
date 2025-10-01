@@ -156,8 +156,7 @@ const processBudget = async (
 
 const handleCommand = async (argv: ArgumentsCamelCase) => {
     const logLevel = (argv.logLevel ?? LogLevel.INFO) as number;
-    const structuredLogs = Boolean(argv.structuredLogs);
-    const logger = new Logger(logLevel, { structuredLogs });
+    const logger = new Logger(logLevel);
 
     const { config } = await loadConfig(argv);
 

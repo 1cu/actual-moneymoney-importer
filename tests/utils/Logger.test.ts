@@ -38,6 +38,7 @@ describe('Logger', () => {
         expect(errorSpy).not.toHaveBeenCalled();
 
         logSpy.mockClear();
+        errorSpy.mockClear();
 
         const error = new Error('kaboom');
         error.stack = ['Error: kaboom', '    at fake.ts:1:1'].join('\n');

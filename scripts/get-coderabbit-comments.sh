@@ -5,23 +5,99 @@ set -euo pipefail
 # Fetches all review comments from a GitHub PR and formats them for AI processing
 # Supports tracking comment resolution state and AI-driven fixes
 
-if [ $# -lt 1 ]; then
-    echo "❌ Error: Missing PR number argument"
+# Global variables for command-line options
+PR=""
+COMMAND=""
+COMMENT_ID=""
+OWNER=""
+REPO=""
+
+# Function to show usage information
+show_usage() {
+    echo "Enhanced GitHub PR Comments Fetcher with AI Resolution Support"
     echo ""
-    echo "Usage: $0 <PR_NUMBER> [--resolve <COMMENT_ID1,COMMENT_ID2,...>] [--status] [--cleanup] [--help]"
-    echo "Example: $0 123"
-    echo "         $0 123 --resolve 2386777571"
-    echo "         $0 123 --resolve 2386777571,2386777572,2386777573"
-    echo "         $0 123 --status"
-    echo "         $0 --cleanup"
+    echo "This script automatically detects the GitHub repository from the current git context."
+    echo "Make sure you're in a GitHub repository with an 'origin' remote."
+    echo ""
+    echo "Usage: $0 <PR_NUMBER> [OPTIONS]"
+    echo "       $0 --cleanup [OPTIONS]"
+    echo "       $0 --help"
     echo ""
     echo "Commands:"
-    echo "  --resolve <COMMENT_IDS>          Mark one or more comments as resolved by AI (comma-separated)"
-    echo "  --status                         Show resolution status"
-    echo "  --cleanup                        Clean up closed PRs and archive resolutions"
-    echo "  --help                          Show this help"
+    echo "  (no command)                    Fetch and display all comments"
+    echo "  --resolve <COMMENT_IDS>        Mark one or more comments as resolved by AI (comma-separated)"
+    echo "  --status                        Show resolution status"
+    echo "  --cleanup                       Clean up closed PRs and archive resolutions"
+    echo "  --help                         Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  $0 123                          # Fetch all comments for PR 123"
+    echo "  $0 123 --resolve 2386777571    # Mark single comment as resolved"
+    echo "  $0 123 --resolve 2386777571,2386777572,2386777573  # Mark multiple comments as resolved"
+    echo "  $0 123 --status                 # Show resolution status"
+    echo "  $0 --cleanup                    # Clean up closed PRs and archive resolutions"
+}
+
+# Function to show error and usage
+show_error() {
+    local message="$1"
+    echo "❌ Error: $message" >&2
+    echo "" >&2
+    show_usage >&2
     exit 1
-fi
+}
+
+# Function to parse command-line arguments
+parse_arguments() {
+    # Handle special cases first
+    if [ $# -eq 0 ]; then
+        show_error "Missing PR number argument"
+    fi
+
+    # Check for help first
+    if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+        show_usage
+        exit 0
+    fi
+
+    # Check for cleanup command
+    if [ "$1" = "--cleanup" ]; then
+        COMMAND="cleanup"
+        return 0
+    fi
+
+    # First argument should be PR number
+    if ! [[ "$1" =~ ^[0-9]+$ ]]; then
+        show_error "First argument must be a PR number (got: $1)"
+    fi
+    PR="$1"
+    shift
+
+    # Parse remaining arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --resolve)
+                if [ $# -lt 2 ]; then
+                    show_error "--resolve requires one or more comment IDs (comma-separated)"
+                fi
+                COMMAND="resolve"
+                COMMENT_ID="$2"
+                shift 2
+                ;;
+            --status)
+                COMMAND="status"
+                shift
+                ;;
+            --help|-h)
+                show_usage
+                exit 0
+                ;;
+            *)
+                show_error "Unknown option: $1"
+                ;;
+        esac
+    done
+}
 
 # Check dependencies
 if ! command -v gh &> /dev/null; then
@@ -45,19 +121,19 @@ fi
 get_repo_info() {
     local remote_url
     remote_url=$(git remote get-url origin 2>/dev/null || echo "")
-    
+
     if [ -z "$remote_url" ]; then
         echo "❌ Error: Not in a git repository or no 'origin' remote found"
         echo "Please run this script from within a git repository with a GitHub remote"
         exit 1
     fi
-    
+
     # Extract owner and repo from various URL formats
     # GitHub HTTPS: https://github.com/owner/repo.git
     # GitHub SSH: git@github.com:owner/repo.git
     # GitHub HTTPS (no .git): https://github.com/owner/repo
     local owner_repo
-    
+
     # Handle SSH format: git@github.com:owner/repo.git
     if [[ "$remote_url" =~ git@github\.com:([^/]+)/([^/]+) ]]; then
         local repo_name="${BASH_REMATCH[2]}"
@@ -76,80 +152,23 @@ get_repo_info() {
         echo "Please ensure you're in a GitHub repository"
         exit 1
     fi
-    
+
     echo "$owner_repo"
 }
 
-PR="$1"
+# Parse command-line arguments
+parse_arguments "$@"
 
-# Parse command line arguments
-COMMAND=""
-COMMENT_ID=""
-
-# Handle special cases for commands that don't require PR number
-if [ "$1" = "--cleanup" ]; then
-    COMMAND="cleanup"
-elif [ "$1" = "--help" ]; then
-    COMMAND="help"
-elif [ $# -gt 1 ]; then
-    case "$2" in
-        --resolve)
-            if [ $# -lt 3 ]; then
-                echo "❌ Error: --resolve requires one or more comment IDs (comma-separated)"
-                exit 1
-            fi
-            COMMAND="resolve"
-            COMMENT_ID="$3"
-            ;;
-        --status)
-            COMMAND="status"
-            ;;
-        --help)
-            COMMAND="help"
-            ;;
-        *)
-            echo "❌ Error: Unknown command '$2'"
-            echo "Use --help for usage information"
-            exit 1
-            ;;
-    esac
-fi
-
-# Get repository information (skip for help and cleanup commands)
-if [ "$COMMAND" != "help" ] && [ "$COMMAND" != "cleanup" ]; then
+# Get repository information (skip for cleanup commands)
+if [ "$COMMAND" != "cleanup" ]; then
     REPO_INFO=$(get_repo_info)
     OWNER=$(echo "$REPO_INFO" | cut -d'/' -f1)
     REPO=$(echo "$REPO_INFO" | cut -d'/' -f2)
-    
+
     # Show detected repository information (only for non-status commands to avoid clutter)
     if [ "$COMMAND" != "status" ]; then
         echo "🔍 Detected repository: $OWNER/$REPO" >&2
     fi
-fi
-
-# Handle help command
-if [ "$COMMAND" = "help" ]; then
-    echo "Enhanced GitHub PR Comments Fetcher with AI Resolution Support"
-    echo ""
-    echo "This script automatically detects the GitHub repository from the current git context."
-    echo "Make sure you're in a GitHub repository with an 'origin' remote."
-    echo ""
-    echo "Usage: $0 <PR_NUMBER> [--resolve <COMMENT_ID1,COMMENT_ID2,...>] [--status] [--cleanup] [--help]"
-    echo ""
-    echo "Commands:"
-    echo "  (no command)                    Fetch and display all comments"
-    echo "  --resolve <COMMENT_IDS>        Mark one or more comments as resolved by AI (comma-separated)"
-    echo "  --status                        Show resolution status"
-    echo "  --cleanup                       Clean up closed PRs and archive resolutions"
-    echo "  --help                         Show this help"
-    echo ""
-    echo "Examples:"
-    echo "  $0 123                          # Fetch all comments for PR 123"
-    echo "  $0 123 --resolve 2386777571    # Mark single comment as resolved"
-    echo "  $0 123 --resolve 2386777571,2386777572,2386777573  # Mark multiple comments as resolved"
-    echo "  $0 123 --status                 # Show resolution status"
-    echo "  $0 --cleanup                    # Clean up closed PRs and archive resolutions"
-    exit 0
 fi
 
 # Create output directory if it doesn't exist
@@ -205,7 +224,7 @@ save_multiple_resolutions() {
 
     # Split comma-separated comment IDs and create resolution entries
     local IFS=','
-    local comment_id_array=($comment_ids)
+    read -ra comment_id_array <<< "$comment_ids"
     local resolution_entries="[]"
 
     for comment_id in "${comment_id_array[@]}"; do
@@ -413,7 +432,6 @@ if [ "$COMMAND" = "resolve" ]; then
         save_multiple_resolutions "$COMMENT_ID"
         update_local_comments_state
         # Count the number of resolved comments
-        local count
         count=$(echo "$COMMENT_ID" | tr ',' '\n' | wc -l | xargs)
         echo "✅ $count comments marked as resolved: $COMMENT_ID"
     else
