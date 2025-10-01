@@ -128,17 +128,17 @@
     - Data integrity issues (silent data loss, corruption)
     - System stability (crashes, infinite loops)
 
-2. **🟠 MAJOR - Should Fix:**
+1. **🟠 MAJOR - Should Fix:**
     - Missing error handling for external service calls
     - Resilience improvements with simple fallback mechanisms
     - User experience improvements (clear error messages)
 
-3. **🟡 MINOR - Nice to Have:**
+1. **🟡 MINOR - Nice to Have:**
     - Error message clarity improvements
     - Documentation and code comments
     - Additional debug logging (when valuable)
 
-4. **🔵 TRIVIAL - Skip:**
+1. **🔵 TRIVIAL - Skip:**
     - Style suggestions (unless project standards)
     - Over-engineering simple problems
     - Premature optimization without proven need
@@ -147,9 +147,9 @@
 ### **Decision Process**
 
 1. **Question every suggestion** - Is this fix truly necessary?
-2. **Consider complexity** - Does it add unnecessary complexity?
-3. **Look for simpler solutions** - Can this be solved more simply?
-4. **Follow project guidelines** - Does it align with complexity prevention?
+1. **Consider complexity** - Does it add unnecessary complexity?
+1. **Look for simpler solutions** - Can this be solved more simply?
+1. **Follow project guidelines** - Does it align with complexity prevention?
 
 **Remember**: The best code is code that doesn't exist. Delete over refactor, inline over abstract, simplify over optimize.
 

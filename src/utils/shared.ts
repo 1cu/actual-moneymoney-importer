@@ -25,7 +25,7 @@ openAiModel = "gpt-3.5-turbo"
 # Import settings
 [import]
 importUncheckedTransactions = true
- # Import log masking: when payee transformation is enabled, importer logs mask payees with deterministic placeholders
+ # Import log masking: when payee transformation is enabled, payee names in logs are masked for privacy
 synchronizeClearedStatus = true # Keep Actual cleared status in sync (default: true)
 
 # Actual servers, you can add multiple servers

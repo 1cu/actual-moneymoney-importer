@@ -345,9 +345,15 @@ class ActualApi {
     }
 
     private createFallbackImportedId(accountId: string, transaction: ImportTransaction): string {
-        const hash = createHash('sha256')
-            .update(`${accountId}-${transaction.date}-${transaction.amount}-${transaction.payee}`)
-            .digest('hex');
+        const parts = {
+            accountId,
+            date: transaction.date ?? '',
+            amount: transaction.amount ?? 0,
+            payee: transaction.imported_payee ?? transaction.payee_name ?? transaction.payee ?? '',
+            transfer_id: transaction.transfer_id ?? '',
+            notes: transaction.notes ?? '',
+        };
+        const hash = createHash('sha256').update(JSON.stringify(parts)).digest('hex');
         return `mm-sync-${hash}`;
     }
 

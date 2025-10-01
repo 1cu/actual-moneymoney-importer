@@ -60,9 +60,9 @@ class PayeeTransformer {
 
             return this.buildResponse(uniquePayees);
         } catch (error) {
-            this.logger.error(
-                `Payee transformation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
+            const errMsg = `Payee transformation failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            const hint = [`Payees(count): ${uncachedPayees.length}`];
+            this.logger.error(errMsg, hint);
             return null;
         }
     }

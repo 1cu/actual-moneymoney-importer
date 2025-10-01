@@ -15,8 +15,8 @@
 ## Development workflow
 
 1. Ensure Node.js **v20.9.0** or newer
-2. Install dependencies with `npm install`
-3. Run the quality gates: `npm run lint:all && npm run typecheck && npm test`
+1. Install dependencies with `npm install`
+1. Run the quality gates: `npm run lint:all && npm run typecheck && npm test`
 
 Tests cover the most important paths; we do not require 100% coverage. Keep critical scenarios healthy.
 
@@ -78,17 +78,17 @@ All changes must pass:
     - Data integrity issues (silent data loss, corruption)
     - System stability (crashes, infinite loops)
 
-2. **🟠 MAJOR - Should Fix:**
+1. **🟠 MAJOR - Should Fix:**
     - Missing error handling for external service calls
     - Resilience improvements with simple fallback mechanisms
     - User experience improvements (clear error messages)
 
-3. **🟡 MINOR - Nice to Have:**
+1. **🟡 MINOR - Nice to Have:**
     - Error message clarity improvements
     - Documentation and code comments
     - Additional debug logging (when valuable)
 
-4. **🔵 TRIVIAL - Skip:**
+1. **🔵 TRIVIAL - Skip:**
     - Style suggestions (unless project standards)
     - Over-engineering simple problems
     - Premature optimization without proven need
@@ -97,9 +97,9 @@ All changes must pass:
 ### **Decision Process**
 
 1. **Question every suggestion** - Is this fix truly necessary?
-2. **Consider complexity** - Does it add unnecessary complexity?
-3. **Look for simpler solutions** - Can this be solved more simply?
-4. **Follow project guidelines** - Does it align with complexity prevention?
+1. **Consider complexity** - Does it add unnecessary complexity?
+1. **Look for simpler solutions** - Can this be solved more simply?
+1. **Follow project guidelines** - Does it align with complexity prevention?
 
 ### **Anti-Patterns to Avoid**
 

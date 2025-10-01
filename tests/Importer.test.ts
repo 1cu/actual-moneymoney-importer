@@ -95,7 +95,19 @@ describe('Importer', () => {
 
         // Verify the method was called with correct parameters
         expect(mockAccountMap.getMap).toHaveBeenCalledWith(['mm-account-1']);
-        expect(mockActualApi.importTransactions).toHaveBeenCalledWith('actual-account-1', expect.any(Array));
+        expect(mockPayeeTransformer.transformPayees).not.toHaveBeenCalled();
+        expect(mockActualApi.importTransactions).toHaveBeenCalledTimes(1);
+        expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
+            'actual-account-1',
+            expect.arrayContaining([
+                expect.objectContaining({
+                    date: '2024-01-15',
+                    amount: 10000,
+                    payee_name: 'Test Transaction',
+                    cleared: true,
+                }),
+            ])
+        );
     });
 
     it('handles empty MoneyMoney transactions', async () => {

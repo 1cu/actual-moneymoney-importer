@@ -218,7 +218,7 @@ describe('PayeeTransformer', () => {
         const result = await transformer.transformPayees(['Vendor Error']);
 
         expect(result).toBeNull();
-        expect(logger.error).toHaveBeenCalledWith('Payee transformation failed: API Error');
+        expect(logger.error).toHaveBeenCalledWith('Payee transformation failed: API Error', ['Payees(count): 1']);
     });
 
     it('handles empty OpenAI payload by falling back to original payee names', async () => {

@@ -37,14 +37,16 @@ class Importer {
         }
         const monMonTransactionMap = this.groupTransactionsByAccount(monMonTransactions);
         const accountMapping = this.accountMap.getMap(accountRefs);
-        const hasNewTransactions = await this.processAllAccounts(
+        const { totalAdded, totalUpdated } = await this.processAllAccounts(
             accountMapping,
             monMonTransactionMap,
             importDate,
             toDate,
             isDryRun
         );
-        if (!hasNewTransactions) {
+        if (totalAdded > 0 || totalUpdated > 0) {
+            this.logger.info(`Import complete: ${totalAdded} added, ${totalUpdated} updated across all accounts`);
+        } else {
             this.logger.info('No new transactions to import.');
         }
     }
@@ -93,11 +95,12 @@ class Importer {
         importDate: Date,
         toDate: Date | undefined,
         isDryRun: boolean
-    ): Promise<boolean> {
-        let hasNewTransactions = false;
+    ): Promise<{ totalAdded: number; totalUpdated: number }> {
+        let totalAdded = 0;
+        let totalUpdated = 0;
         for (const [monMonAccount, actualAccount] of accountMapping) {
             const accountTransactions = monMonTransactionMap[monMonAccount.uuid] ?? [];
-            const processed = await this.processAccountTransactions(
+            const result = await this.processAccountTransactions(
                 monMonAccount,
                 actualAccount,
                 accountTransactions,
@@ -105,9 +108,12 @@ class Importer {
                 toDate,
                 isDryRun
             );
-            if (processed) hasNewTransactions = true;
+            if (result) {
+                totalAdded += result.added;
+                totalUpdated += result.updated;
+            }
         }
-        return hasNewTransactions;
+        return { totalAdded, totalUpdated };
     }
     private async processAccountTransactions(
         monMonAccount: MonMonAccount,
@@ -116,7 +122,7 @@ class Importer {
         importDate: Date,
         toDate: Date | undefined,
         isDryRun: boolean
-    ): Promise<boolean> {
+    ): Promise<{ added: number; updated: number } | null> {
         // Convert transactions with individual error handling
         const createTransactions = await this.convertTransactionsWithErrorHandling(
             accountTransactions,
@@ -127,77 +133,51 @@ class Importer {
             to: toDate ?? undefined,
         });
         // Add starting balance if needed
-        if (existingActualTransactions.length === 0 && createTransactions.length > 0) {
-            const firstTransaction = accountTransactions[0];
-            const startDate = firstTransaction?.valueDate ?? importDate;
-            const startTransaction: ImportTransaction = {
-                account: actualAccount.id,
-                date: format(startDate, DATE_FORMAT),
-                amount: this.getStartingBalanceForAccount(monMonAccount, accountTransactions),
-                imported_id: `${monMonAccount.uuid}-start`,
-                cleared: true,
-                notes: 'Starting balance',
-                imported_payee: 'Starting balance',
-            };
-            createTransactions.push(startTransaction);
-        }
+        this.addStartingBalanceIfNeeded(
+            monMonAccount,
+            actualAccount.id,
+            accountTransactions,
+            importDate,
+            existingActualTransactions,
+            createTransactions
+        );
         // Filter out existing transactions
         const existingIds = new Set(
             existingActualTransactions.map((t) => t.imported_id).filter((id): id is string => Boolean(id))
         );
         const filteredTransactions = createTransactions.filter((t) => {
             const id = t.imported_id;
+            if (!id) {
+                this.logger.warn(`Transaction missing imported_id, will be skipped: ${JSON.stringify(t)}`);
+            }
             return id && !existingIds.has(id);
         });
         if (filteredTransactions.length === 0) {
             this.logger.debug(`No new transactions found for Actual account '${actualAccount.name}'. Skipping...`);
-            return false;
+            return null;
         }
         // Handle payee transformation
-        if (this.payeeTransformer && !isDryRun) {
-            try {
-                const uniquePayees = Array.from(
-                    new Set(filteredTransactions.map((t) => String(t.imported_payee ?? '')))
-                );
-                const transformedPayees = await this.payeeTransformer.transformPayees(uniquePayees);
-                if (transformedPayees) {
-                    filteredTransactions.forEach((t) => {
-                        const original = t.imported_payee as string;
-                        const transformed = transformedPayees[original];
-                        t.payee_name = transformed && transformed.toLowerCase() !== 'unknown' ? transformed : original;
-                    });
-                } else {
-                    filteredTransactions.forEach((t) => {
-                        t.payee_name = t.imported_payee;
-                    });
-                }
-            } catch (error) {
-                this.logger.warn(
-                    'Payee transformation failed, using original payees',
-                    error instanceof Error ? error.message : String(error)
-                );
-                filteredTransactions.forEach((t) => {
-                    t.payee_name = t.imported_payee;
-                });
-            }
-        } else {
-            filteredTransactions.forEach((t) => {
-                t.payee_name = t.imported_payee;
-            });
-        }
+        await this.handlePayeeTransformation(filteredTransactions, isDryRun);
         // Import transactions
         if (isDryRun) {
             this.logger.info(
                 `DRY RUN - Would import ${filteredTransactions.length} transactions to '${actualAccount.name}'`
             );
+            return { added: filteredTransactions.length, updated: 0 };
         } else {
             const result = await this.actualApi.importTransactions(actualAccount.id, filteredTransactions);
             if (result.errors && result.errors.length > 0) {
-                this.logger.error(`Import errors: ${result.errors.length} errors occurred`);
+                this.logger.error(
+                    `Import errors: ${result.errors.length} errors occurred`,
+                    [
+                        ...result.errors.slice(0, 5).map((err: unknown) => String(err)),
+                        result.errors.length > 5 ? `... and ${result.errors.length - 5} more errors` : '',
+                    ].filter(Boolean)
+                );
             }
             this.logger.info(`Import successful: ${result.added.length} added, ${result.updated.length} updated`);
+            return { added: result.added.length, updated: result.updated.length };
         }
-        return true;
     }
     private sortTransactions(transactions: MonMonTransaction[]) {
         return [...transactions].sort((left, right) => {
@@ -337,9 +317,73 @@ class Importer {
             }
         }
         if (conversionErrors.length > 0) {
-            this.logger.warn(`Skipped ${conversionErrors.length} invalid transactions during conversion`, conversionErrors);
+            this.logger.warn(
+                `Skipped ${conversionErrors.length} invalid transactions during conversion`,
+                conversionErrors
+            );
         }
         return createTransactions;
+    }
+
+    private addStartingBalanceIfNeeded(
+        monMonAccount: MonMonAccount,
+        accountId: string,
+        accountTransactions: MonMonTransaction[],
+        importDate: Date,
+        existingActualTransactions: Array<{ imported_id?: string }>,
+        createTransactions: ImportTransaction[]
+    ): void {
+        if (existingActualTransactions.length === 0 && createTransactions.length > 0) {
+            const firstTransaction = accountTransactions[0];
+            const startDate = firstTransaction?.valueDate ?? importDate;
+            const startTransaction: ImportTransaction = {
+                account: accountId,
+                date: format(startDate, DATE_FORMAT),
+                amount: this.getStartingBalanceForAccount(monMonAccount, accountTransactions),
+                imported_id: `${monMonAccount.uuid}-start`,
+                cleared: true,
+                notes: 'Starting balance',
+                imported_payee: 'Starting balance',
+            };
+            createTransactions.push(startTransaction);
+        }
+    }
+
+    private async handlePayeeTransformation(
+        filteredTransactions: ImportTransaction[],
+        isDryRun: boolean
+    ): Promise<void> {
+        if (this.payeeTransformer && this.config.payeeTransformation?.enabled && !isDryRun) {
+            try {
+                const uniquePayees = Array.from(
+                    new Set(filteredTransactions.map((t) => String(t.imported_payee ?? '')))
+                );
+                const transformedPayees = await this.payeeTransformer.transformPayees(uniquePayees);
+                if (transformedPayees) {
+                    filteredTransactions.forEach((t) => {
+                        const original = t.imported_payee as string;
+                        const transformed = transformedPayees[original];
+                        t.payee_name = transformed && transformed.toLowerCase() !== 'unknown' ? transformed : original;
+                    });
+                } else {
+                    filteredTransactions.forEach((t) => {
+                        t.payee_name = t.imported_payee;
+                    });
+                }
+            } catch (error) {
+                this.logger.warn(
+                    'Payee transformation failed, using original payees',
+                    error instanceof Error ? error.message : String(error)
+                );
+                filteredTransactions.forEach((t) => {
+                    t.payee_name = t.imported_payee;
+                });
+            }
+        } else {
+            filteredTransactions.forEach((t) => {
+                t.payee_name = t.imported_payee;
+            });
+        }
     }
 }
 export default Importer;

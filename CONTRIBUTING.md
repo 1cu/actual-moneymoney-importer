@@ -18,9 +18,9 @@ Thanks for helping improve Actual-MoneyMoney! This guide explains how to get set
     npm install
     ```
 
-2. Copy or create a configuration file as needed (see `example-config-advanced.toml`)
+1. Copy or create a configuration file as needed (see `example-config-advanced.toml`)
 
-3. Run the quality gates:
+1. Run the quality gates:
 
     ```bash
     npm run lint:all && npm run typecheck && npm test
@@ -29,12 +29,12 @@ Thanks for helping improve Actual-MoneyMoney! This guide explains how to get set
 ## Development Workflow
 
 1. Create a feature branch from `main`
-2. Implement your changes and keep commits focused
-3. Follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat: add importer telemetry`)
-4. Re-run the quality gates: `npm run lint:all && npm run typecheck && npm test`
-5. Update documentation alongside behaviour changes
-6. Include or update Vitest coverage for changed logic under `tests/`
-7. Open a pull request with a clear summary
+1. Implement your changes and keep commits focused
+1. Follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat: add importer telemetry`)
+1. Re-run the quality gates: `npm run lint:all && npm run typecheck && npm test`
+1. Update documentation alongside behaviour changes
+1. Include or update Vitest coverage for changed logic under `tests/`
+1. Open a pull request with a clear summary
 
 ## Configuration Updates
 
