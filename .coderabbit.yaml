@@ -32,7 +32,7 @@ reviews:
               # Basic formatting
               All character sets need to be in UTF-8.
               Lines need to end with LF (line feed).
-              Use spaces (2) for indentation; no tabs.
+              Use spaces (4) for indentation; no tabs.
               A newline must be inserted at the end of the file.
               Trim all trailing whitespaces.
               Respect the repo's Prettier printWidth; do not hand-enforce line length outside tooling.

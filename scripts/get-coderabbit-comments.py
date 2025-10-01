@@ -387,10 +387,12 @@ class CommentProcessor:
             return "🟡 Should address: Minor issue"
 
         # Trivial nitpicks on configuration files are often simple fixes
-        if (comment.priority == "trivial" and
-            comment.category == "nitpick" and
-            comment.file_path and
-            any(ext in comment.file_path for ext in ['.yaml', '.yml', '.json', '.gitignore', '.prettierignore'])):
+        if (
+            comment.priority == "trivial"
+            and comment.category == "nitpick"
+            and comment.file_path
+            and any(ext in comment.file_path for ext in ['.yaml', '.yml', '.json', '.gitignore', '.prettierignore'])
+        ):
             return "🟢 Review: Simple config file fix - likely worth addressing"
 
         # Trivial nitpicks on code files need evaluation

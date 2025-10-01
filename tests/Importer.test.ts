@@ -217,7 +217,10 @@ describe('Importer', () => {
         } as unknown as AccountMap;
 
         const mockPayeeTransformer = {
-            transformPayees: vi.fn().mockResolvedValue([]),
+            transformPayees: vi.fn().mockResolvedValue({
+                'Test Transaction': 'Transformed Test Transaction',
+                'Starting balance': 'Starting balance'
+            }),
         } as unknown as PayeeTransformer;
 
         const importer = new Importer(
@@ -269,7 +272,7 @@ describe('Importer', () => {
                 expect.objectContaining({
                     date: '2024-01-15',
                     amount: 10000, // MoneyMoney uses cents
-                    payee_name: 'Test Transaction',
+                    payee_name: 'Transformed Test Transaction',
                     cleared: true,
                 }),
             ])

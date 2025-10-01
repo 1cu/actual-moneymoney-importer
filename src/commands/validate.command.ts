@@ -42,7 +42,12 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
         try {
             configData = toml.parse(configContent) as Record<string, unknown>;
         } catch (tomlError) {
-            logger.error(`TOML syntax error: ${tomlError instanceof Error ? tomlError.message : String(tomlError)}`);
+            const err = tomlError as Error & { line?: number; column?: number };
+            const message = err.message ?? String(tomlError);
+            const hasLine = typeof err.line === 'number';
+            const hasColumn = typeof err.column === 'number';
+            const location = hasLine && hasColumn ? ` (line ${err.line}, column ${err.column})` : '';
+            logger.error(`TOML syntax error${location}: ${message}`);
             throw tomlError;
         }
 

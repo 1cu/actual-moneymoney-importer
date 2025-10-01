@@ -67,6 +67,10 @@ class PayeeTransformer {
         }
     }
 
+    private supportsJsonMode(model: string): boolean {
+        return /\bgpt-4(?:o|\.1(?:-mini)?)\b/.test(model) || model.includes('4o-mini');
+    }
+
     private async makeOpenAIRequest(
         prompt: string,
         payeeList: string[],
@@ -78,10 +82,11 @@ class PayeeTransformer {
                 { role: 'system', content: prompt },
                 { role: 'user', content: payeeList.join('\n') },
             ],
-            response_format: {
-                type: 'json_object',
-            },
         };
+
+        if (this.supportsJsonMode(model)) {
+            requestConfig.response_format = { type: 'json_object' };
+        }
 
         // Simple parameter handling
         if (this.config.modelConfig?.temperature !== undefined) {

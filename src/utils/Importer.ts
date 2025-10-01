@@ -217,7 +217,7 @@ class Importer {
             imported_payee: transaction.name,
             cleared: this.config.import.synchronizeClearedStatus ? transaction.booked : undefined,
             notes: transaction.purpose,
-            // payee_name: transaction.name,
+            payee_name: transaction.name,
         };
     }
     private assertValidTransaction(transaction: MonMonTransaction): void {

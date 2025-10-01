@@ -34,7 +34,6 @@ coverage.xml
 .mypy_cache/
 
 # TypeScript
-*.tsbuildinfo
 *.d.ts.map
 *.js.map
 
@@ -108,7 +107,6 @@ coverage/
 .env.production.local
 
 # parcel-bundler cache (https://parceljs.org/)
-.cache
 .parcel-cache
 
 # Next.js build output
@@ -116,7 +114,6 @@ coverage/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 
 # Gatsby files
 .cache/
