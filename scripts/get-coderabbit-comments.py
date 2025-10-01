@@ -34,7 +34,6 @@ try:
     from rich.console import Console
     from rich.table import Table
     from rich.panel import Panel
-    from rich.progress import Progress, BarColumn, TextColumn
     # Rich imports for enhanced formatting
 
     RICH_AVAILABLE = True
@@ -333,7 +332,7 @@ class CommentProcessor:
         import re
 
         # Compile regex patterns once for better performance
-        if not hasattr(self, '_file_patterns'):
+        if not hasattr(self, "_file_patterns"):
             self._file_patterns = [
                 re.compile(r"In ([^\s]+) around lines?"),
                 re.compile(r"In ([^\s]+) at lines?"),
@@ -517,15 +516,23 @@ class StatusDisplay:
             return
 
         # Calculate statistics
-        resolved_comments = [c for c in comments if c.is_resolved and c.resolution_type == "resolved"]
-        skipped_comments = [c for c in comments if c.is_resolved and c.resolution_type == "skipped"]
+        resolved_comments = [
+            c for c in comments if c.is_resolved and c.resolution_type == "resolved"
+        ]
+        skipped_comments = [
+            c for c in comments if c.is_resolved and c.resolution_type == "skipped"
+        ]
         unresolved_comments = [c for c in comments if not c.is_resolved]
 
         total_comments = len(comments)
         resolved_count = len(resolved_comments)
         skipped_count = len(skipped_comments)
         unresolved_count = len(unresolved_comments)
-        progress = int((resolved_count + skipped_count) / total_comments * 100) if total_comments > 0 else 0
+        progress = (
+            int((resolved_count + skipped_count) / total_comments * 100)
+            if total_comments > 0
+            else 0
+        )
 
         if self.console and show_summary:
             # Create summary panel
@@ -536,7 +543,9 @@ class StatusDisplay:
             summary_text += f"[bold]Total:[/bold] {total_comments}\n"
             summary_text += f"[bold]Progress:[/bold] {progress}%"
 
-            summary_panel = Panel(summary_text, title="Comment Status", border_style="blue")
+            summary_panel = Panel(
+                summary_text, title="Comment Status", border_style="blue"
+            )
             self.console.print(summary_panel)
             self.console.print()
 
@@ -580,14 +589,14 @@ class StatusDisplay:
                         "major": "red",
                         "minor": "yellow",
                         "trivial": "blue",
-                        "unknown": "dim"
+                        "unknown": "dim",
                     }.get(comment.priority, "dim")
 
                     # Color the status column
                     status_color = {
                         "✅ Resolved": "green",
                         "⏭️ Skipped": "yellow",
-                        "❌ Unresolved": "red"
+                        "❌ Unresolved": "red",
                     }.get(status, "dim")
 
                     file_path = comment.file_path or "General"
@@ -599,7 +608,7 @@ class StatusDisplay:
                         comment.category,
                         file_path,
                         comment.author,
-                        date_str
+                        date_str,
                     )
                 self.console.print(table)
             else:
@@ -608,7 +617,9 @@ class StatusDisplay:
                 for comment, status in all_comments:
                     file_path = comment.file_path or "General"
                     date_str = comment.created_at.split("T")[0]
-                    print(f"  {status} {comment.comment_id} - {file_path} - {comment.author} - {date_str}")
+                    print(
+                        f"  {status} {comment.comment_id} - {file_path} - {comment.author} - {date_str}"
+                    )
 
     def show_status(self, unresolved_only: bool = False):
         """Show resolution status"""
@@ -631,7 +642,9 @@ class StatusDisplay:
             # Filter to show only unresolved comments
             unresolved_comments = [c for c in comments if not c.is_resolved]
             if unresolved_comments:
-                self._create_unified_table(unresolved_comments, "❌ Unresolved Comments", show_summary=False)
+                self._create_unified_table(
+                    unresolved_comments, "❌ Unresolved Comments", show_summary=False
+                )
             else:
                 if self.console:
                     self.console.print("[green]✅ No unresolved comments![/green]")
@@ -640,7 +653,6 @@ class StatusDisplay:
         else:
             # Show all comments with summary
             self._create_unified_table(comments, "📝 All Comments", show_summary=True)
-
 
 
 def main():
@@ -687,7 +699,9 @@ Examples:
         if not local_dir.exists():
             if RICH_AVAILABLE:
                 console = Console()
-                console.print("[yellow]⚠️  No .local directory found - nothing to clean up[/yellow]")
+                console.print(
+                    "[yellow]⚠️  No .local directory found - nothing to clean up[/yellow]"
+                )
             else:
                 logger.warning("⚠️  No .local directory found - nothing to clean up")
             return
@@ -716,7 +730,9 @@ Examples:
 
         if RICH_AVAILABLE:
             console = Console()
-            console.print(f"[green]✅ Archived {archived_count} files to .local/archive/[/green]")
+            console.print(
+                f"[green]✅ Archived {archived_count} files to .local/archive/[/green]"
+            )
         else:
             logger.info(f"✅ Archived {archived_count} files to .local/archive/")
         return
@@ -813,27 +829,45 @@ Examples:
     # Display comments using unified display
     if RICH_AVAILABLE:
         console = Console()
-        console.print(f"[green]✅ Fetched {len(processed_comments)} comments for PR #{args.pr_number}[/green]")
+        console.print(
+            f"[green]✅ Fetched {len(processed_comments)} comments for PR #{args.pr_number}[/green]"
+        )
         console.print()
 
         # Load existing resolution state and update comments
         status_display = StatusDisplay(resolution_manager)
-        status_display.resolution_manager.update_comments_resolution_state(processed_comments)
+        status_display.resolution_manager.update_comments_resolution_state(
+            processed_comments
+        )
 
         # Use unified display for fetch summary with actual resolution status
-        status_display._create_unified_table(processed_comments, "📝 All Comments", show_summary=True)
+        status_display._create_unified_table(
+            processed_comments, "📝 All Comments", show_summary=True
+        )
         console.print()
-        console.print("[dim]💡 Use --status to see resolution status, --resolve/--skip to manage comments[/dim]")
+        console.print(
+            "[dim]💡 Use --status to see resolution status, --resolve/--skip to manage comments[/dim]"
+        )
 
     else:
         # Plain text fallback
-        logger.info(f"✅ Fetched {len(processed_comments)} comments for PR #{args.pr_number}")
+        logger.info(
+            f"✅ Fetched {len(processed_comments)} comments for PR #{args.pr_number}"
+        )
         print("\n📊 Comment Summary:")
         print(f"  Total: {len(processed_comments)}")
-        print(f"  Major: {len([c for c in processed_comments if c.priority == 'major'])}")
-        print(f"  Minor: {len([c for c in processed_comments if c.priority == 'minor'])}")
-        print(f"  Trivial: {len([c for c in processed_comments if c.priority == 'trivial'])}")
-        print("\n💡 Use --status to see resolution status, --resolve/--skip to manage comments")
+        print(
+            f"  Major: {len([c for c in processed_comments if c.priority == 'major'])}"
+        )
+        print(
+            f"  Minor: {len([c for c in processed_comments if c.priority == 'minor'])}"
+        )
+        print(
+            f"  Trivial: {len([c for c in processed_comments if c.priority == 'trivial'])}"
+        )
+        print(
+            "\n💡 Use --status to see resolution status, --resolve/--skip to manage comments"
+        )
 
 
 if __name__ == "__main__":

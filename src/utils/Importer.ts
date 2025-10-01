@@ -32,21 +32,52 @@ class Importer {
         to?: Date;
         isDryRun?: boolean;
     }) {
-        const fromDate = from ?? subMonths(new Date(), 1);
-        const earliestImportDate = this.budgetConfig.earliestImportDate
-            ? new Date(this.budgetConfig.earliestImportDate)
-            : null;
-        const importDate = earliestImportDate && earliestImportDate > fromDate ? earliestImportDate : fromDate;
-
-        let monMonTransactions = await getTransactions({ from: importDate, to: toDate });
-        monMonTransactions = this.sortTransactions(monMonTransactions);
-
+        const importDate = this.calculateImportDate(from);
+        const monMonTransactions = await this.fetchAndFilterTransactions(importDate, toDate);
+        
         if (monMonTransactions.length === 0) {
             this.logger.info(`No transactions found in MoneyMoney since ${format(importDate, DATE_FORMAT)}.`);
             return;
         }
 
-        // Simple filtering
+        const monMonTransactionMap = this.groupTransactionsByAccount(monMonTransactions);
+        const accountMapping = this.accountMap.getMap(accountRefs);
+        const hasNewTransactions = await this.processAllAccounts(
+            accountMapping,
+            monMonTransactionMap,
+            importDate,
+            toDate,
+            isDryRun
+        );
+
+        if (!hasNewTransactions) {
+            this.logger.info('No new transactions to import.');
+        }
+    }
+
+    private calculateImportDate(from?: Date): Date {
+        const fromDate = from ?? subMonths(new Date(), 1);
+        const earliestImportDate = this.budgetConfig.earliestImportDate
+            ? new Date(this.budgetConfig.earliestImportDate)
+            : null;
+        return earliestImportDate && earliestImportDate > fromDate ? earliestImportDate : fromDate;
+    }
+
+    private async fetchAndFilterTransactions(importDate: Date, toDate?: Date): Promise<MonMonTransaction[]> {
+        let monMonTransactions: MonMonTransaction[];
+        try {
+            monMonTransactions = await getTransactions({ from: importDate, to: toDate });
+        } catch (error) {
+            if (error && typeof error === 'object' && 'name' in error && error.name === 'DatabaseLockedError') {
+                this.logger.error('MoneyMoney database is locked. Please unlock MoneyMoney and try again.');
+                throw error;
+            }
+            throw error;
+        }
+        
+        monMonTransactions = this.sortTransactions(monMonTransactions);
+
+        // Apply filters
         if (!this.config.import.importUncheckedTransactions) {
             monMonTransactions = monMonTransactions.filter((t) => t.booked);
         }
@@ -56,15 +87,26 @@ class Importer {
             );
         }
 
-        const monMonTransactionMap = monMonTransactions.reduce(
+        return monMonTransactions;
+    }
+
+    private groupTransactionsByAccount(transactions: MonMonTransaction[]): Record<string, MonMonTransaction[]> {
+        return transactions.reduce(
             (acc, transaction) => {
                 (acc[transaction.accountUuid] ??= []).push(transaction);
                 return acc;
             },
             {} as Record<string, MonMonTransaction[]>
         );
+    }
 
-        const accountMapping = this.accountMap.getMap(accountRefs);
+    private async processAllAccounts(
+        accountMapping: Map<MonMonAccount, Awaited<ReturnType<ActualApi['getAccounts']>>[number]>,
+        monMonTransactionMap: Record<string, MonMonTransaction[]>,
+        importDate: Date,
+        toDate: Date | undefined,
+        isDryRun: boolean
+    ): Promise<boolean> {
         let hasNewTransactions = false;
 
         for (const [monMonAccount, actualAccount] of accountMapping) {
@@ -80,9 +122,7 @@ class Importer {
             if (processed) hasNewTransactions = true;
         }
 
-        if (!hasNewTransactions) {
-            this.logger.info('No new transactions to import.');
-        }
+        return hasNewTransactions;
     }
 
     private async processAccountTransactions(

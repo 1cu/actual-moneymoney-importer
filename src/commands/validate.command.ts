@@ -11,7 +11,7 @@ const createDefaultConfig = async (configPath: string, logger: Logger): Promise<
     try {
         await fs.mkdir(path.dirname(configPath), { recursive: true });
         await fs.writeFile(configPath, EXAMPLE_CONFIG, { encoding: 'utf-8', mode: 0o600 });
-        logger.warn('Configuration file not found. Created default configuration file.');
+        logger.warn(`Configuration file not found. Created default configuration at: ${configPath}`);
     } catch (createError) {
         logger.error(
             `Failed to create configuration file: ${createError instanceof Error ? createError.message : String(createError)}`
