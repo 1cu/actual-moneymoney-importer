@@ -135,16 +135,28 @@ class Importer {
 
         // Handle payee transformation
         if (this.payeeTransformer && !isDryRun) {
-            const uniquePayees = Array.from(new Set(filteredTransactions.map((t) => String(t.imported_payee ?? ''))));
-            const transformedPayees = await this.payeeTransformer.transformPayees(uniquePayees);
+            try {
+                const uniquePayees = Array.from(
+                    new Set(filteredTransactions.map((t) => String(t.imported_payee ?? '')))
+                );
+                const transformedPayees = await this.payeeTransformer.transformPayees(uniquePayees);
 
-            if (transformedPayees) {
-                filteredTransactions.forEach((t) => {
-                    const original = t.imported_payee as string;
-                    const transformed = transformedPayees[original];
-                    t.payee_name = transformed && transformed.toLowerCase() !== 'unknown' ? transformed : original;
-                });
-            } else {
+                if (transformedPayees) {
+                    filteredTransactions.forEach((t) => {
+                        const original = t.imported_payee as string;
+                        const transformed = transformedPayees[original];
+                        t.payee_name = transformed && transformed.toLowerCase() !== 'unknown' ? transformed : original;
+                    });
+                } else {
+                    filteredTransactions.forEach((t) => {
+                        t.payee_name = t.imported_payee;
+                    });
+                }
+            } catch (error) {
+                this.logger.warn(
+                    'Payee transformation failed, using original payees',
+                    error instanceof Error ? error.message : String(error)
+                );
                 filteredTransactions.forEach((t) => {
                     t.payee_name = t.imported_payee;
                 });

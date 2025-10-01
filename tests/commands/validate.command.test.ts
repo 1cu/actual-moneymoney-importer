@@ -157,7 +157,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(mkdirError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith('Configuration validation failed: permission denied');
+        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration file: permission denied');
         expect(writeFileMock).not.toHaveBeenCalled();
     });
 
@@ -183,7 +183,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(writeError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith('Configuration validation failed: disk full');
+        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration file: disk full');
     });
 
     it('logs syntax errors from the TOML parser with line and column details', async () => {

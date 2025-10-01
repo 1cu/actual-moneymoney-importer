@@ -14,7 +14,7 @@ const createDefaultConfig = async (configPath: string, logger: Logger): Promise<
         logger.warn('Configuration file not found. Created default configuration file.');
     } catch (createError) {
         logger.error(
-            `Configuration validation failed: ${createError instanceof Error ? createError.message : String(createError)}`
+            `Failed to create configuration file: ${createError instanceof Error ? createError.message : String(createError)}`
         );
         throw createError;
     }

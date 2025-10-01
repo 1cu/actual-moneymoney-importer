@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # Enhanced GitHub PR Comments Fetcher with AI Resolution Support
-# Fetches all review comments from a GitHub PR and formats them for AI processing
-# Supports tracking comment resolution state and AI-driven fixes
+# Supports distinguishing between "resolved" (fixed) and "skipped" (intentionally ignored) comments
 
 # Global variables for command-line options
 PR=""
 COMMAND=""
 COMMENT_ID=""
+RESOLUTION_TYPE=""
 OWNER=""
 REPO=""
 
@@ -25,15 +25,18 @@ show_usage() {
     echo ""
     echo "Commands:"
     echo "  (no command)                    Fetch and display all comments"
-    echo "  --resolve <COMMENT_IDS>        Mark one or more comments as resolved by AI (comma-separated)"
+    echo "  --resolve <COMMENT_IDS>        Mark one or more comments as resolved (fixed)"
+    echo "  --skip <COMMENT_IDS>           Mark one or more comments as skipped (intentionally ignored)"
     echo "  --status                        Show resolution status"
     echo "  --cleanup                       Clean up closed PRs and archive resolutions"
     echo "  --help                         Show this help"
     echo ""
     echo "Examples:"
     echo "  $0 123                          # Fetch all comments for PR 123"
-    echo "  $0 123 --resolve 2386777571    # Mark single comment as resolved"
-    echo "  $0 123 --resolve 2386777571,2386777572,2386777573  # Mark multiple comments as resolved"
+    echo "  $0 123 --resolve 2386777571    # Mark single comment as resolved (fixed)"
+    echo "  $0 123 --skip 2386777572        # Mark single comment as skipped (ignored)"
+    echo "  $0 123 --resolve 2386777571,2386777573  # Mark multiple comments as resolved"
+    echo "  $0 123 --skip 2386777572,2386777574      # Mark multiple comments as skipped"
     echo "  $0 123 --status                 # Show resolution status"
     echo "  $0 --cleanup                    # Clean up closed PRs and archive resolutions"
 }
@@ -81,6 +84,16 @@ parse_arguments() {
                     show_error "--resolve requires one or more comment IDs (comma-separated)"
                 fi
                 COMMAND="resolve"
+                RESOLUTION_TYPE="resolved"
+                COMMENT_ID="$2"
+                shift 2
+                ;;
+            --skip)
+                if [ $# -lt 2 ]; then
+                    show_error "--skip requires one or more comment IDs (comma-separated)"
+                fi
+                COMMAND="resolve"
+                RESOLUTION_TYPE="skipped"
                 COMMENT_ID="$2"
                 shift 2
                 ;;
@@ -129,21 +142,16 @@ get_repo_info() {
     fi
 
     # Extract owner and repo from various URL formats
-    # GitHub HTTPS: https://github.com/owner/repo.git
-    # GitHub SSH: git@github.com:owner/repo.git
-    # GitHub HTTPS (no .git): https://github.com/owner/repo
     local owner_repo
 
     # Handle SSH format: git@github.com:owner/repo.git
     if [[ "$remote_url" =~ git@github\.com:([^/]+)/([^/]+) ]]; then
         local repo_name="${BASH_REMATCH[2]}"
-        # Remove .git suffix if present
         repo_name="${repo_name%.git}"
         owner_repo="${BASH_REMATCH[1]}/${repo_name}"
     # Handle HTTPS format: https://github.com/owner/repo.git
     elif [[ "$remote_url" =~ https://github\.com/([^/]+)/([^/]+) ]]; then
         local repo_name="${BASH_REMATCH[2]}"
-        # Remove .git suffix if present
         repo_name="${repo_name%.git}"
         owner_repo="${BASH_REMATCH[1]}/${repo_name}"
     else
@@ -185,12 +193,13 @@ load_resolutions() {
     if [ -f "$resolution_file" ]; then
         cat "$resolution_file"
     else
-        echo '{"resolved_comments": [], "resolution_history": []}'
+        echo '{"resolved_comments": [], "skipped_comments": [], "resolution_history": []}'
     fi
 }
 
 save_resolution() {
     local comment_id="$1"
+    local resolution_type="$2"
     local resolution_file
     local current_resolutions
     local updated_resolutions
@@ -198,21 +207,35 @@ save_resolution() {
     resolution_file=$(get_resolution_file)
     current_resolutions=$(load_resolutions)
 
-    # Add to resolved comments and history (deduplicate resolved_comments)
-    updated_resolutions=$(echo "$current_resolutions" | jq --arg comment_id "$comment_id" --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-        .resolved_comments = (.resolved_comments + [$comment_id] | unique) |
-        .resolution_history += [{
-            comment_id: $comment_id,
-            resolved_at: $timestamp,
-            resolved_by: "ai"
-        }]
-    ')
+    # Add to appropriate list and history
+    if [ "$resolution_type" = "resolved" ]; then
+        updated_resolutions=$(echo "$current_resolutions" | jq --arg comment_id "$comment_id" --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+            .resolved_comments = (.resolved_comments + [$comment_id] | unique) |
+            .resolution_history += [{
+                comment_id: $comment_id,
+                resolution_type: "resolved",
+                resolved_at: $timestamp,
+                resolved_by: "ai"
+            }]
+        ')
+    else
+        updated_resolutions=$(echo "$current_resolutions" | jq --arg comment_id "$comment_id" --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+            .skipped_comments = (.skipped_comments + [$comment_id] | unique) |
+            .resolution_history += [{
+                comment_id: $comment_id,
+                resolution_type: "skipped",
+                resolved_at: $timestamp,
+                resolved_by: "ai"
+            }]
+        ')
+    fi
 
     echo "$updated_resolutions" > "$resolution_file"
 }
 
 save_multiple_resolutions() {
     local comment_ids="$1"
+    local resolution_type="$2"
     local resolution_file
     local current_resolutions
     local updated_resolutions
@@ -231,9 +254,10 @@ save_multiple_resolutions() {
         # Trim whitespace
         comment_id=$(echo "$comment_id" | xargs)
         if [ -n "$comment_id" ]; then
-            resolution_entries=$(echo "$resolution_entries" | jq --arg id "$comment_id" --arg ts "$timestamp" '
+            resolution_entries=$(echo "$resolution_entries" | jq --arg id "$comment_id" --arg type "$resolution_type" --arg ts "$timestamp" '
                 . += [{
                     comment_id: $id,
+                    resolution_type: $type,
                     resolved_at: $ts,
                     resolved_by: "ai"
                 }]
@@ -241,11 +265,18 @@ save_multiple_resolutions() {
         fi
     done
 
-    # Add all resolved comments and history entries (deduplicate resolved_comments)
-    updated_resolutions=$(echo "$current_resolutions" | jq --argjson new_resolutions "$resolution_entries" '
-        .resolved_comments = (.resolved_comments + ($new_resolutions | map(.comment_id)) | unique) |
-        .resolution_history = (.resolution_history + $new_resolutions)
-    ')
+    # Add all resolved/skipped comments and history entries
+    if [ "$resolution_type" = "resolved" ]; then
+        updated_resolutions=$(echo "$current_resolutions" | jq --argjson new_resolutions "$resolution_entries" '
+            .resolved_comments = (.resolved_comments + ($new_resolutions | map(.comment_id)) | unique) |
+            .resolution_history = (.resolution_history + $new_resolutions)
+        ')
+    else
+        updated_resolutions=$(echo "$current_resolutions" | jq --argjson new_resolutions "$resolution_entries" '
+            .skipped_comments = (.skipped_comments + ($new_resolutions | map(.comment_id)) | unique) |
+            .resolution_history = (.resolution_history + $new_resolutions)
+        ')
+    fi
 
     echo "$updated_resolutions" > "$resolution_file"
 }
@@ -254,6 +285,7 @@ show_resolution_status() {
     local resolution_file
     local resolutions
     local resolved_count
+    local skipped_count
     local total_comments
     local comments_file
 
@@ -286,17 +318,17 @@ show_resolution_status() {
         return 1
     fi
 
-    # Local state is already up to date when called from --status
-
     resolutions=$(cat "$resolution_file")
     resolved_count=$(jq '.metadata.resolved_comments // 0' "$comments_file" 2>/dev/null || echo "0")
+    skipped_count=$(jq '.metadata.skipped_comments // 0' "$comments_file" 2>/dev/null || echo "0")
     total_comments=$(jq '.metadata.total_comments // 0' "$comments_file" 2>/dev/null || echo "0")
 
     echo "📊 Resolution Status:"
     echo "  Resolved: $resolved_count"
+    echo "  Skipped: $skipped_count"
     echo "  Total: $total_comments"
     if [ "${total_comments:-0}" -gt 0 ]; then
-        progress=$(( resolved_count * 100 / total_comments ))
+        progress=$(( (resolved_count + skipped_count) * 100 / total_comments ))
     else
         progress=0
     fi
@@ -307,8 +339,20 @@ show_resolution_status() {
     echo "✅ RESOLVED COMMENTS:"
     if [ "$resolved_count" -gt 0 ]; then
         jq -r '
-        .comments | map(select(.is_resolved == true)) | .[] |
+        .comments | map(select(.is_resolved == true and .resolution_type == "resolved")) | .[] |
         "  ✅ \(.comment_id) - \(.file_path // "General") - \(.author) - \(.createdAt)"
+        ' "$comments_file"
+    else
+        echo "  None"
+    fi
+    echo ""
+
+    # Show skipped comments
+    echo "⏭️  SKIPPED COMMENTS:"
+    if [ "$skipped_count" -gt 0 ]; then
+        jq -r '
+        .comments | map(select(.is_resolved == true and .resolution_type == "skipped")) | .[] |
+        "  ⏭️  \(.comment_id) - \(.file_path // "General") - \(.author) - \(.createdAt)"
         ' "$comments_file"
     else
         echo "  None"
@@ -330,10 +374,72 @@ show_resolution_status() {
     fi
     echo ""
 
-    # Show recent resolution history
-    echo "📝 Recent Resolutions:"
-    echo "$resolutions" | jq -r '.resolution_history[-5:] | .[] | "  ✅ \(.comment_id) - \(.resolved_at) (\(.resolved_by))"'
 }
+
+# Update local comments file with current resolution state
+update_local_comments_state() {
+    local comments_file=".local/pr-$PR-change-comments.json"
+    local resolution_file
+    resolution_file=$(get_resolution_file)
+
+    if [ ! -f "$comments_file" ] || [ ! -f "$resolution_file" ]; then
+        return 0
+    fi
+
+    local resolutions
+    resolutions=$(cat "$resolution_file")
+    local resolved_comments
+    local skipped_comments
+    resolved_comments=$(echo "$resolutions" | jq -r '.resolved_comments[]')
+    skipped_comments=$(echo "$resolutions" | jq -r '.skipped_comments[]')
+
+    # Update the comments file with current resolution state
+    jq --argjson resolved_list "$(echo "$resolved_comments" | jq -R -s 'if length > 0 then split("\n")[:-1] else [] end')" \
+       --argjson skipped_list "$(echo "$skipped_comments" | jq -R -s 'if length > 0 then split("\n")[:-1] else [] end')" '
+        def is_resolved($comment_id):
+            $resolved_list | contains([$comment_id]);
+        def is_skipped($comment_id):
+            $skipped_list | contains([$comment_id]);
+        def get_resolution_type($comment_id):
+            if is_resolved($comment_id) then "resolved"
+            elif is_skipped($comment_id) then "skipped"
+            else null end;
+
+        .comments = (.comments | map(
+            .is_resolved = (is_resolved(.comment_id) or is_skipped(.comment_id)) |
+            .resolution_type = get_resolution_type(.comment_id)
+        )) |
+        .metadata.resolved_comments = ($resolved_list | length) |
+        .metadata.skipped_comments = ($skipped_list | length) |
+        .metadata.unresolved_comments = ((.comments | length) - ($resolved_list | length) - ($skipped_list | length)) |
+        .metadata.resolution_rate = (if (.comments | length) > 0 then ((($resolved_list | length) + ($skipped_list | length)) * 100 / (.comments | length)) | floor else 0 end)
+    ' "$comments_file" > "$comments_file.tmp" && mv "$comments_file.tmp" "$comments_file"
+}
+
+# Handle resolution commands
+if [ "$COMMAND" = "resolve" ]; then
+    # Check if multiple comment IDs are provided (comma-separated)
+    if [[ "$COMMENT_ID" == *","* ]]; then
+        save_multiple_resolutions "$COMMENT_ID" "$RESOLUTION_TYPE"
+        update_local_comments_state
+        # Count the number of resolved/skipped comments
+        count=$(echo "$COMMENT_ID" | tr ',' '\n' | wc -l | xargs)
+        if [ "$RESOLUTION_TYPE" = "resolved" ]; then
+            echo "✅ $count comments marked as resolved (fixed): $COMMENT_ID"
+        else
+            echo "⏭️  $count comments marked as skipped (ignored): $COMMENT_ID"
+        fi
+    else
+        save_resolution "$COMMENT_ID" "$RESOLUTION_TYPE"
+        update_local_comments_state
+        if [ "$RESOLUTION_TYPE" = "resolved" ]; then
+            echo "✅ Comment $COMMENT_ID marked as resolved (fixed)"
+        else
+            echo "⏭️  Comment $COMMENT_ID marked as skipped (ignored)"
+        fi
+    fi
+    exit 0
+fi
 
 # Cleanup function to archive closed PRs
 cleanup_closed_prs() {
@@ -396,50 +502,6 @@ cleanup_closed_prs() {
         echo "  📁 Archive location: .local/_Archive/" >&2
     fi
 }
-
-# Update local comments file with current resolution state
-update_local_comments_state() {
-    local comments_file=".local/pr-$PR-change-comments.json"
-    local resolution_file
-    resolution_file=$(get_resolution_file)
-
-    if [ ! -f "$comments_file" ] || [ ! -f "$resolution_file" ]; then
-        return 0
-    fi
-
-    local resolutions
-    resolutions=$(cat "$resolution_file")
-    local resolved_comments
-    resolved_comments=$(echo "$resolutions" | jq -r '.resolved_comments[]')
-
-    # Update the comments file with current resolution state
-    jq --argjson resolved_list "$(echo "$resolved_comments" | jq -R -s 'if length > 0 then split("\n")[:-1] else [] end')" '
-        def is_resolved($comment_id):
-            $resolved_list | contains([$comment_id]);
-
-        .comments = (.comments | map(.is_resolved = is_resolved(.comment_id))) |
-        .metadata.resolved_comments = ($resolved_list | length) |
-        .metadata.unresolved_comments = ((.comments | length) - ($resolved_list | length)) |
-        .metadata.resolution_rate = (if (.comments | length) > 0 then (($resolved_list | length) * 100 / (.comments | length)) | floor else 0 end)
-    ' "$comments_file" > "$comments_file.tmp" && mv "$comments_file.tmp" "$comments_file"
-}
-
-# Handle resolution commands
-if [ "$COMMAND" = "resolve" ]; then
-    # Check if multiple comment IDs are provided (comma-separated)
-    if [[ "$COMMENT_ID" == *","* ]]; then
-        save_multiple_resolutions "$COMMENT_ID"
-        update_local_comments_state
-        # Count the number of resolved comments
-        count=$(echo "$COMMENT_ID" | tr ',' '\n' | wc -l | xargs)
-        echo "✅ $count comments marked as resolved: $COMMENT_ID"
-    else
-        save_resolution "$COMMENT_ID"
-        update_local_comments_state
-        echo "✅ Comment $COMMENT_ID marked as resolved"
-    fi
-    exit 0
-fi
 
 if [ "$COMMAND" = "cleanup" ]; then
     cleanup_closed_prs
@@ -547,9 +609,15 @@ jq -n --slurpfile threads .local/temp-threads.json --slurpfile comments .local/t
      else .captures[0].string end) //
     null;
 
-  # Check if comment is resolved
+  # Check if comment is resolved or skipped
   def is_resolved($comment_id):
     $resolutions.resolved_comments | contains([$comment_id]);
+  def is_skipped($comment_id):
+    $resolutions.skipped_comments | contains([$comment_id]);
+  def get_resolution_type($comment_id):
+    if is_resolved($comment_id) then "resolved"
+    elif is_skipped($comment_id) then "skipped"
+    else null end;
 
   # Process inline comments
   def process_inline_comments:
@@ -566,7 +634,8 @@ jq -n --slurpfile threads .local/temp-threads.json --slurpfile comments .local/t
         file_path: (.path // extract_file_path(.body)),
         line_range: extract_line_range(.body),
         has_code_changes: has_changes(.body),
-        is_resolved: is_resolved(.id),
+        is_resolved: (is_resolved(.id) or is_skipped(.id)),
+        resolution_type: get_resolution_type(.id),
         comment_id: .id
       });
 
@@ -586,7 +655,8 @@ jq -n --slurpfile threads .local/temp-threads.json --slurpfile comments .local/t
         file_path: extract_file_path(.body),
         line_range: extract_line_range(.body),
         has_code_changes: has_changes(.body),
-        is_resolved: is_resolved(.id),
+        is_resolved: (is_resolved(.id) or is_skipped(.id)),
+        resolution_type: get_resolution_type(.id),
         comment_id: .id
       });
 
@@ -607,7 +677,8 @@ jq -n --slurpfile threads .local/temp-threads.json --slurpfile comments .local/t
       pr_comments: ($comments | map(select(.type == "pr-comment")) | length),
       with_code_changes: ($comments | map(select(.has_code_changes == true)) | length),
       without_code_changes: ($comments | map(select(.has_code_changes == false)) | length),
-      resolved_comments: ($comments | map(select(.is_resolved == true)) | length),
+      resolved_comments: ($comments | map(select(.is_resolved == true and .resolution_type == "resolved")) | length),
+      skipped_comments: ($comments | map(select(.is_resolved == true and .resolution_type == "skipped")) | length),
       unresolved_comments: ($comments | map(select(.is_resolved == false)) | length),
       resolution_rate: (if ($comments | length) > 0 then (($comments | map(select(.is_resolved == true)) | length) * 100 / ($comments | length)) | floor else 0 end)
     };
@@ -639,6 +710,7 @@ jq -r '
   "📊 STATISTICS:",
   "Total Comments: \(.summary.total_comments)",
   "Resolved: \(.summary.resolved_comments)",
+  "Skipped: \(.summary.skipped_comments)",
   "Unresolved: \(.summary.unresolved_comments)",
   "Resolution Rate: \(.summary.resolution_rate)%",
   "Inline Comments: \(.summary.inline_comments)",
@@ -666,7 +738,7 @@ jq -r '
     "   Comments: \(.comments | length)",
     "",
     (.comments[] |
-      "  ┌─ \(.type | ascii_upcase) | \(.priority | ascii_upcase) | \(.category | ascii_upcase)\(if .is_resolved then " | ✅ RESOLVED" else "" end)",
+      "  ┌─ \(.type | ascii_upcase) | \(.priority | ascii_upcase) | \(.category | ascii_upcase)\(if .is_resolved then (if .resolution_type == "resolved" then " | ✅ RESOLVED" else " | ⏭️ SKIPPED" end) else "" end)",
       "  │ File: \(.file_path // "N/A")",
       "  │ Author: \(.author)",
       "  │ Created: \(.createdAt)",
@@ -689,7 +761,7 @@ echo "  📄 JSON: .local/pr-$PR-change-comments.json" >&2
 echo "  📋 Summary: .local/pr-$PR-summary.txt" >&2
 echo "" >&2
 echo "📊 Quick stats:" >&2
-jq -r '"Total: \(.summary.total_comments), Resolved: \(.summary.resolved_comments), Unresolved: \(.summary.unresolved_comments), Rate: \(.summary.resolution_rate)%"' .local/pr-"$PR"-change-comments.json >&2
+jq -r '"Total: \(.summary.total_comments), Resolved: \(.summary.resolved_comments), Skipped: \(.summary.skipped_comments), Unresolved: \(.summary.unresolved_comments), Rate: \(.summary.resolution_rate)%"' .local/pr-"$PR"-change-comments.json >&2
 echo "" >&2
 echo "❌ UNRESOLVED COMMENTS:" >&2
 jq -r '

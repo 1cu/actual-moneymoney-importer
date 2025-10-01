@@ -66,3 +66,57 @@ All changes must pass:
 - **SIMPLIFY over OPTIMIZE** - Simple approaches work better than complex ones
 - **QUESTION every abstraction** - Many "helpers" are actually over-engineering
 - **Focus on essential functionality** - Avoid premature optimization
+
+## Coderabbit Comment Handling
+
+**CRITICAL**: Not all Coderabbit suggestions are necessary or beneficial. Follow these guidelines:
+
+### **Evaluation Framework**
+
+1. **🔴 CRITICAL - Must Fix:**
+   - Security vulnerabilities (credential exposure, data leaks)
+   - Data integrity issues (silent data loss, corruption)
+   - System stability (crashes, infinite loops)
+
+2. **🟠 MAJOR - Should Fix:**
+   - Missing error handling for external service calls
+   - Resilience improvements with simple fallback mechanisms
+   - User experience improvements (clear error messages)
+
+3. **🟡 MINOR - Nice to Have:**
+   - Error message clarity improvements
+   - Documentation and code comments
+   - Additional debug logging (when valuable)
+
+4. **🔵 TRIVIAL - Skip:**
+   - Style suggestions (unless project standards)
+   - Over-engineering simple problems
+   - Premature optimization without proven need
+   - Unnecessary complexity additions
+
+### **Decision Process**
+
+1. **Question every suggestion** - Is this fix truly necessary?
+2. **Consider complexity** - Does it add unnecessary complexity?
+3. **Look for simpler solutions** - Can this be solved more simply?
+4. **Follow project guidelines** - Does it align with complexity prevention?
+
+### **Anti-Patterns to Avoid**
+
+- Complex error handling with multiple fallback layers
+- Generic abstractions that hide complexity
+- Excessive logging and debugging infrastructure
+- Complex configuration with too many options
+- Over-mocking in tests
+
+### **Preferred Patterns**
+
+- Simple, direct code that's readable by new developers
+- Minimal error handling with clear error messages
+- Single-purpose utilities with focused interfaces
+- Simple test data and minimal fixtures
+- Direct API calls without unnecessary abstraction layers
+
+**Remember**: The best code is code that doesn't exist. Delete over refactor, inline over abstract, simplify over optimize.
+
+For detailed guidance, see [`.cursor/rules/coderabbit-comment-handling.mdc`](.cursor/rules/coderabbit-comment-handling.mdc).
