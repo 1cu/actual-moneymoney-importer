@@ -42,6 +42,7 @@ const SUPPRESSED_PATTERNS = [
     /^Budget saved/i,
     /^Applying migration/i,
     /^Migration applied/i,
+    /^Debug data for the operations:/i,
 ];
 
 // Simple console filtering - no caching needed
