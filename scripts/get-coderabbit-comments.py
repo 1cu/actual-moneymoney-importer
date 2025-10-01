@@ -645,7 +645,7 @@ class ResolutionManager:
             "resolution_history": state.resolution_history,
         }
 
-        with open(self.resolution_file, "w") as f:
+        with open(self.resolution_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     def mark_resolved(self, comment_ids: List[str]):

@@ -238,8 +238,8 @@ When configuration values are not explicitly set, the following defaults are use
 | `payeeTransformation.enabled`                      | `false`         | Disable AI payee transformation by default          |
 | `payeeTransformation.openAiModel`                  | `"gpt-4o-mini"` | Use cost-effective model for transformations        |
 | `payeeTransformation.cacheTransformedPayees`       | `true`          | Cache transformations to avoid repeated API calls   |
-| `import.uncheckedTransactions`                     | `true`          | Import transactions as unchecked by default         |
-| `import.clearedTransactions`                       | `false`         | Import transactions as uncleared by default         |
+| `import.importUncheckedTransactions`              | `true`          | Import transactions as unchecked by default         |
+| `import.synchronizeClearedStatus`                 | `true`          | Import transactions as uncleared by default         |
 | `import.maskPayeesInLogs`                         | `true`          | Mask payee names in logs for privacy                |
 | `import.importSince`                              | `null`          | No date filter by default (import all transactions) |
 | `import.importUntil`                              | `null`          | No end date filter by default                       |
@@ -347,8 +347,6 @@ For detailed workflows, see [CONTRIBUTING.md](./CONTRIBUTING.md). Helpful npm
 scripts when working on the project:
 
 - `npm run lint:all` – run all linters (ESLint, Prettier, Markdown).
-- `npm run lint:complexity` – enforce the cyclomatic (max 40) and cognitive (max
-  60\) complexity budgets for the source tree.
 - `npm run lint:prettier` – check formatting with Prettier.
 - `npm run typecheck` – perform a strict TypeScript type check without emitting
   files.
