@@ -198,9 +198,9 @@ save_resolution() {
     resolution_file=$(get_resolution_file)
     current_resolutions=$(load_resolutions)
 
-    # Add to resolved comments and history
+    # Add to resolved comments and history (deduplicate resolved_comments)
     updated_resolutions=$(echo "$current_resolutions" | jq --arg comment_id "$comment_id" --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-        .resolved_comments += [$comment_id] |
+        .resolved_comments = (.resolved_comments + [$comment_id] | unique) |
         .resolution_history += [{
             comment_id: $comment_id,
             resolved_at: $timestamp,
@@ -241,9 +241,9 @@ save_multiple_resolutions() {
         fi
     done
 
-    # Add all resolved comments and history entries
+    # Add all resolved comments and history entries (deduplicate resolved_comments)
     updated_resolutions=$(echo "$current_resolutions" | jq --argjson new_resolutions "$resolution_entries" '
-        .resolved_comments = (.resolved_comments + ($new_resolutions | map(.comment_id))) |
+        .resolved_comments = (.resolved_comments + ($new_resolutions | map(.comment_id)) | unique) |
         .resolution_history = (.resolution_history + $new_resolutions)
     ')
 
