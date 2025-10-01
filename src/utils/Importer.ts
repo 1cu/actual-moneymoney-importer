@@ -8,7 +8,6 @@ import type { ActualBudgetConfig, Config } from './config.js';
 import Logger from './Logger.js';
 import PayeeTransformer from './PayeeTransformer.js';
 import { DATE_FORMAT } from './shared.js';
-
 class Importer {
     public constructor(
         private config: Config,
@@ -18,9 +17,7 @@ class Importer {
         private accountMap: AccountMap,
         private payeeTransformer?: PayeeTransformer
     ) {}
-
     private readonly patternCache = new Map<string, RegExp>();
-
     public async importTransactions({
         accountRefs,
         from,
@@ -34,12 +31,10 @@ class Importer {
     }) {
         const importDate = this.calculateImportDate(from);
         const monMonTransactions = await this.fetchAndFilterTransactions(importDate, toDate);
-
         if (monMonTransactions.length === 0) {
             this.logger.info(`No transactions found in MoneyMoney since ${format(importDate, DATE_FORMAT)}.`);
             return;
         }
-
         const monMonTransactionMap = this.groupTransactionsByAccount(monMonTransactions);
         const accountMapping = this.accountMap.getMap(accountRefs);
         const hasNewTransactions = await this.processAllAccounts(
@@ -49,12 +44,10 @@ class Importer {
             toDate,
             isDryRun
         );
-
         if (!hasNewTransactions) {
             this.logger.info('No new transactions to import.');
         }
     }
-
     private calculateImportDate(from?: Date): Date {
         const fromDate = from ?? subMonths(new Date(), 1);
         const earliestImportDate = this.budgetConfig.earliestImportDate
@@ -62,7 +55,6 @@ class Importer {
             : null;
         return earliestImportDate && earliestImportDate > fromDate ? earliestImportDate : fromDate;
     }
-
     private async fetchAndFilterTransactions(importDate: Date, toDate?: Date): Promise<MonMonTransaction[]> {
         let monMonTransactions: MonMonTransaction[];
         try {
@@ -74,9 +66,7 @@ class Importer {
             }
             throw error;
         }
-
         monMonTransactions = this.sortTransactions(monMonTransactions);
-
         // Apply filters
         if (!this.config.import.importUncheckedTransactions) {
             monMonTransactions = monMonTransactions.filter((t) => t.booked);
@@ -86,10 +76,8 @@ class Importer {
                 (t) => !this.matchesPattern(t.name, this.config.import.ignorePatterns!.payeePatterns)
             );
         }
-
         return monMonTransactions;
     }
-
     private groupTransactionsByAccount(transactions: MonMonTransaction[]): Record<string, MonMonTransaction[]> {
         return transactions.reduce(
             (acc, transaction) => {
@@ -99,7 +87,6 @@ class Importer {
             {} as Record<string, MonMonTransaction[]>
         );
     }
-
     private async processAllAccounts(
         accountMapping: Map<MonMonAccount, Awaited<ReturnType<ActualApi['getAccounts']>>[number]>,
         monMonTransactionMap: Record<string, MonMonTransaction[]>,
@@ -108,7 +95,6 @@ class Importer {
         isDryRun: boolean
     ): Promise<boolean> {
         let hasNewTransactions = false;
-
         for (const [monMonAccount, actualAccount] of accountMapping) {
             const accountTransactions = monMonTransactionMap[monMonAccount.uuid] ?? [];
             const processed = await this.processAccountTransactions(
@@ -121,10 +107,8 @@ class Importer {
             );
             if (processed) hasNewTransactions = true;
         }
-
         return hasNewTransactions;
     }
-
     private async processAccountTransactions(
         monMonAccount: MonMonAccount,
         actualAccount: { id: string; name: string },
@@ -135,15 +119,13 @@ class Importer {
     ): Promise<boolean> {
         // Convert transactions with individual error handling
         const createTransactions = await this.convertTransactionsWithErrorHandling(
-            accountTransactions, 
+            accountTransactions,
             actualAccount.id
         );
-
         const existingActualTransactions = await this.actualApi.getTransactions(actualAccount.id, {
             from: importDate,
             to: toDate ?? undefined,
         });
-
         // Add starting balance if needed
         if (existingActualTransactions.length === 0 && createTransactions.length > 0) {
             const firstTransaction = accountTransactions[0];
@@ -159,22 +141,18 @@ class Importer {
             };
             createTransactions.push(startTransaction);
         }
-
         // Filter out existing transactions
         const existingIds = new Set(
             existingActualTransactions.map((t) => t.imported_id).filter((id): id is string => Boolean(id))
         );
-
         const filteredTransactions = createTransactions.filter((t) => {
             const id = t.imported_id;
             return id && !existingIds.has(id);
         });
-
         if (filteredTransactions.length === 0) {
             this.logger.debug(`No new transactions found for Actual account '${actualAccount.name}'. Skipping...`);
             return false;
         }
-
         // Handle payee transformation
         if (this.payeeTransformer && !isDryRun) {
             try {
@@ -182,7 +160,6 @@ class Importer {
                     new Set(filteredTransactions.map((t) => String(t.imported_payee ?? '')))
                 );
                 const transformedPayees = await this.payeeTransformer.transformPayees(uniquePayees);
-
                 if (transformedPayees) {
                     filteredTransactions.forEach((t) => {
                         const original = t.imported_payee as string;
@@ -208,7 +185,6 @@ class Importer {
                 t.payee_name = t.imported_payee;
             });
         }
-
         // Import transactions
         if (isDryRun) {
             this.logger.info(
@@ -216,57 +192,43 @@ class Importer {
             );
         } else {
             const result = await this.actualApi.importTransactions(actualAccount.id, filteredTransactions);
-
             if (result.errors && result.errors.length > 0) {
                 this.logger.error(`Import errors: ${result.errors.length} errors occurred`);
             }
-
             this.logger.info(`Import successful: ${result.added.length} added, ${result.updated.length} updated`);
         }
-
         return true;
     }
-
     private sortTransactions(transactions: MonMonTransaction[]) {
         return [...transactions].sort((left, right) => {
             const leftTime = this.getTransactionTime(left.valueDate);
             const rightTime = this.getTransactionTime(right.valueDate);
-
             if (leftTime < rightTime) {
                 return -1;
             }
-
             if (leftTime > rightTime) {
                 return 1;
             }
-
             const leftId = left.id === undefined || left.id === null ? '' : String(left.id);
             const rightId = right.id === undefined || right.id === null ? '' : String(right.id);
-
             return leftId.localeCompare(rightId);
         });
     }
-
     private getTransactionTime(valueDate: MonMonTransaction['valueDate']) {
         if (!(valueDate instanceof Date)) {
             return Number.POSITIVE_INFINITY;
         }
-
         const time = valueDate.getTime();
-
         if (Number.isNaN(time)) {
             return Number.POSITIVE_INFINITY;
         }
-
         return time;
     }
-
     private async convertToActualTransaction(
         transaction: MonMonTransaction,
         accountId: string
     ): Promise<ImportTransaction> {
         this.assertValidTransaction(transaction);
-
         return {
             account: accountId,
             date: format(transaction.valueDate, DATE_FORMAT),
@@ -278,15 +240,12 @@ class Importer {
             // payee_name: transaction.name,
         };
     }
-
     private assertValidTransaction(transaction: MonMonTransaction): void {
         const issues: string[] = [];
-
         const hasValidDate = transaction.valueDate instanceof Date && !Number.isNaN(transaction.valueDate.getTime());
         if (!hasValidDate) {
             issues.push('valueDate is missing or invalid');
         }
-
         if (
             typeof transaction.amount !== 'number' ||
             Number.isNaN(transaction.amount) ||
@@ -294,48 +253,38 @@ class Importer {
         ) {
             issues.push('amount is missing or invalid');
         }
-
         const transactionName = transaction.name;
         if (typeof transactionName !== 'string' || transactionName.trim().length === 0) {
             issues.push('name is missing or invalid');
         }
-
         if (!transaction.id) {
             issues.push('id is missing');
         }
-
         if (!transaction.accountUuid) {
             issues.push('accountUuid is missing');
         }
-
         if (issues.length === 0) {
             return;
         }
-
         const transactionId = transaction.id ?? '(missing)';
         const accountUuid = transaction.accountUuid ?? '(missing)';
         const message = `MoneyMoney returned a malformed transaction (id: ${transactionId}, account: ${accountUuid}). ${issues.join(
             '; '
         )}.`;
-
         this.logger.error(message, [
             `Transaction ID: ${transactionId}`,
             `MoneyMoney account UUID: ${accountUuid}`,
             'Export a fresh transactions report from MoneyMoney or repair the database before retrying.',
         ]);
-
         throw new Error(message);
     }
-
     private getIdForMoneyMoneyTransaction(transaction: MonMonTransaction) {
         return `${transaction.accountUuid}-${transaction.id}`;
     }
-
     private getStartingBalanceForAccount(account: MonMonAccount, transactions: MonMonTransaction[]) {
         // Use the first (earliest) balance entry, not the last
         const firstBalanceRow = account.balance[0];
         const monMonAccountBalance = firstBalanceRow?.[0];
-
         if (monMonAccountBalance === undefined) {
             this.logger.warn(
                 `MoneyMoney account '${account.uuid}' is missing a balance entry. Assuming a starting balance of 0.`,
@@ -347,36 +296,32 @@ class Importer {
             (acc, transaction) => acc + (transaction.booked ? transaction.amount : 0),
             0
         );
-
         const startingBalance = Math.round((monMonAccountBalance - netChange) * 100);
-
         return startingBalance;
     }
-
     private matchesPattern(value: string | undefined, patterns?: string[]) {
         if (!value || !patterns?.length) return false;
         return patterns.some((pattern) => {
-            const regex = this.patternCache.get(pattern) || (() => {
-                // Escape all regex special characters except * which we want to convert to .*
-                const escapedPattern = pattern
-                    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape all regex special chars
-                    .replace(/\\\*/g, '.*'); // Convert escaped * back to .*
-                
-                // Anchor the pattern to match the entire string
-                return new RegExp(`^${escapedPattern}$`, 'i');
-            })();
+            const regex =
+                this.patternCache.get(pattern) ||
+                (() => {
+                    // Escape all regex special characters except * which we want to convert to .*
+                    const escapedPattern = pattern
+                        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape all regex special chars
+                        .replace(/\\\*/g, '.*'); // Convert escaped * back to .*
+                    // Anchor the pattern to match the entire string
+                    return new RegExp(`^${escapedPattern}$`, 'i');
+                })();
             this.patternCache.set(pattern, regex);
             return regex.test(value);
         });
     }
-
     private async convertTransactionsWithErrorHandling(
         accountTransactions: MonMonTransaction[],
         accountId: string
     ): Promise<ImportTransaction[]> {
         const createTransactions: ImportTransaction[] = [];
         const conversionErrors: string[] = [];
-        
         for (const transaction of accountTransactions) {
             try {
                 const converted = await this.convertToActualTransaction(transaction, accountId);
@@ -387,7 +332,7 @@ class Importer {
                 this.logger.warn(errorMessage, [
                     `Transaction ID: ${transaction.id}`,
                     `Account UUID: ${transaction.accountUuid}`,
-                    'This transaction will be skipped from the import.'
+                    'This transaction will be skipped from the import.',
                 ]);
             }
         }

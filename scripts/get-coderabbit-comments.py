@@ -28,7 +28,7 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from rich.console import Console
@@ -308,7 +308,7 @@ class CommentProcessor:
     def _extract_priority(self, body: str) -> str:
         """Extract priority from comment body"""
         # Use faster string operations instead of multiple if statements
-        if "Major" in body:
+        if "Major" in body or "P1" in body:
             return "major"
         if "Minor" in body:
             return "minor"
@@ -413,7 +413,7 @@ class ResolutionManager:
                 {
                     "comment_id": comment_id,
                     "resolution_type": "resolved",
-                    "resolved_at": datetime.now().isoformat() + "Z",
+                    "resolved_at": datetime.now(timezone.utc).isoformat(),
                     "resolved_by": "ai",
                 }
             )
@@ -443,7 +443,7 @@ class ResolutionManager:
                 {
                     "comment_id": comment_id,
                     "resolution_type": "skipped",
-                    "resolved_at": datetime.now().isoformat() + "Z",
+                    "resolved_at": datetime.now(timezone.utc).isoformat(),
                     "resolved_by": "ai",
                 }
             )
@@ -695,7 +695,7 @@ Examples:
     parser.add_argument(
         "--cleanup",
         action="store_true",
-        help="Clean up closed PRs and archive resolutions",
+        help="Archive all PR data files to .local/archive/",
     )
 
     args = parser.parse_args()

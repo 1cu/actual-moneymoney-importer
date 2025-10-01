@@ -48,9 +48,17 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
 
         const config = configSchema.parse(configData);
 
-        // Debug: Log effective configuration at debug level
+        // Debug: Log effective configuration at debug level (excluding sensitive data)
         if (logLevel >= LogLevel.DEBUG) {
-            logger.debug('Effective configuration loaded', JSON.stringify(config, null, 2));
+            const sanitizedConfig = JSON.parse(
+                JSON.stringify(config, (key: string, value: unknown) => {
+                    if (key === 'serverPassword' || key === 'password' || key === 'openAiApiKey') {
+                        return '[REDACTED]';
+                    }
+                    return value;
+                })
+            ) as Record<string, unknown>;
+            logger.debug('Effective configuration loaded', JSON.stringify(sanitizedConfig, null, 2));
         }
 
         logger.info('Configuration is valid.');
