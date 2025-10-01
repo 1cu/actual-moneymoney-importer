@@ -92,14 +92,12 @@ class ActualApi {
     protected isInitialized = false;
     private currentDataDir: string | null = null;
     private static consolePatchDepth = 0;
-    private static originalConsole:
-        | null
-        | {
-              log: typeof console.log;
-              info: typeof console.info;
-              debug: typeof console.debug;
-              warn: typeof console.warn;
-          } = null;
+    private static originalConsole: null | {
+        log: typeof console.log;
+        info: typeof console.info;
+        debug: typeof console.debug;
+        warn: typeof console.warn;
+    } = null;
 
     public constructor(
         private readonly serverConfig: ActualServerConfig,
