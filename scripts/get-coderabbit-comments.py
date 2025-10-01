@@ -164,7 +164,7 @@ class GitHubAPI:
                 logger.error(f"❌ gh CLI fallback also failed: {gh_error}")
             sys.exit(1)
 
-    def fetch_comments(self, pr_number: int) -> Tuple[List[Comment], List[Comment]]:
+    def fetch_comments(self, pr_number: int) -> Tuple[List[Comment], List[Comment], List[Comment]]:
         """Fetch comments from GitHub API"""
         import concurrent.futures
 
@@ -174,21 +174,23 @@ class GitHubAPI:
         else:
             logger.info(f"Fetching comments for PR #{pr_number}...")
 
-        # Fetch both in parallel for better performance
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        # Fetch all three types in parallel for better performance
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             review_future = executor.submit(self._fetch_review_threads, pr_number)
             pr_future = executor.submit(self._fetch_pr_comments, pr_number)
+            review_comments_future = executor.submit(self._fetch_review_comments, pr_number)
 
-            # Wait for both to complete
+            # Wait for all to complete
             review_threads = review_future.result()
             pr_comments = pr_future.result()
+            review_comments = review_comments_future.result()
 
         if RICH_AVAILABLE:
             console.print("[green]✅ Comments fetched[/green]")
         else:
             logger.info("✅ Comments fetched")
 
-        return review_threads, pr_comments
+        return review_threads, pr_comments, review_comments
 
     def _fetch_review_threads(self, pr_number: int) -> List[Comment]:
         """Fetch review threads using GitHub CLI with batch processing for large PRs"""
@@ -445,6 +447,70 @@ class GitHubAPI:
             logger.error(f"❌ Error fetching PR comments: {e}")
             return []
 
+    def _fetch_review_comments(self, pr_number: int) -> List[Comment]:
+        """Fetch review comments (outside diff range) using GitHub CLI"""
+        query = """
+        query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
+          repository(owner:$owner, name:$name) {
+            pullRequest(number:$number) {
+              reviews(first:50, after:$cursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  id
+                  body
+                  url
+                  createdAt
+                  updatedAt
+                  author { login }
+                  comments(first:50) {
+                    nodes {
+                      id
+                      body
+                      url
+                      createdAt
+                      updatedAt
+                      author { login }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+
+        try:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "--paginate",
+                    "-F",
+                    f"query={query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+
+            data = json.loads(result.stdout)
+            return self._parse_review_comments(data)
+        except (
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as e:
+            logger.error(f"❌ Error fetching review comments: {e}")
+            return []
+
     def _parse_review_threads(self, data: Dict[str, Any]) -> List[Comment]:
         """Parse review threads data"""
         comments = []
@@ -491,6 +557,39 @@ class GitHubAPI:
                 comments.append(comment)
         except (KeyError, TypeError) as e:
             logger.error(f"❌ Error parsing PR comments: {e}")
+        return comments
+
+    def _parse_review_comments(self, data: Dict[str, Any]) -> List[Comment]:
+        """Parse review comments data (outside diff range)"""
+        comments = []
+        try:
+            reviews_data = data["data"]["repository"]["pullRequest"]["reviews"]["nodes"]
+            for review in reviews_data:
+                # Add the review body as a comment if it exists
+                if review.get("body") and review["body"].strip():
+                    comment = Comment(
+                        comment_id=review["id"],
+                        body=review["body"],
+                        author=review["author"]["login"],
+                        created_at=review["createdAt"],
+                        updated_at=review["updatedAt"],
+                        url=review["url"],
+                    )
+                    comments.append(comment)
+                
+                # Add individual review comments
+                for comment_data in review["comments"]["nodes"]:
+                    comment = Comment(
+                        comment_id=comment_data["id"],
+                        body=comment_data["body"],
+                        author=comment_data["author"]["login"],
+                        created_at=comment_data["createdAt"],
+                        updated_at=comment_data["updatedAt"],
+                        url=comment_data["url"],
+                    )
+                    comments.append(comment)
+        except (KeyError, TypeError) as e:
+            logger.error(f"❌ Error parsing review comments: {e}")
         return comments
 
 
@@ -1068,10 +1167,10 @@ Examples:
     comment_processor = CommentProcessor()
 
     # Fetch comments from GitHub
-    review_threads, pr_comments = github_api.fetch_comments(args.pr_number)
+    review_threads, pr_comments, review_comments = github_api.fetch_comments(args.pr_number)
 
     # Combine all comments
-    all_comments = review_threads + pr_comments
+    all_comments = review_threads + pr_comments + review_comments
 
     if not all_comments:
         if RICH_AVAILABLE:
