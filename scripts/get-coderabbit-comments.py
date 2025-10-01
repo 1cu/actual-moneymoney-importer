@@ -321,9 +321,11 @@ class CommentProcessor:
         # Check for summary and command patterns first (more specific)
         if "## Walkthrough" in body:
             return "summary"
-        if (body.strip().startswith("@coderabbit") or
-            body.strip().startswith("@CodeRabbit") or
-            body.strip().startswith("@codex")):
+        if (
+            body.strip().startswith("@coderabbit")
+            or body.strip().startswith("@CodeRabbit")
+            or body.strip().startswith("@codex")
+        ):
             return "command"
 
         # Then check for review comment patterns
@@ -801,12 +803,14 @@ Examples:
 
     # Automatically skip command and summary comments (they're not actionable review feedback)
     command_comment_ids = [
-        comment.comment_id for comment in processed_comments
+        comment.comment_id
+        for comment in processed_comments
         if comment.category == "command"
     ]
 
     summary_comment_ids = [
-        comment.comment_id for comment in processed_comments
+        comment.comment_id
+        for comment in processed_comments
         if comment.category == "summary"
     ]
 
@@ -816,9 +820,31 @@ Examples:
     if auto_skip_ids:
         resolution_manager.mark_skipped(auto_skip_ids)
         if RICH_AVAILABLE:
-            console.print(f"[yellow]⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments[/yellow]")
+            console.print(
+                f"[yellow]⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments[/yellow]"
+            )
         else:
-            logger.info(f"⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments")
+            logger.info(
+                f"⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments"
+            )
+
+    # Automatically resolve comments that have been addressed (contain "✅ Addressed")
+    addressed_comment_ids = [
+        comment.comment_id
+        for comment in processed_comments
+        if "✅ Addressed" in comment.body
+    ]
+
+    if addressed_comment_ids:
+        resolution_manager.mark_resolved(addressed_comment_ids)
+        if RICH_AVAILABLE:
+            console.print(
+                f"[green]✅ Auto-resolved {len(addressed_comment_ids)} comments that were already addressed[/green]"
+            )
+        else:
+            logger.info(
+                f"✅ Auto-resolved {len(addressed_comment_ids)} comments that were already addressed"
+            )
 
     # Save comments to file - optimized serialization
     comments_data = {
