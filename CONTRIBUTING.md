@@ -20,9 +20,11 @@ up, run the quality checks, and collaborate smoothly with the team.
    cd actual-moneymoney
    npm install
    ```
+
 1. Copy or create a configuration file as needed (see
    [`example-config-advanced.toml`](./example-config-advanced.toml) for
    reference).
+
 1. Run the quality gates to confirm your environment is ready:
 
    ```bash
@@ -36,9 +38,11 @@ up, run the quality checks, and collaborate smoothly with the team.
 
 - Create a feature branch from `main` (or the requested base branch) before
   making changes.
+
 - Implement your changes and keep commits focused. Follow
   [Conventional Commits](https://www.conventionalcommits.org/) so commitlint
   accepts the history (e.g., `feat: add importer telemetry`).
+
 - Re-run the quality gates to verify linting, formatting, type safety, builds, and tests:
 
   ```bash
@@ -47,12 +51,15 @@ up, run the quality checks, and collaborate smoothly with the team.
 
 - Update documentation alongside behaviour changes. Configuration updates
   usually involve:
+
   - [`src/utils/config.ts`](./src/utils/config.ts)
   - [`src/utils/shared.ts`](./src/utils/shared.ts)
   - [`example-config-advanced.toml`](./example-config-advanced.toml)
   - [`README.md`](./README.md)
   - [`tests/config.test.ts`](./tests/config.test.ts)
+
 - Include or update Vitest coverage for changed logic under `tests/`.
+
 - Open a pull request with a clear summary of the changes and any manual
   verification performed.
 

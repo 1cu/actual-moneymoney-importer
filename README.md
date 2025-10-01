@@ -241,8 +241,7 @@ actual-monmon validate
 
 You can increase or decrease CLI verbosity with `--logLevel` (`0 = ERROR`,
 `1 = WARN`, `2 = INFO`, `3 = DEBUG`). Combine it with `--config` to validate a
-different configuration file, and use `--structuredLogs` when you need
-machine-readable JSON output for log aggregation:
+different configuration file:
 
 ```bash
 actual-monmon validate --config ./config.toml --logLevel 3
@@ -267,7 +266,6 @@ You can limit the scope of an import with additional flags:
 - `--from YYYY-MM-DD` / `--to YYYY-MM-DD` – bound the transaction date range.
 - `--dry-run` – simulate the import without persisting any changes.
 - `--logLevel <0-3>` – control CLI verbosity (defaults to `2`, INFO).
-- `--structuredLogs` – emit JSON-formatted logs instead of coloured text.
 - `--config <path>` – load a configuration file from a custom path.
 
 ### Console Output Filtering
@@ -277,6 +275,7 @@ The CLI automatically filters noisy Actual SDK console output to provide a clean
 #### How Console Filtering Works
 
 - **Automatic Suppression**: Noisy Actual SDK output is automatically detected and suppressed
+
 - **Categorized Debug Logging**: When `--logLevel 3` (DEBUG) is enabled, suppressed messages are logged with categories:
 
   - `[NETWORK:SYNC]` - Network synchronization messages
@@ -307,9 +306,6 @@ The console filtering system includes performance optimizations:
 ```bash
 # See all console output including filtered messages
 actual-monmon import --logLevel 3
-
-# Use structured JSON logs for log aggregation
-actual-monmon import --logLevel 3 --structuredLogs
 
 # Normal operation (filtered output)
 actual-monmon import

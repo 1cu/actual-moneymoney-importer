@@ -95,6 +95,7 @@ anti-patterns and examples.
 To prevent future complexity creep, the project enforces strict guardrails:
 
 ### File Length Limits
+
 - **Source files** (`src/**/*.ts`): 400 lines max (utility files, core logic)
 - **Entry points & commands** (`src/index.ts`, `src/commands/*.ts`): 300 lines max (should be focused)
 - **Configuration files** (`src/utils/config-format.ts`): 200 lines max (should be simple)
@@ -102,18 +103,22 @@ To prevent future complexity creep, the project enforces strict guardrails:
 - **Enforcement**: CI fails if any file exceeds its category limit
 
 ### Complexity Limits
+
 - **Cyclomatic complexity**: Maximum 15 per function
 - **Cognitive complexity**: Maximum 20 per function
 - **Check command**: `npm run lint:eslint`
 - **Enforcement**: CI fails if any function exceeds limits
 
 ### Quality Gates
+
 All changes must pass:
+
 - `npm run lint:all` - All linting (ESLint with complexity and file length rules, Prettier)
 - `npm run typecheck` - TypeScript compilation
 - `npm test` - All tests passing
 
 ### Complexity Prevention Principles
+
 - **DELETE over ABSTRACT** - Remove complexity instead of refactoring
 - **SIMPLIFY over OPTIMIZE** - Simple approaches work better than complex ones
 - **QUESTION every abstraction** - Many "helpers" are actually over-engineering

@@ -523,7 +523,7 @@ end-to-end CLI tests being available.
 - **Acceptance Criteria:**
   - Extract console interception and timeout helpers into neighbouring modules without changing public `ActualApi` signatures.
   - Preserve structured logging, retries, and shutdown safety nets with updated unit/integration coverage.
-  - Keep new helpers under complexity budgets (<150 lines) and document extension points in module headers.
+  - Keep new helpers under complexity budgets (\<150 lines) and document extension points in module headers.
   - Update ADR/backlog entries summarising the new layering.
 - **Evidence:** Reduced `ActualApi.ts` from 1,267 lines to 842 lines (-425 lines, ~34% reduction) by simplifying console filtering, timeout handling, and budget directory resolution. Achieved target of ≤845 lines through deletion and simplification rather than extraction.
 - **Tasks:**
@@ -539,7 +539,7 @@ end-to-end CLI tests being available.
 - **Dependencies:** 14.1 for baseline notes.
 - **Acceptance Criteria:**
   - Identify unused or redundant decision tracking and either prune it or document why it must remain.
-  - Split default-resolution helpers into smaller utilities with focused unit tests (<80 lines each).
+  - Split default-resolution helpers into smaller utilities with focused unit tests (\<80 lines each).
   - Ensure `example-config-advanced.toml`, README, and tests continue to mirror the schema.
   - Document the resulting flow (diagram or step list) for future contributors.
 - **Evidence:** Completely removed over-engineered configuration decision tracking system. Deleted `config-format.ts` (161 lines) and reduced `config.ts` from 272 lines to 188 lines (-84 lines, ~31% reduction). Total reduction: 245+ lines of unnecessary complexity.

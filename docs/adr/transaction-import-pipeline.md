@@ -59,9 +59,9 @@ sequenceDiagram
 ### Migration notes
 
 1. Introduce interfaces for each stage (`TransactionFetcher`, etc.) that accept dependencies via constructor or function parameters to keep them testable.
-2. Incrementally move existing logic out of `Importer.importTransactions`, stage by stage, ensuring each refactor is covered by unit tests before proceeding.
-3. The orchestrator should default to a pass-through context until each dedicated stage is implemented, enabling partial migrations without breaking behaviour.
-4. Update CLI integration tests after all stages land to validate dry-run/live parity and error messaging.
+1. Incrementally move existing logic out of `Importer.importTransactions`, stage by stage, ensuring each refactor is covered by unit tests before proceeding.
+1. The orchestrator should default to a pass-through context until each dedicated stage is implemented, enabling partial migrations without breaking behaviour.
+1. Update CLI integration tests after all stages land to validate dry-run/live parity and error messaging.
 
 ## Consequences
 

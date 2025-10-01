@@ -31,8 +31,7 @@ const handleZodError = (error: z.ZodError, logger: Logger): void => {
 const handleValidate = async (argv: ArgumentsCamelCase) => {
     const configPath = await getConfigFile(argv);
     const logLevel = (argv.logLevel ?? LogLevel.INFO) as number;
-    const structuredLogs = Boolean(argv.structuredLogs);
-    const logger = new Logger(logLevel, { structuredLogs });
+    const logger = new Logger(logLevel);
 
     logger.info(`Current configuration file: ${configPath}`);
 
