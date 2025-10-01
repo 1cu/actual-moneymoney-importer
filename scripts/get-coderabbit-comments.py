@@ -918,14 +918,6 @@ Examples:
 
     if auto_skip_ids:
         resolution_manager.mark_skipped(auto_skip_ids)
-        if RICH_AVAILABLE:
-            console.print(
-                f"[yellow]⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments[/yellow]"
-            )
-        else:
-            logger.info(
-                f"⏭️ Auto-skipped {len(command_comment_ids)} command comments and {len(summary_comment_ids)} summary comments"
-            )
 
     # Automatically resolve comments that have been addressed (contain "✅ Addressed")
     addressed_comment_ids = [
@@ -936,14 +928,6 @@ Examples:
 
     if addressed_comment_ids:
         resolution_manager.mark_resolved(addressed_comment_ids)
-        if RICH_AVAILABLE:
-            console.print(
-                f"[green]✅ Auto-resolved {len(addressed_comment_ids)} comments that were already addressed[/green]"
-            )
-        else:
-            logger.info(
-                f"✅ Auto-resolved {len(addressed_comment_ids)} comments that were already addressed"
-            )
 
     # Save comments to file - optimized serialization
     comments_data = {
@@ -1000,7 +984,7 @@ Examples:
         )
         console.print()
         console.print(
-            "[dim]💡 Use --status to see resolution status, --resolve/--skip to manage comments[/dim]"
+            "[dim]💡 Use --status to see resolution status, --assess for guidance, --resolve/--skip to manage comments[/dim]"
         )
 
     else:
@@ -1020,7 +1004,7 @@ Examples:
             f"  Trivial: {len([c for c in processed_comments if c.priority == 'trivial'])}"
         )
         print(
-            "\n💡 Use --status to see resolution status, --resolve/--skip to manage comments"
+            "\n💡 Use --status to see resolution status, --assess for guidance, --resolve/--skip to manage comments"
         )
 
 
