@@ -86,8 +86,6 @@ describe('validate command', () => {
 
         getConfigFileMock.mockResolvedValue(configPath);
         readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-        writeFileMock.mockResolvedValue(undefined);
-        mkdirMock.mockResolvedValue(undefined);
 
         const { default: commandModule } = await import('../../src/commands/validate.command.js');
 
@@ -115,8 +113,6 @@ describe('validate command', () => {
 
         getConfigFileMock.mockResolvedValue(configPath);
         readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-        writeFileMock.mockResolvedValue(undefined);
-        mkdirMock.mockResolvedValue(undefined);
 
         const { default: commandModule } = await import('../../src/commands/validate.command.js');
 

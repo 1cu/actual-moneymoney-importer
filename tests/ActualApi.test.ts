@@ -233,4 +233,5 @@ describe('ActualApi', () => {
 
         await expect(api.init()).rejects.toThrow();
     });
+
 });

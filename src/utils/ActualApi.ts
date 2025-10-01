@@ -142,25 +142,20 @@ class ActualApi {
         operation: string
     ): Promise<T> {
         let timeoutId: NodeJS.Timeout | undefined;
-        let isCancelled = false;
 
         const timeoutPromise = new Promise<never>((_, reject) => {
             timeoutId = setTimeout(() => {
-                if (!isCancelled) {
-                    reject(new ActualApiTimeoutError(operation, timeoutMs));
-                }
+                reject(new ActualApiTimeoutError(operation, timeoutMs));
             }, timeoutMs);
         });
 
         try {
             const result = await Promise.race([callback(), timeoutPromise]);
-            isCancelled = true;
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
             return result;
         } catch (error) {
-            isCancelled = true;
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }

@@ -88,9 +88,9 @@ export default defineConfig(
     defineConfig({
         files: ['src/index.ts', 'src/commands/**/*.ts'],
         rules: {
+            ...sharedRules,
             // Entry points and commands: 300 lines max (should be focused)
             'max-lines': ['error', 300],
-            ...sharedRules,
         },
     }),
     defineConfig({

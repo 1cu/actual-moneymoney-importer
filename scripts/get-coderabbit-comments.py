@@ -22,6 +22,7 @@ Examples:
 
 import argparse
 import json
+import os
 import sys
 import subprocess
 import logging
@@ -85,13 +86,14 @@ class GitHubAPI:
         self._detect_repository()
 
     def _detect_repository(self):
-        """Detect repository from git remote"""
+        """Detect repository from git remote with CI fallbacks"""
         try:
             result = subprocess.run(
                 ["git", "remote", "get-url", "origin"],
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=5,
             )
             url = result.stdout.strip()
             if "github.com" in url:
@@ -117,8 +119,31 @@ class GitHubAPI:
                 logger.info(f"🔍 Detected repository: {self.owner}/{self.repo}")
             else:
                 raise ValueError("Not a GitHub repository")
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (subprocess.CalledProcessError, ValueError, FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
             logger.error(f"❌ Error detecting repository: {e}")
+            # Fallback for CI: GITHUB_REPOSITORY="owner/repo"
+            repo_env = os.getenv("GITHUB_REPOSITORY")
+            if repo_env and "/" in repo_env:
+                self.owner, self.repo = repo_env.split("/", 1)
+                logger.info(f"🔍 Detected repository from GITHUB_REPOSITORY: {self.owner}/{self.repo}")
+                return
+            # Try gh CLI as fallback
+            try:
+                result = subprocess.run(
+                    ["gh", "repo", "view", "--json", "owner,name"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=5,
+                )
+                import json
+                repo_data = json.loads(result.stdout)
+                self.owner = repo_data["owner"]["login"]
+                self.repo = repo_data["name"]
+                logger.info(f"🔍 Detected repository from gh CLI: {self.owner}/{self.repo}")
+                return
+            except (subprocess.CalledProcessError, ValueError, FileNotFoundError, subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as gh_error:
+                logger.error(f"❌ gh CLI fallback also failed: {gh_error}")
             sys.exit(1)
 
     def fetch_comments(self, pr_number: int) -> Tuple[List[Comment], List[Comment]]:
