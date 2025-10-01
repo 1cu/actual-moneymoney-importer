@@ -125,6 +125,9 @@ export interface LoadedConfig {
 
 export const getConfigFile = (argv: ArgumentsCamelCase): string => {
     if (argv.config !== undefined && argv.config !== null) {
+        if (typeof argv.config === 'string' && argv.config.trim().length === 0) {
+            return DEFAULT_CONFIG_FILE;
+        }
         const argvConfigFile = path.resolve(argv.config as string);
         return argvConfigFile;
     }

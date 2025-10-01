@@ -98,7 +98,7 @@ To prevent future complexity creep, the project enforces strict guardrails:
 
 - **Source files** (`src/**/*.ts`): 400 lines max (utility files, core logic)
 - **Entry points & commands** (`src/index.ts`, `src/commands/*.ts`): 300 lines max (should be focused)
-- **Configuration files** (`src/utils/config-format.ts`): 200 lines max (should be simple)
+- **Configuration files** (`src/utils/config.ts`): 200 lines max (should be simple)
 - **Test files** (`tests/**/*.ts`): 500 lines max (more lenient for test fixtures)
 - **Enforcement**: CI fails if any file exceeds its category limit
 
@@ -106,7 +106,7 @@ To prevent future complexity creep, the project enforces strict guardrails:
 
 - **Cyclomatic complexity**: Maximum 15 per function
 - **Cognitive complexity**: Maximum 20 per function
-- **Check command**: `npm run lint:eslint`
+- **Check command**: `npm run lint:all`
 - **Enforcement**: CI fails if any function exceeds limits
 
 ### Quality Gates

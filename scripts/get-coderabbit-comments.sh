@@ -362,14 +362,13 @@ cleanup_closed_prs() {
         echo "🔍 Checking PR #$pr_num..." >&2
 
         # Check if PR is closed using GitHub CLI
-        local pr_state
         pr_state=$(gh pr view "$pr_num" --json state --jq '.state' 2>/dev/null || echo "unknown")
 
         if [ "$pr_state" = "CLOSED" ] || [ "$pr_state" = "MERGED" ]; then
             echo "  📦 PR #$pr_num is $pr_state - archiving..." >&2
 
             # Archive resolution file if it exists
-            local resolution_file=".local/pr-$pr_num-resolutions.json"
+            resolution_file=".local/pr-$pr_num-resolutions.json"
             if [ -f "$resolution_file" ]; then
                 mv "$resolution_file" ".local/_Archive/pr-$pr_num-resolutions.json"
                 echo "    ✅ Archived resolutions" >&2
@@ -414,7 +413,7 @@ update_local_comments_state() {
     resolved_comments=$(echo "$resolutions" | jq -r '.resolved_comments[]')
 
     # Update the comments file with current resolution state
-    jq --argjson resolved_list "$(echo "$resolved_comments" | jq -R -s 'split("\n")[:-1]')" '
+    jq --argjson resolved_list "$(echo "$resolved_comments" | jq -R -s 'if length > 0 then split("\n")[:-1] else [] end')" '
         def is_resolved($comment_id):
             $resolved_list | contains([$comment_id]);
 
@@ -461,13 +460,13 @@ fi
 # Only fetch from API if we're not doing resolve command
 if [ "$COMMAND" != "resolve" ]; then
     echo "Fetching review threads for PR #$PR..." >&2
-# Fetch review threads (increased limit to get more comments)
+# Fetch review threads with pagination
 echo "Fetching review threads..." >&2
-gh api graphql -f query="
-query(\$owner:String!, \$name:String!, \$number:Int!) {
+gh api graphql --paginate -f query="
+query(\$owner:String!, \$name:String!, \$number:Int!, \$cursor:String) {
   repository(owner:\$owner, name:\$name) {
     pullRequest(number:\$number) {
-      reviewThreads(first:100) {
+      reviewThreads(first:100, after:\$cursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
@@ -485,13 +484,13 @@ query(\$owner:String!, \$name:String!, \$number:Int!) {
 }
 " -F owner="$OWNER" -F name="$REPO" -F number="$PR" > .local/temp-threads.json
 
-# Fetch PR comments
+# Fetch PR comments with pagination
 echo "Fetching PR comments..." >&2
-gh api graphql -f query="
-query(\$owner:String!, \$name:String!, \$number:Int!) {
+gh api graphql --paginate -f query="
+query(\$owner:String!, \$name:String!, \$number:Int!, \$cursor:String) {
   repository(owner:\$owner, name:\$name) {
     pullRequest(number:\$number) {
-      comments(first:50) {
+      comments(first:50, after:\$cursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
           id body url createdAt updatedAt

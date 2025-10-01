@@ -19,8 +19,6 @@ const logLevelEnumValues = Object.values(LogLevel).filter((value): value is numb
 const minLogLevel = Math.min(...logLevelEnumValues);
 const maxLogLevel = Math.max(...logLevelEnumValues);
 
-let structuredLogsEnabled = false;
-
 const parser: Argv<unknown> = yargs(hideBin(process.argv))
     .option('config', {
         type: 'string',
@@ -29,10 +27,6 @@ const parser: Argv<unknown> = yargs(hideBin(process.argv))
     .option('logLevel', {
         type: 'number',
         description: 'The log level to use (0-3)',
-    })
-    .option('structuredLogs', {
-        type: 'boolean',
-        description: 'Emit structured JSON logs instead of coloured text output',
     })
     .coerce('logLevel', (value: unknown): number | null | undefined => {
         if (value === undefined || value === null) {
@@ -51,9 +45,6 @@ const parser: Argv<unknown> = yargs(hideBin(process.argv))
     })
     .command(importCommand)
     .command(validateCommand)
-    .middleware((argv) => {
-        structuredLogsEnabled = Boolean(argv.structuredLogs);
-    })
     .showHelpOnFail(false)
     .fail((msg, err) => {
         if (err) {
@@ -68,7 +59,7 @@ const run = async (): Promise<void> => {
 };
 
 run().catch((error: unknown) => {
-    const logger = new Logger(LogLevel.INFO, { structuredLogs: structuredLogsEnabled });
+    const logger = new Logger(LogLevel.INFO);
     logger.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
 });

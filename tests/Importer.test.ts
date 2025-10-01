@@ -90,8 +90,9 @@ describe('Importer', () => {
             isDryRun: false,
         });
 
-        // Basic test - just verify the method can be called without errors
-        expect(mockAccountMap.getMap).toHaveBeenCalled();
+        // Verify the method was called with correct parameters
+        expect(mockAccountMap.getMap).toHaveBeenCalledWith(['mm-account-1']);
+        expect(mockActualApi.importTransactions).toHaveBeenCalledWith('actual-account-1', expect.any(Array));
     });
 
     it('handles empty MoneyMoney transactions', async () => {

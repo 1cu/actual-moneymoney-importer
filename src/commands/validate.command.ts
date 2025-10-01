@@ -37,7 +37,15 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
 
     try {
         const configContent = await fs.readFile(configPath, 'utf-8');
-        const configData = toml.parse(configContent) as Record<string, unknown>;
+
+        let configData: Record<string, unknown>;
+        try {
+            configData = toml.parse(configContent) as Record<string, unknown>;
+        } catch (tomlError) {
+            logger.error(`TOML syntax error: ${tomlError instanceof Error ? tomlError.message : String(tomlError)}`);
+            throw tomlError;
+        }
+
         configSchema.parse(configData);
         logger.info('Configuration is valid.');
     } catch (error) {
