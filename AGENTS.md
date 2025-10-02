@@ -24,7 +24,7 @@ Tests cover the most important paths; we do not require 100% coverage. Keep crit
 
 **CRITICAL**: Follow complexity prevention guidelines to avoid overengineering:
 
-- **File size limits**: Utility files max 400 lines, commands max 300 lines
+- **File size limits**: Utility files max 400 lines, commands max 300 lines, tests max 300 lines
 - **Delete over abstract**: Remove complexity instead of refactoring
 - **Inline simple functionality**: Don't create files for trivial functions
 - **Avoid over-engineering**: Question every abstraction

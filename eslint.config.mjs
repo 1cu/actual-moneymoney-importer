@@ -130,8 +130,8 @@ export default defineConfig(
         },
         rules: {
             ...sharedRules,
-            // Test files: 500 lines max (more lenient for test fixtures)
-            'max-lines': ['error', 500],
+            // Test files: 300 lines max (should be simple)
+            'max-lines': ['error', 300],
             // Keep some safety rules for tests to catch import/type errors
             '@typescript-eslint/no-unsafe-member-access': 'warn',
             '@typescript-eslint/no-unsafe-call': 'warn',

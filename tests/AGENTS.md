@@ -28,6 +28,7 @@ Target the assertions that deliver the most value—100% coverage is neither exp
 - **Prefer integration over unit**: Test real behavior when possible
 - **Remove obsolete tests**: Delete tests for removed functionality
 - **Avoid complex test builders**: Use simple test data instead
+- **File size limit**: 300 lines maximum
 
 ### Test anti-patterns to avoid
 

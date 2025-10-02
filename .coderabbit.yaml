@@ -48,6 +48,26 @@ reviews:
               Inline simple functionality instead of creating wrappers.
               Question every abstraction - does it solve a real problem?
 
+              # File size limits (enforced)
+              Source files (src/**/*.ts): 400 lines maximum
+              Commands (src/commands/*.ts): 300 lines maximum
+              Config files (src/utils/config.ts): 200 lines maximum
+              Test files (tests/**/*.ts): 300 lines maximum
+
+              # Anti-patterns to avoid
+              Complex caching with TTL, disk persistence, and performance optimization
+              Multiple fallback layers and complex error recovery
+              Generic abstractions that hide complexity
+              Over-mocking in tests
+              Complex configuration with too many options
+
+              # Preferred patterns
+              Simple, direct code that's readable by new developers
+              Minimal error handling with clear error messages
+              Single-purpose utilities with focused interfaces
+              Simple test data and minimal fixtures
+              Direct API calls without unnecessary abstraction layers
+
               # macOS-only project
               Target platform is macOS (MoneyMoney). Use macOS paths in docs, but keep CI and project scripts POSIX-portable; avoid macOS-only shellisms.
 
