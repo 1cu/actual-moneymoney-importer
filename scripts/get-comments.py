@@ -74,7 +74,10 @@ class Comment:
     created_at: str
     updated_at: str
     database_id: Optional[int] = None  # Integer database ID (e.g., 2392959649)
-    file_path: Optional[str] = None  # Primary field for file path
+    file_path: Optional[str] = (
+        None  # Primary field for file path (for backward compatibility)
+    )
+    file_paths: List[str] = None  # All file paths referenced in this comment
     position: Optional[int] = None
     url: str = ""
     is_resolved: bool = False
@@ -86,6 +89,14 @@ class Comment:
     has_code_changes: bool = False  # For compatibility with existing data
     auto_skip_reason: Optional[str] = None  # Auto-skip detection reason
     thread_id: Optional[str] = None  # Thread ID for review comments
+    resolved_files: List[str] = None  # Files that have been addressed in this comment
+
+    def __post_init__(self):
+        """Initialize default values for list fields"""
+        if self.file_paths is None:
+            self.file_paths = []
+        if self.resolved_files is None:
+            self.resolved_files = []
 
 
 @dataclass
@@ -751,16 +762,19 @@ class CommentProcessor:
             re.compile(r"<summary>([^\s<>()]+) \(\d+\)</summary>"),
             # Pattern for review comments: <summary>filename</summary> - for files without extensions
             re.compile(r"<summary>([^\s<>()]+)</summary>"),
-
             # Enhanced patterns for general PR comments that mention files
             # Pattern for file paths in code blocks or backticks
             re.compile(r"`([^\s`]+\.(ts|js|json|md|txt|yml|yaml|py|sh))`"),
             # Pattern for file paths in parentheses or brackets (but not HTML attributes)
-            re.compile(r"[\[\(]([^\s\]\)]+\.(ts|js|json|md|txt|yml|yaml|py|sh))[\]\)](?!\s*=)"),
+            re.compile(
+                r"[\[\(]([^\s\]\)]+\.(ts|js|json|md|txt|yml|yaml|py|sh))[\]\)](?!\s*=)"
+            ),
             # Pattern for file paths in "at" or "in" contexts
             re.compile(r"(?:at|in)\s+([^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
             # Pattern for file paths in "file" or "path" contexts
-            re.compile(r"(?:file|path)[\s:]+([^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
+            re.compile(
+                r"(?:file|path)[\s:]+([^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"
+            ),
             # Pattern for src/ and tests/ directory references
             re.compile(r"(src/[^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
             re.compile(r"(tests/[^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
@@ -854,11 +868,11 @@ class CommentProcessor:
         """Check if the extracted path is a valid file path"""
         # Filter out HTML attributes, URLs, and other non-file patterns
         invalid_patterns = [
-            r'^https?://',  # URLs
-            r'^src=',       # HTML src attributes
-            r'^Badge',      # HTML badges
-            r'^img\.',      # Image references
-            r'^[^a-zA-Z0-9_/]',  # Doesn't start with valid file path characters
+            r"^https?://",  # URLs
+            r"^src=",  # HTML src attributes
+            r"^Badge",  # HTML badges
+            r"^img\.",  # Image references
+            r"^[^a-zA-Z0-9_/]",  # Doesn't start with valid file path characters
         ]
 
         for pattern in invalid_patterns:
@@ -866,7 +880,17 @@ class CommentProcessor:
                 return False
 
         # Must contain at least one valid file extension
-        valid_extensions = ['.ts', '.js', '.json', '.md', '.txt', '.yml', '.yaml', '.py', '.sh']
+        valid_extensions = [
+            ".ts",
+            ".js",
+            ".json",
+            ".md",
+            ".txt",
+            ".yml",
+            ".yaml",
+            ".py",
+            ".sh",
+        ]
         if not any(ext in file_path for ext in valid_extensions):
             return False
 
@@ -881,13 +905,23 @@ class CommentProcessor:
             return "bot_command"
 
         # Skip simple bot commands (more flexible pattern)
-        if body_lower.startswith("@coderabbit") and body_lower in ["@coderabbit fullreview", "@coderabbit review"]:
+        if body_lower.startswith("@coderabbit") and body_lower in [
+            "@coderabbit fullreview",
+            "@coderabbit review",
+        ]:
             return "bot_command"
-        if body_lower.startswith("@codex") and body_lower in ["@codex review", "@codex fullreview"]:
+        if body_lower.startswith("@codex") and body_lower in [
+            "@codex review",
+            "@codex fullreview",
+        ]:
             return "bot_command"
 
         # Skip GitHub Actions release notifications
-        if ":tada:" in body_lower and "this pr is included in version" in body_lower and "github release" in body_lower:
+        if (
+            ":tada:" in body_lower
+            and "this pr is included in version" in body_lower
+            and "github release" in body_lower
+        ):
             return "github_release"
 
         # Skip informational content
@@ -926,7 +960,11 @@ class CommentProcessor:
             "actionable comments posted" in body_lower
             and "review details" in body_lower
             and "configuration used" in body_lower
-            and ("plan:" in body_lower or "plan: pro" in body_lower or "review profile" in body_lower)
+            and (
+                "plan:" in body_lower
+                or "plan: pro" in body_lower
+                or "review profile" in body_lower
+            )
         ):
             return "review_summary_meta"
 
@@ -1268,7 +1306,7 @@ class ResolutionManager:
             elif comment.comment_id in state.skipped_comments:
                 comment.is_resolved = True
                 comment.resolution_type = "skipped"
-            elif hasattr(comment, 'auto_skip_reason') and comment.auto_skip_reason:
+            elif hasattr(comment, "auto_skip_reason") and comment.auto_skip_reason:
                 # Auto-skipped comments are considered resolved
                 comment.is_resolved = True
                 comment.resolution_type = "skipped"
@@ -1303,13 +1341,13 @@ class StatusDisplay:
 
         # Calculate auto-skip statistics
         auto_skipped_comments = [
-            c for c in skipped_comments
+            c
+            for c in skipped_comments
             if hasattr(c, "auto_skip_reason") and c.auto_skip_reason
         ]
         # Comments that were resolved from comment status (contain "✅ Addressed")
         manually_resolved_comments = [
-            c for c in resolved_comments
-            if "✅ Addressed" in c.body
+            c for c in resolved_comments if "✅ Addressed" in c.body
         ]
 
         total_comments = len(comments)
@@ -1334,7 +1372,9 @@ class StatusDisplay:
             summary_text = "[bold blue]📊 Comment Status[/bold blue]\n\n"
             summary_text += f"[green]✅ Resolved:[/green] {resolved_count}"
             if manually_resolved_count > 0:
-                summary_text += f" ({manually_resolved_count} resolved from comment status)\n"
+                summary_text += (
+                    f" ({manually_resolved_count} resolved from comment status)\n"
+                )
             else:
                 summary_text += "\n"
             summary_text += f"[yellow]⏭️  Skipped:[/yellow] {skipped_count}"
@@ -1628,22 +1668,18 @@ Examples:
             f"[bold blue]Comment ID:[/bold blue] {target_comment.comment_id}\n"
         )
         comment_info += f"[bold blue]Author:[/bold blue] {target_comment.author}\n"
+        comment_info += f"[bold blue]Created:[/bold blue] {target_comment.created_at}\n"
+        comment_info += f"[bold blue]Updated:[/bold blue] {target_comment.updated_at}\n"
         comment_info += (
-            f"[bold blue]Created:[/bold blue] {target_comment.created_at}\n"
+            f"[bold blue]File:[/bold blue] {target_comment.file_path or 'General'}\n"
         )
-        comment_info += (
-            f"[bold blue]Updated:[/bold blue] {target_comment.updated_at}\n"
-        )
-        comment_info += f"[bold blue]File:[/bold blue] {target_comment.file_path or 'General'}\n"
-        comment_info += (
-            f"[bold blue]Priority:[/bold blue] {target_comment.priority}\n"
-        )
-        comment_info += (
-            f"[bold blue]Category:[/bold blue] {target_comment.category}\n"
-        )
+        comment_info += f"[bold blue]Priority:[/bold blue] {target_comment.priority}\n"
+        comment_info += f"[bold blue]Category:[/bold blue] {target_comment.category}\n"
         comment_info += f"[bold blue]Status:[/bold blue] {'Resolved' if target_comment.is_resolved else 'Unresolved'}\n"
         if target_comment.resolution_type:
-            comment_info += f"[bold blue]Resolution:[/bold blue] {target_comment.resolution_type}\n"
+            comment_info += (
+                f"[bold blue]Resolution:[/bold blue] {target_comment.resolution_type}\n"
+            )
         if target_comment.auto_skip_reason:
             comment_info += f"[bold blue]Auto-skip reason:[/bold blue] {target_comment.auto_skip_reason}\n"
         if target_comment.url:
@@ -1657,10 +1693,9 @@ Examples:
 
         # Display the comment body (escape Rich markup to prevent parsing errors)
         from rich.text import Text
+
         body_text = Text(target_comment.body, style="default")
-        body_panel = Panel(
-            body_text, title="Comment Content", border_style="green"
-        )
+        body_panel = Panel(body_text, title="Comment Content", border_style="green")
         console.print(body_panel)
         return
 
