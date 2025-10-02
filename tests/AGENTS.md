@@ -6,7 +6,7 @@
 - Tests live under `tests/` and mirror the structure of `src/`:
   - `ActualApi.test.ts` handles timeout errors
   - `Importer.test.ts` imports transactions, handles empty MoneyMoney transactions, and dry-run mode
-  - `PayeeTransformer.test.ts` exercises OpenAI integration, model caching, and logging safeguards
+  - `PayeeTransformer.test.ts` exercises OpenAI integration, in-memory caching, and logging safeguards
   - `config.test.ts` validates encryption requirements
 
 ## Test Organization

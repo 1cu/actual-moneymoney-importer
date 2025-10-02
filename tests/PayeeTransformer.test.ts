@@ -149,7 +149,7 @@ describe('PayeeTransformer', () => {
 
         await secondTransformer.transformPayees(['Vendor B']);
 
-        // Each transformer instance has its own model cache, but with disk caching,
+        // Each transformer instance has its own model cache, but with in-memory caching,
         // the second call will use the cached result, so only 1 API call is made
         expect(listMock).toHaveBeenCalledTimes(1);
     });

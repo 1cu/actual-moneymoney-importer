@@ -337,6 +337,7 @@ class GitHubAPI:
     ) -> List[Comment]:
         """Fetch review threads in batches for large PRs"""
         all_comments: List[Comment] = []
+        fetched_threads = 0
         batch_size = Constants.BATCH_SIZE
         cursor = None
 
@@ -344,7 +345,7 @@ class GitHubAPI:
             f"📦 Fetching {total_count} review threads in batches of {batch_size}..."
         )
 
-        while len(all_comments) < total_count:
+        while fetched_threads < total_count:
             query = """
             query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
               repository(owner:$owner, name:$name) {
@@ -398,6 +399,7 @@ class GitHubAPI:
                 threads = data["data"]["repository"]["pullRequest"]["reviewThreads"][
                     "nodes"
                 ]
+                fetched_threads += len(threads)
                 page_info = data["data"]["repository"]["pullRequest"]["reviewThreads"][
                     "pageInfo"
                 ]
@@ -1517,6 +1519,12 @@ Examples:
         archived_count = 0
         for file_path in resolution_files + comments_files:
             archive_path = archive_dir / file_path.name
+            if archive_path.exists():
+                # Handle collision by adding timestamp
+                timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                archive_path = (
+                    archive_dir / f"{file_path.stem}-{timestamp}{file_path.suffix}"
+                )
             file_path.rename(archive_path)
             archived_count += 1
 

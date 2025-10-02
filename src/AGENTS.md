@@ -555,7 +555,7 @@ describe('Configuration Loading', () => {
 ### PayeeTransformer Utility
 
 - **OpenAI integration** for payee normalization
-- **Simple caching** with disk and memory storage
+- **Simple in-memory caching** for repeated payees
 - **Respect masking configuration** when logging
 
 ### Complexity Prevention in Utilities
