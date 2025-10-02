@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { configSchema } from '../src/utils/config.js';
+import { configSchema, type Config } from '../src/utils/config.js';
 
 // Helper function to create base config
-const createBaseConfig = (overrides = {}) => ({
-    payeeTransformation: { enabled: false },
-    import: { importUncheckedTransactions: true },
+const createBaseConfig = (overrides: Partial<Config> = {}): Config => ({
+    payeeTransformation: {
+        enabled: false,
+        openAiModel: 'gpt-4o-mini',
+        skipModelValidation: false,
+    },
+    import: {
+        importUncheckedTransactions: true,
+        synchronizeClearedStatus: true,
+    },
     actualServers: [
         {
             serverUrl: 'http://localhost:5006',
             serverPassword: 'test-password',
+            requestTimeoutMs: 45000,
             budgets: [
                 {
                     syncId: 'test-sync-id',
@@ -25,103 +33,81 @@ describe('Config Validation', () => {
     describe('E2E Encryption Validation', () => {
         it('should allow empty password when encryption is disabled', () => {
             const validConfig = createBaseConfig({
-                actualServers: [{
-                    ...createBaseConfig().actualServers[0],
-                    budgets: [{
-                        ...createBaseConfig().actualServers[0].budgets[0],
-                        accountMapping: { 'test-account': 'actual-account-id' }
-                    }]
-                }]
+                actualServers: [
+                    {
+                        serverUrl: 'http://localhost:5006',
+                        serverPassword: 'test-password',
+                        requestTimeoutMs: 45000,
+                        budgets: [
+                            {
+                                syncId: 'test-sync-id',
+                                e2eEncryption: { enabled: false, password: '' },
+                                accountMapping: { 'test-account': 'actual-account-id' },
+                            },
+                        ],
+                    },
+                ],
             });
             expect(() => configSchema.parse(validConfig)).not.toThrow();
         });
 
         it('should allow undefined password when encryption is disabled', () => {
-            const validConfig = {
-                payeeTransformation: {
-                    enabled: false,
-                },
-                import: {
-                    importUncheckedTransactions: true,
-                },
+            const validConfig = createBaseConfig({
                 actualServers: [
                     {
                         serverUrl: 'http://localhost:5006',
                         serverPassword: 'test-password',
+                        requestTimeoutMs: 45000,
                         budgets: [
                             {
                                 syncId: 'test-sync-id',
-                                e2eEncryption: {
-                                    enabled: false,
-                                    // password is undefined
-                                },
-                                accountMapping: {
-                                    'test-account': 'actual-account-id',
-                                },
+                                e2eEncryption: { enabled: false },
+                                accountMapping: { 'test-account': 'actual-account-id' },
                             },
                         ],
                     },
                 ],
-            };
-
+            });
             expect(() => configSchema.parse(validConfig)).not.toThrow();
         });
 
         it('should require non-empty password when encryption is enabled', () => {
-            const invalidConfig = {
-                payeeTransformation: {
-                    enabled: false,
-                },
-                import: {
-                    importUncheckedTransactions: true,
-                },
+            const invalidConfig = createBaseConfig({
                 actualServers: [
                     {
                         serverUrl: 'http://localhost:5006',
                         serverPassword: 'test-password',
+                        requestTimeoutMs: 45000,
                         budgets: [
                             {
                                 syncId: 'test-sync-id',
-                                e2eEncryption: {
-                                    enabled: true,
-                                    password: '',
-                                },
-                                accountMapping: {
-                                    'test-account': 'actual-account-id',
-                                },
+                                e2eEncryption: { enabled: true, password: '' },
+                                accountMapping: { 'test-account': 'actual-account-id' },
                             },
                         ],
                     },
                 ],
-            };
-
+            });
             expect(() => configSchema.parse(invalidConfig)).toThrow();
         });
 
         it('should reject whitespace-only password when encryption is enabled', () => {
-            const invalidConfig = {
-                payeeTransformation: { enabled: false },
-                import: { importUncheckedTransactions: true },
+            const invalidConfig = createBaseConfig({
                 actualServers: [
                     {
                         serverUrl: 'http://localhost:5006',
                         serverPassword: 'test-password',
+                        requestTimeoutMs: 45000,
                         budgets: [
                             {
                                 syncId: 'test-sync-id',
-                                e2eEncryption: {
-                                    enabled: true,
-                                    password: '   ',
-                                },
-                                accountMapping: {
-                                    'test-account': 'actual-account-id',
-                                },
+                                e2eEncryption: { enabled: true, password: '   ' },
+                                accountMapping: { 'test-account': 'actual-account-id' },
                             },
                         ],
                     },
                 ],
-            };
-
+            });
             expect(() => configSchema.parse(invalidConfig)).toThrow();
         });
 
@@ -292,7 +278,20 @@ describe('Config Validation', () => {
     describe('URL Validation', () => {
         it('should reject invalid serverUrl formats', () => {
             const invalidConfig = createBaseConfig({
-                actualServers: [{ ...createBaseConfig().actualServers[0], serverUrl: 'not-a-valid-url' }]
+                actualServers: [
+                    {
+                        serverUrl: 'not-a-valid-url',
+                        serverPassword: 'test-password',
+                        requestTimeoutMs: 45000,
+                        budgets: [
+                            {
+                                syncId: 'test-sync-id',
+                                e2eEncryption: { enabled: false, password: '' },
+                                accountMapping: {},
+                            },
+                        ],
+                    },
+                ],
             });
             expect(() => configSchema.parse(invalidConfig)).toThrow();
         });
@@ -301,7 +300,20 @@ describe('Config Validation', () => {
             const validConfigs = ['http://localhost:5006', 'https://example.com', 'https://subdomain.example.com:8080'];
             validConfigs.forEach((serverUrl) => {
                 const config = createBaseConfig({
-                    actualServers: [{ ...createBaseConfig().actualServers[0], serverUrl }]
+                    actualServers: [
+                        {
+                            serverUrl,
+                            serverPassword: 'test-password',
+                            requestTimeoutMs: 45000,
+                            budgets: [
+                                {
+                                    syncId: 'test-sync-id',
+                                    e2eEncryption: { enabled: false, password: '' },
+                                    accountMapping: {},
+                                },
+                            ],
+                        },
+                    ],
                 });
                 expect(() => configSchema.parse(config)).not.toThrow();
             });
@@ -313,13 +325,21 @@ describe('Config Validation', () => {
             const invalidDates = ['not-a-date', '2024-13-01', '2024-01-32', '2024/01/01', '01-01-2024'];
             invalidDates.forEach((invalidDate) => {
                 const config = createBaseConfig({
-                    actualServers: [{
-                        ...createBaseConfig().actualServers[0],
-                        budgets: [{
-                            ...createBaseConfig().actualServers[0].budgets[0],
-                            earliestImportDate: invalidDate
-                        }]
-                    }]
+                    actualServers: [
+                        {
+                            serverUrl: 'http://localhost:5006',
+                            serverPassword: 'test-password',
+                            requestTimeoutMs: 45000,
+                            budgets: [
+                                {
+                                    syncId: 'test-sync-id',
+                                    e2eEncryption: { enabled: false, password: '' },
+                                    accountMapping: {},
+                                    earliestImportDate: invalidDate,
+                                },
+                            ],
+                        },
+                    ],
                 });
                 expect(() => configSchema.parse(config)).toThrow();
             });
@@ -329,13 +349,21 @@ describe('Config Validation', () => {
             const validDates = ['2024-01-01', '2023-12-31', '2024-02-29'];
             validDates.forEach((validDate) => {
                 const config = createBaseConfig({
-                    actualServers: [{
-                        ...createBaseConfig().actualServers[0],
-                        budgets: [{
-                            ...createBaseConfig().actualServers[0].budgets[0],
-                            earliestImportDate: validDate
-                        }]
-                    }]
+                    actualServers: [
+                        {
+                            serverUrl: 'http://localhost:5006',
+                            serverPassword: 'test-password',
+                            requestTimeoutMs: 45000,
+                            budgets: [
+                                {
+                                    syncId: 'test-sync-id',
+                                    e2eEncryption: { enabled: false, password: '' },
+                                    accountMapping: {},
+                                    earliestImportDate: validDate,
+                                },
+                            ],
+                        },
+                    ],
                 });
                 expect(() => configSchema.parse(config)).not.toThrow();
             });
@@ -344,13 +372,12 @@ describe('Config Validation', () => {
 
     describe('Multiple Servers', () => {
         it('should accept multiple actualServers entries', () => {
-            const config = {
-                payeeTransformation: { enabled: false },
-                import: { importUncheckedTransactions: true },
+            const config = createBaseConfig({
                 actualServers: [
                     {
                         serverUrl: 'http://localhost:5006',
                         serverPassword: 'test-password-1',
+                        requestTimeoutMs: 45000,
                         budgets: [
                             {
                                 syncId: 'test-sync-id-1',
@@ -362,6 +389,7 @@ describe('Config Validation', () => {
                     {
                         serverUrl: 'http://localhost:5007',
                         serverPassword: 'test-password-2',
+                        requestTimeoutMs: 45000,
                         budgets: [
                             {
                                 syncId: 'test-sync-id-2',
@@ -371,73 +399,44 @@ describe('Config Validation', () => {
                         ],
                     },
                 ],
-            };
-
+            });
             expect(() => configSchema.parse(config)).not.toThrow();
         });
     });
 
     describe('Payee Transformation', () => {
         it('should accept payeeTransformation.enabled: true with API key', () => {
-            const config = {
+            const config = createBaseConfig({
                 payeeTransformation: {
                     enabled: true,
                     openAiApiKey: 'sk-test-key',
+                    openAiModel: 'gpt-4o-mini',
+                    skipModelValidation: false,
                 },
-                import: { importUncheckedTransactions: true },
-                actualServers: [
-                    {
-                        serverUrl: 'http://localhost:5006',
-                        serverPassword: 'test-password',
-                        budgets: [
-                            {
-                                syncId: 'test-sync-id',
-                                e2eEncryption: { enabled: false, password: '' },
-                                accountMapping: {},
-                            },
-                        ],
-                    },
-                ],
-            };
-
+            });
             expect(() => configSchema.parse(config)).not.toThrow();
         });
 
         it('should reject payeeTransformation.enabled: true without API key', () => {
-            const config = {
+            const config = createBaseConfig({
                 payeeTransformation: {
                     enabled: true,
-                    // missing openAiApiKey
+                    openAiModel: 'gpt-4o-mini',
+                    skipModelValidation: false,
                 },
-                import: { importUncheckedTransactions: true },
-                actualServers: [
-                    {
-                        serverUrl: 'http://localhost:5006',
-                        serverPassword: 'test-password',
-                        budgets: [
-                            {
-                                syncId: 'test-sync-id',
-                                e2eEncryption: { enabled: false, password: '' },
-                                accountMapping: {},
-                            },
-                        ],
-                    },
-                ],
-            };
-
+            });
             expect(() => configSchema.parse(config)).toThrow();
         });
     });
 
     describe('Account Mapping', () => {
         it('should accept valid accountMapping structures', () => {
-            const config = {
-                payeeTransformation: { enabled: false },
-                import: { importUncheckedTransactions: true },
+            const config = createBaseConfig({
                 actualServers: [
                     {
                         serverUrl: 'http://localhost:5006',
                         serverPassword: 'test-password',
+                        requestTimeoutMs: 45000,
                         budgets: [
                             {
                                 syncId: 'test-sync-id',
@@ -450,8 +449,7 @@ describe('Config Validation', () => {
                         ],
                     },
                 ],
-            };
-
+            });
             expect(() => configSchema.parse(config)).not.toThrow();
         });
 
@@ -464,23 +462,23 @@ describe('Config Validation', () => {
 
             invalidMappings.forEach((invalidMapping) => {
                 const config = {
-                    payeeTransformation: { enabled: false },
-                    import: { importUncheckedTransactions: true },
+                    payeeTransformation: { enabled: false, openAiModel: 'gpt-4o-mini', skipModelValidation: false },
+                    import: { importUncheckedTransactions: true, synchronizeClearedStatus: true },
                     actualServers: [
                         {
                             serverUrl: 'http://localhost:5006',
                             serverPassword: 'test-password',
+                            requestTimeoutMs: 45000,
                             budgets: [
                                 {
                                     syncId: 'test-sync-id',
                                     e2eEncryption: { enabled: false, password: '' },
-                                    accountMapping: invalidMapping,
+                                    accountMapping: invalidMapping as unknown as Record<string, string>,
                                 },
                             ],
                         },
                     ],
                 };
-
                 expect(() => configSchema.parse(config)).toThrow();
             });
         });
