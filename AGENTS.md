@@ -90,6 +90,9 @@ python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --status
 # Show only unresolved comments
 python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --status-unresolved
 
+# Show full content of a specific comment
+python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --show <COMMENT_ID>
+
 # Show assessment guidance for unresolved comments
 python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --assess
 

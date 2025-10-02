@@ -10,6 +10,7 @@ Usage:
 Examples:
     python3 get-coderabbit-comments.py 123 --status
     python3 get-coderabbit-comments.py 123 --status-unresolved
+    python3 get-coderabbit-comments.py 123 --show COMMENT_ID
     python3 get-coderabbit-comments.py 123 --resolve COMMENT_ID1,COMMENT_ID2
     python3 get-coderabbit-comments.py 123 --skip COMMENT_ID1,COMMENT_ID2
 """
@@ -1059,7 +1060,7 @@ class StatusDisplay:
         if all_comments:
             if self.console:
                 table = Table(title=title, show_header=True, header_style="blue")
-                table.add_column("ID", style="dim", width=20)
+                table.add_column("ID", style="dim")
                 table.add_column("Status", style="bold", width=12)
                 table.add_column("Priority", style="bold", width=8)
                 table.add_column("Category", style="cyan", width=10)
@@ -1101,6 +1102,10 @@ class StatusDisplay:
                         date_str,
                     )
                 self.console.print(table)
+                self.console.print()
+                self.console.print(
+                    "[dim]💡 Use --show <COMMENT_ID> to view full comment content[/dim]"
+                )
             else:
                 # Plain text fallback
                 print(f"\n{title}:")
@@ -1110,6 +1115,8 @@ class StatusDisplay:
                     print(
                         f"  {status} {comment.comment_id} - {file_path} - {comment.author} - {date_str}"
                     )
+                print()
+                print("💡 Use --show <COMMENT_ID> to view full comment content")
 
     def show_status(self, unresolved_only: bool = False, show_assessment: bool = False):
         """Show resolution status"""
@@ -1156,6 +1163,7 @@ def main():
         epilog="""
 Examples:
   %(prog)s 123                          # Fetch all comments for PR 123
+  %(prog)s 123 --show 2386777571       # Show full content of specific comment
   %(prog)s 123 --resolve 2386777571    # Mark single comment as resolved (fixed)
   %(prog)s 123 --skip 2386777572        # Mark single comment as skipped (ignored)
   %(prog)s 123 --resolve 2386777571,2386777573  # Mark multiple comments as resolved
@@ -1179,6 +1187,10 @@ Examples:
         "--assess",
         action="store_true",
         help="Show assessment guidance for unresolved comments",
+    )
+    parser.add_argument(
+        "--show",
+        help="Show full content of a specific comment by ID",
     )
     parser.add_argument(
         "--cleanup",
@@ -1233,6 +1245,101 @@ Examples:
             )
         else:
             logger.info(f"✅ Archived {archived_count} files to .local/archive/")
+        return
+
+    # Handle show command
+    if args.show:
+        if not args.pr_number:
+            parser.error("PR number is required for --show command")
+
+        resolution_manager = ResolutionManager(args.pr_number)
+        comments = resolution_manager.load_comments()
+
+        if not comments:
+            if RICH_AVAILABLE:
+                console = Console()
+                console.print(
+                    "[red]❌ Error: No comments found. Run without --show first to fetch comments.[/red]"
+                )
+            else:
+                logger.error(
+                    "❌ Error: No comments found. Run without --show first to fetch comments."
+                )
+            return
+
+        # Find the specific comment
+        target_comment = None
+        for comment in comments:
+            if comment.comment_id == args.show:
+                target_comment = comment
+                break
+
+        if not target_comment:
+            if RICH_AVAILABLE:
+                console = Console()
+                console.print(
+                    f"[red]❌ Error: Comment with ID '{args.show}' not found.[/red]"
+                )
+            else:
+                logger.error(f"❌ Error: Comment with ID '{args.show}' not found.")
+            return
+
+        # Display the comment
+        if RICH_AVAILABLE:
+            console = Console()
+
+            # Create a detailed panel for the comment
+            comment_info = f"[bold blue]Comment ID:[/bold blue] {target_comment.comment_id}\n"
+            comment_info += f"[bold blue]Author:[/bold blue] {target_comment.author}\n"
+            comment_info += f"[bold blue]Created:[/bold blue] {target_comment.created_at}\n"
+            comment_info += f"[bold blue]Updated:[/bold blue] {target_comment.updated_at}\n"
+            comment_info += f"[bold blue]File:[/bold blue] {target_comment.file_path or 'General'}\n"
+            comment_info += f"[bold blue]Priority:[/bold blue] {target_comment.priority}\n"
+            comment_info += f"[bold blue]Category:[/bold blue] {target_comment.category}\n"
+            comment_info += f"[bold blue]Status:[/bold blue] {'Resolved' if target_comment.is_resolved else 'Unresolved'}\n"
+            if target_comment.resolution_type:
+                comment_info += f"[bold blue]Resolution:[/bold blue] {target_comment.resolution_type}\n"
+            if target_comment.auto_skip_reason:
+                comment_info += f"[bold blue]Auto-skip reason:[/bold blue] {target_comment.auto_skip_reason}\n"
+            if target_comment.url:
+                comment_info += f"[bold blue]URL:[/bold blue] {target_comment.url}\n"
+
+            info_panel = Panel(
+                comment_info.strip(),
+                title="Comment Information",
+                border_style="blue"
+            )
+            console.print(info_panel)
+            console.print()
+
+            # Display the comment body
+            body_panel = Panel(
+                target_comment.body,
+                title="Comment Content",
+                border_style="green"
+            )
+            console.print(body_panel)
+        else:
+            # Plain text fallback
+            print(f"Comment ID: {target_comment.comment_id}")
+            print(f"Author: {target_comment.author}")
+            print(f"Created: {target_comment.created_at}")
+            print(f"Updated: {target_comment.updated_at}")
+            print(f"File: {target_comment.file_path or 'General'}")
+            print(f"Priority: {target_comment.priority}")
+            print(f"Category: {target_comment.category}")
+            print(f"Status: {'Resolved' if target_comment.is_resolved else 'Unresolved'}")
+            if target_comment.resolution_type:
+                print(f"Resolution: {target_comment.resolution_type}")
+            if target_comment.auto_skip_reason:
+                print(f"Auto-skip reason: {target_comment.auto_skip_reason}")
+            if target_comment.url:
+                print(f"URL: {target_comment.url}")
+            print("\n" + "="*80)
+            print("COMMENT CONTENT:")
+            print("="*80)
+            print(target_comment.body)
+            print("="*80)
         return
 
     # Validate PR number
