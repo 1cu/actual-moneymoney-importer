@@ -119,7 +119,7 @@ A basic configuration document looks like this:
 [payeeTransformation]
 enabled = false
 openAiApiKey = "<openAiKey>"  # Your OpenAI API key
-openAiModel = "gpt-3.5-turbo"  # Optional: Specify the OpenAI model to use
+openAiModel = "gpt-4o-mini"  # Optional: Specify the OpenAI model to use
 # payee transformation debug logs
 
 # Import settings
@@ -239,7 +239,7 @@ When configuration values are not explicitly set, the following defaults are use
 | `payeeTransformation.openAiModel`                  | `"gpt-4o-mini"` | Use cost-effective model for transformations        |
 | `payeeTransformation.cacheTransformedPayees`       | `true`          | Cache transformations to avoid repeated API calls   |
 | `import.importUncheckedTransactions`              | `true`          | Import transactions as unchecked by default         |
-| `import.synchronizeClearedStatus`                 | `true`          | Import transactions as uncleared by default         |
+| `import.synchronizeClearedStatus`                 | `true`          | Synchronize cleared status between MoneyMoney and Actual |
 | `import.maskPayeesInLogs`                         | `true`          | Mask payee names in logs for privacy                |
 | `import.importSince`                              | `null`          | No date filter by default (import all transactions) |
 | `import.importUntil`                              | `null`          | No end date filter by default                       |
@@ -358,8 +358,7 @@ Run `mdformat <files>` locally when updating docs to keep diffs clean.
 
 The repository includes Husky hooks to keep the working tree clean:
 
-- `pre-commit` runs `npm run lint:all`, `npm run lint:eslint`,
-  `npm run typecheck`, `npm run test:typecheck`, and `npm test` to block formatting, lint, type, or test violations.
+- `pre-commit` runs `npm run lint:prettier:fix`, `npm run lint:markdown:fix`, `npm run lint:eslint`, `npm run typecheck`, `npm run test:typecheck`, and `npm test` to block formatting, lint, type, or test violations.
 - `pre-push` runs the quality gates so that pushes only succeed when the entire
   local CI suite is green.
 

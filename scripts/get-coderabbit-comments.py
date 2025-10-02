@@ -3,12 +3,6 @@
 Enhanced GitHub PR Comments Fetcher with AI Resolution Support
 Supports distinguishing between "resolved" (fixed) and "skipped" (intentionally ignored) comments
 
-This is the Python version of the shell script, providing the same functionality with:
-- Clean object-oriented design
-- Better error handling
-- Improved maintainability
-- Full compatibility with existing data files
-
 Usage:
     python3 get-coderabbit-comments.py <PR_NUMBER> [OPTIONS]
     python3 get-coderabbit-comments.py --help
@@ -65,9 +59,9 @@ class Comment:
     priority: str = "unknown"
     category: str = "other"
     type: Optional[str] = None  # For compatibility with existing data
-    path: Optional[str] = None  # Legacy field, prefer file_path
     line_range: Optional[str] = None  # For compatibility with existing data
     has_code_changes: bool = False  # For compatibility with existing data
+    auto_skip_reason: Optional[str] = None  # Auto-skip detection reason
 
 
 @dataclass
@@ -164,7 +158,9 @@ class GitHubAPI:
                 logger.error(f"❌ gh CLI fallback also failed: {gh_error}")
             sys.exit(1)
 
-    def fetch_comments(self, pr_number: int) -> Tuple[List[Comment], List[Comment], List[Comment]]:
+    def fetch_comments(
+        self, pr_number: int
+    ) -> Tuple[List[Comment], List[Comment], List[Comment]]:
         """Fetch comments from GitHub API"""
         import concurrent.futures
 
@@ -178,7 +174,9 @@ class GitHubAPI:
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             review_future = executor.submit(self._fetch_review_threads, pr_number)
             pr_future = executor.submit(self._fetch_pr_comments, pr_number)
-            review_comments_future = executor.submit(self._fetch_review_comments, pr_number)
+            review_comments_future = executor.submit(
+                self._fetch_review_comments, pr_number
+            )
 
             # Wait for all to complete
             review_threads = review_future.result()
@@ -603,9 +601,13 @@ class CommentProcessor:
             re.compile(r"In ([^\s]+) at lines?"),
             re.compile(r"([^\s]+\.(ts|js|json|md|txt|yml|yaml)) around lines?"),
             # Pattern for review comments: <summary>filename.ext (count)</summary>
-            re.compile(r"<summary>([^\s<>()]+\.(ts|js|json|md|txt|yml|yaml|py|sh)) \(\d+\)</summary>"),
+            re.compile(
+                r"<summary>([^\s<>()]+\.(ts|js|json|md|txt|yml|yaml|py|sh)) \(\d+\)</summary>"
+            ),
             # Pattern for review comments: <summary>filename.ext</summary>
-            re.compile(r"<summary>([^\s<>()]+\.(ts|js|json|md|txt|yml|yaml|py|sh))</summary>"),
+            re.compile(
+                r"<summary>([^\s<>()]+\.(ts|js|json|md|txt|yml|yaml|py|sh))</summary>"
+            ),
             # Pattern for review comments: <summary>filename (count)</summary> - for files without extensions
             re.compile(r"<summary>([^\s<>()]+) \(\d+\)</summary>"),
             # Pattern for review comments: <summary>filename</summary> - for files without extensions
@@ -660,6 +662,10 @@ class CommentProcessor:
         comment.category = self._extract_category(comment.body)
         if not comment.file_path:
             comment.file_path = self._extract_file_path(comment.body)
+
+        # Simple auto-skip detection
+        comment.auto_skip_reason = self._should_auto_skip(comment.body)
+
         return comment
 
     def _extract_priority(self, body: str) -> str:
@@ -683,6 +689,43 @@ class CommentProcessor:
             match = pattern.search(body)
             if match:
                 return match.group(1)
+        return None
+
+    def _should_auto_skip(self, body: str) -> Optional[str]:
+        """Simple auto-skip detection - returns reason if should skip, None otherwise"""
+        body_lower = body.lower()
+
+        # Skip informational content
+        if "codex" in body_lower and "automated review" in body_lower:
+            return "informational_codex"
+
+        # Skip review summaries with no actionable content
+        if (
+            "learnings" in body_lower
+            and "configuration" in body_lower
+            and not any(
+                word in body_lower
+                for word in [
+                    "should",
+                    "must",
+                    "fix",
+                    "update",
+                    "change",
+                    "add",
+                    "remove",
+                ]
+            )
+        ):
+            return "review_summary"
+
+        # Skip pure metadata
+        if (
+            "review details" in body_lower
+            and "files selected" in body_lower
+            and "```" not in body
+        ):
+            return "metadata_only"
+
         return None
 
     def assess_comment_for_action(self, comment: Comment) -> str:
@@ -843,9 +886,9 @@ class ResolutionManager:
                 "priority": "priority",
                 "category": "category",
                 "type": "type",
-                "path": "path",
                 "line_range": "line_range",
                 "has_code_changes": "has_code_changes",
+                "auto_skip_reason": "auto_skip_reason",
             }
 
             # Default values to avoid repeated dict lookups
@@ -862,6 +905,11 @@ class ResolutionManager:
                 mapped_comment = {}
                 for field, key in field_mapping.items():
                     mapped_comment[field] = comment_data.get(key, defaults.get(field))
+
+                # Handle legacy 'path' field by mapping it to 'file_path' if file_path is not set
+                # This ensures backward compatibility with existing data files
+                if not mapped_comment.get("file_path") and comment_data.get("path"):
+                    mapped_comment["file_path"] = comment_data["path"]
 
                 comments.append(Comment(**mapped_comment))
             return comments
@@ -931,11 +979,58 @@ class StatusDisplay:
             summary_text += f"[bold]Total:[/bold] {total_comments}\n"
             summary_text += f"[bold]Progress:[/bold] {progress}%"
 
+            # Check for auto-skip suggestions
+            auto_skip_comments = [
+                c
+                for c in comments
+                if hasattr(c, "auto_skip_reason")
+                and c.auto_skip_reason
+                and not c.is_resolved
+            ]
+            if auto_skip_comments:
+                auto_skip_text = (
+                    "[bold yellow]🤖 Auto-skip suggestions:[/bold yellow]\n\n"
+                )
+                for comment in auto_skip_comments:
+                    auto_skip_text += (
+                        f"• {comment.comment_id}: {comment.auto_skip_reason}\n"
+                    )
+                auto_skip_panel = Panel(
+                    auto_skip_text.strip(),
+                    title="Auto-skip Suggestions",
+                    border_style="yellow",
+                )
+                self.console.print(auto_skip_panel)
+                self.console.print()
+
             summary_panel = Panel(
                 summary_text, title="Comment Status", border_style="blue"
             )
             self.console.print(summary_panel)
             self.console.print()
+        elif show_summary:
+            # Plain text summary
+            print("📊 Comment Status")
+            print(f"✅ Resolved: {resolved_count}")
+            print(f"⏭️  Skipped: {skipped_count}")
+            print(f"❌ Unresolved: {unresolved_count}")
+            print(f"Total: {total_comments}")
+            print(f"Progress: {progress}%")
+            print()
+
+            # Check for auto-skip suggestions (plain text)
+            auto_skip_comments = [
+                c
+                for c in comments
+                if hasattr(c, "auto_skip_reason")
+                and c.auto_skip_reason
+                and not c.is_resolved
+            ]
+            if auto_skip_comments:
+                print("🤖 Auto-skip suggestions:")
+                for comment in auto_skip_comments:
+                    print(f"• {comment.comment_id}: {comment.auto_skip_reason}")
+                print()
 
         # Combine all comments with status
         all_comments = []
@@ -1067,7 +1162,7 @@ Examples:
   %(prog)s 123 --skip 2386777572,2386777574      # Mark multiple comments as skipped
   %(prog)s 123 --status                 # Show resolution status
   %(prog)s 123 --status-unresolved      # Show only unresolved comments
-  %(prog)s --cleanup                    # Clean up closed PRs and archive resolutions
+  %(prog)s --cleanup                    # Archive all PR data files to .local/archive/
         """,
     )
 
@@ -1095,7 +1190,7 @@ Examples:
 
     # Handle cleanup command
     if args.cleanup:
-        logger.info("🧹 Cleaning up closed PRs and archiving resolutions...")
+        logger.info("🧹 Archiving all PR data files...")
 
         # Find all resolution files
         local_dir = Path(".local")
@@ -1176,7 +1271,9 @@ Examples:
     comment_processor = CommentProcessor()
 
     # Fetch comments from GitHub
-    review_threads, pr_comments, review_comments = github_api.fetch_comments(args.pr_number)
+    review_threads, pr_comments, review_comments = github_api.fetch_comments(
+        args.pr_number
+    )
 
     # Combine all comments
     all_comments = review_threads + pr_comments + review_comments
@@ -1244,9 +1341,9 @@ Examples:
                 "priority": comment.priority,
                 "category": comment.category,
                 "type": comment.type,
-                "path": comment.path,
                 "line_range": comment.line_range,
                 "has_code_changes": comment.has_code_changes,
+                "auto_skip_reason": getattr(comment, "auto_skip_reason", None),
             }
             for comment in processed_comments
         ],
