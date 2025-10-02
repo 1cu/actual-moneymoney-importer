@@ -5,34 +5,23 @@
 A CLI to import [MoneyMoney](https://moneymoney-app.com) transactions into
 [Actual Budget](https://actualbudget.org), written in TypeScript
 
-> **Fork Notice**: This is an enhanced fork of
+> **Fork Notice**: This is a development-focused fork of
 > [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney) with
-> significant improvements including targeted regression coverage, enhanced
-> error handling, timeout management, and advanced configuration options.
+> comprehensive testing, CI/CD infrastructure, and code quality improvements.
 
 ![GitHub Checks](https://badgers.space/github/checks/1cu/actual-moneymoney/develop)
 
-## Enhanced Features (Fork Improvements)
+## Fork Improvements
 
-This fork includes significant enhancements over the upstream version:
+This fork focuses on code quality, testing, and development infrastructure:
 
-- **🧪 Targeted Testing**: Focused Vitest suite exercising the essential API,
-  importer, and payee transformation paths—no push for 100% coverage
-- **⏱️ Timeout Management**: Configurable request timeouts with proper cleanup
-  and error handling
-- **🔒 Privacy Protection**: Payee log masking to protect sensitive financial
-  data
-- **🎯 Server Filtering**: Import specific accounts from selected MoneyMoney
-  servers
-- **🤖 Enhanced AI**: Improved OpenAI integration with configurable models and
-  better error handling
-- **📊 Better Logging**: Structured logging with proper error reporting and debug
-  information
-- **🔇 Smart Console Filtering**: Intelligent suppression of noisy Actual SDK output
-  with categorized debug logging
-- **🔄 Robust Imports**: Enhanced transaction deduplication and retry mechanisms
-- **⚙️ Advanced Configuration**: Extended TOML configuration with timeout and
-  filtering options
+- **🧪 Comprehensive Testing**: Full Vitest test suite with 24 test files covering
+  all critical paths and edge cases
+- **🔧 Development Infrastructure**: Professional CI/CD, linting, formatting,
+  and quality gates with automated checks
+- **📚 Documentation**: Extensive contributor guides and complexity prevention guidelines
+- **🛡️ Code Quality**: ESLint, Prettier, TypeScript strict mode, and file size
+  limits to prevent over-engineering
 
 ## Table of Contents
 
