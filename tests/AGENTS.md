@@ -9,6 +9,28 @@
   - `PayeeTransformer.test.ts` exercises OpenAI integration, model caching, and logging safeguards
   - `config.test.ts` validates encryption requirements
 
+## Test Organization
+
+### Test Structure
+
+- **Structure**: Mirror source structure in [tests/](mdc:tests/)
+- **Naming**: Use `*.test.ts` convention
+- **Coverage**: Focus on critical paths, not 100% coverage
+- **Mocking**: External services (Actual API, MoneyMoney, OpenAI)
+
+### Test Commands
+
+- **Run Tests**: `npm test`
+- **Watch Mode**: `npm run test:watch` (if available)
+- **Coverage**: `npm run test:coverage` (if available)
+
+### Test Maintenance
+
+- Update tests alongside source changes
+- Extend test coverage for new behavior
+- Remove obsolete tests when functionality changes
+- Keep tests focused on valuable assertions
+
 ## Writing and maintaining tests
 
 - Use `vi.mock()` to isolate external dependencies (`@actual-app/api`, `moneymoney`, `openai`). Declare mocks at the top of the file and reset them in `beforeEach` to avoid cross-test bleed
