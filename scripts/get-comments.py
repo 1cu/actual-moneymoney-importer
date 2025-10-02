@@ -28,15 +28,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
-try:
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
-    # Rich imports for enhanced formatting
-
-    RICH_AVAILABLE = True
-except ImportError:
-    RICH_AVAILABLE = False
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -80,7 +74,10 @@ class Comment:
     created_at: str
     updated_at: str
     database_id: Optional[int] = None  # Integer database ID (e.g., 2392959649)
-    file_path: Optional[str] = None  # Primary field for file path
+    file_path: Optional[str] = (
+        None  # Primary field for file path (for backward compatibility)
+    )
+    file_paths: List[str] = None  # All file paths referenced in this comment
     position: Optional[int] = None
     url: str = ""
     is_resolved: bool = False
@@ -92,6 +89,14 @@ class Comment:
     has_code_changes: bool = False  # For compatibility with existing data
     auto_skip_reason: Optional[str] = None  # Auto-skip detection reason
     thread_id: Optional[str] = None  # Thread ID for review comments
+    resolved_files: List[str] = None  # Files that have been addressed in this comment
+
+    def __post_init__(self):
+        """Initialize default values for list fields"""
+        if self.file_paths is None:
+            self.file_paths = []
+        if self.resolved_files is None:
+            self.resolved_files = []
 
 
 @dataclass
@@ -196,11 +201,8 @@ class GitHubAPI:
         """Fetch comments from GitHub API"""
         import concurrent.futures
 
-        if RICH_AVAILABLE:
-            console = Console()
-            console.print("[bold blue]Fetching comments...[/bold blue]")
-        else:
-            logger.info(f"Fetching comments for PR #{pr_number}...")
+        console = Console()
+        console.print("[bold blue]Fetching comments...[/bold blue]")
 
         # Fetch all three types in parallel for better performance
         with concurrent.futures.ThreadPoolExecutor(
@@ -217,10 +219,7 @@ class GitHubAPI:
             pr_comments = pr_future.result()
             review_comments = review_comments_future.result()
 
-        if RICH_AVAILABLE:
-            console.print("[green]✅ Comments fetched[/green]")
-        else:
-            logger.info("✅ Comments fetched")
+        console.print("[green]✅ Comments fetched[/green]")
 
         return review_threads, pr_comments, review_comments
 
@@ -747,6 +746,7 @@ class CommentProcessor:
     def __init__(self):
         # Pre-compile regex patterns for better performance
         self._file_patterns = [
+            # Original patterns for review comments
             re.compile(r"In ([^\s]+) around lines?"),
             re.compile(r"In ([^\s]+) at lines?"),
             re.compile(r"([^\s]+\.(ts|js|json|md|txt|yml|yaml)) around lines?"),
@@ -762,6 +762,25 @@ class CommentProcessor:
             re.compile(r"<summary>([^\s<>()]+) \(\d+\)</summary>"),
             # Pattern for review comments: <summary>filename</summary> - for files without extensions
             re.compile(r"<summary>([^\s<>()]+)</summary>"),
+            # Enhanced patterns for general PR comments that mention files
+            # Pattern for file paths in code blocks or backticks
+            re.compile(r"`([^\s`]+\.(ts|js|json|md|txt|yml|yaml|py|sh))`"),
+            # Pattern for file paths in parentheses or brackets (but not HTML attributes)
+            re.compile(
+                r"[\[\(]([^\s\]\)]+\.(ts|js|json|md|txt|yml|yaml|py|sh))[\]\)](?!\s*=)"
+            ),
+            # Pattern for file paths in "at" or "in" contexts
+            re.compile(r"(?:at|in)\s+([^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
+            # Pattern for file paths in "file" or "path" contexts
+            re.compile(
+                r"(?:file|path)[\s:]+([^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"
+            ),
+            # Pattern for src/ and tests/ directory references
+            re.compile(r"(src/[^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
+            re.compile(r"(tests/[^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
+            re.compile(r"(scripts/[^\s]+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
+            # Pattern for common file extensions in general text (but not URLs or HTML)
+            re.compile(r"([^\s<>\"']+\.(ts|js|json|md|txt|yml|yaml|py|sh))"),
         ]
 
         # Pre-compile priority and category patterns
@@ -838,12 +857,72 @@ class CommentProcessor:
         for pattern in self._file_patterns:
             match = pattern.search(body)
             if match:
-                return match.group(1)
+                file_path = match.group(1)
+                # Filter out HTML attributes, URLs, and other non-file patterns
+                if not self._is_valid_file_path(file_path):
+                    continue
+                return file_path
         return None
+
+    def _is_valid_file_path(self, file_path: str) -> bool:
+        """Check if the extracted path is a valid file path"""
+        # Filter out HTML attributes, URLs, and other non-file patterns
+        invalid_patterns = [
+            r"^https?://",  # URLs
+            r"^src=",  # HTML src attributes
+            r"^Badge",  # HTML badges
+            r"^img\.",  # Image references
+            r"^[^a-zA-Z0-9_/]",  # Doesn't start with valid file path characters
+        ]
+
+        for pattern in invalid_patterns:
+            if re.search(pattern, file_path):
+                return False
+
+        # Must contain at least one valid file extension
+        valid_extensions = [
+            ".ts",
+            ".js",
+            ".json",
+            ".md",
+            ".txt",
+            ".yml",
+            ".yaml",
+            ".py",
+            ".sh",
+        ]
+        if not any(ext in file_path for ext in valid_extensions):
+            return False
+
+        return True
 
     def _should_auto_skip(self, body: str) -> Optional[str]:
         """Simple auto-skip detection - returns reason if should skip, None otherwise"""
         body_lower = body.lower()
+
+        # Skip bot commands (simple @bot commands)
+        if body_lower in ["@coderabbit fullreview", "@codex review"]:
+            return "bot_command"
+
+        # Skip simple bot commands (more flexible pattern)
+        if body_lower.startswith("@coderabbit") and body_lower in [
+            "@coderabbit fullreview",
+            "@coderabbit review",
+        ]:
+            return "bot_command"
+        if body_lower.startswith("@codex") and body_lower in [
+            "@codex review",
+            "@codex fullreview",
+        ]:
+            return "bot_command"
+
+        # Skip GitHub Actions release notifications
+        if (
+            ":tada:" in body_lower
+            and "this pr is included in version" in body_lower
+            and "github release" in body_lower
+        ):
+            return "github_release"
 
         # Skip informational content
         if "codex" in body_lower and "automated review" in body_lower:
@@ -875,6 +954,35 @@ class CommentProcessor:
             and "```" not in body
         ):
             return "metadata_only"
+
+        # Skip CodeRabbit review summary comments with actionable count (check this first)
+        if (
+            "actionable comments posted" in body_lower
+            and "review details" in body_lower
+            and "configuration used" in body_lower
+            and (
+                "plan:" in body_lower
+                or "plan: pro" in body_lower
+                or "review profile" in body_lower
+            )
+        ):
+            return "review_summary_meta"
+
+        # Skip CodeRabbit review status comments
+        if (
+            "this is an auto-generated comment by coderabbit" in body_lower
+            and "review status" in body_lower
+        ):
+            return "coderabbit_review_status"
+
+        # Skip review summaries that contain learnings and configuration but are meta-comments
+        if (
+            "learnings" in body_lower
+            and "configuration" in body_lower
+            and "files selected for processing" in body_lower
+            and "additional context used" in body_lower
+        ):
+            return "review_summary_with_context"
 
         return None
 
@@ -1046,19 +1154,14 @@ class ResolutionManager:
                             f"📝 Review comment {comment_id} marked locally (GitHub resolution failed)"
                         )
 
-        if RICH_AVAILABLE:
-            console = Console()
+        console = Console()
+        console.print(
+            f"[green]✅ {len(comment_ids)} comments marked as resolved (fixed)[/green]"
+        )
+        if github_resolved:
             console.print(
-                f"[green]✅ {len(comment_ids)} comments marked as resolved (fixed)[/green]"
+                f"[green]🌐 {len(github_resolved)} also resolved on GitHub[/green]"
             )
-            if github_resolved:
-                console.print(
-                    f"[green]🌐 {len(github_resolved)} also resolved on GitHub[/green]"
-                )
-        else:
-            logger.info(f"✅ {len(comment_ids)} comments marked as resolved (fixed)")
-            if github_resolved:
-                logger.info(f"🌐 {len(github_resolved)} also resolved on GitHub")
 
     def _get_comment_type(self, comment_id: str) -> str:
         """Determine the type of comment based on its ID and stored data"""
@@ -1128,13 +1231,10 @@ class ResolutionManager:
             )
 
         self.save_resolution_state(state)
-        if RICH_AVAILABLE:
-            console = Console()
-            console.print(
-                f"[yellow]⏭️ {len(comment_ids)} comments marked as skipped (ignored)[/yellow]"
-            )
-        else:
-            logger.info(f"⏭️ {len(comment_ids)} comments marked as skipped (ignored)")
+        console = Console()
+        console.print(
+            f"[yellow]⏭️ {len(comment_ids)} comments marked as skipped (ignored)[/yellow]"
+        )
 
     def load_comments(self) -> List[Comment]:
         """Load comments from file with optimized field mapping"""
@@ -1206,6 +1306,10 @@ class ResolutionManager:
             elif comment.comment_id in state.skipped_comments:
                 comment.is_resolved = True
                 comment.resolution_type = "skipped"
+            elif hasattr(comment, "auto_skip_reason") and comment.auto_skip_reason:
+                # Auto-skipped comments are considered resolved
+                comment.is_resolved = True
+                comment.resolution_type = "skipped"
             else:
                 comment.is_resolved = False
                 comment.resolution_type = None
@@ -1216,17 +1320,14 @@ class StatusDisplay:
 
     def __init__(self, resolution_manager: ResolutionManager):
         self.resolution_manager = resolution_manager
-        self.console = Console() if RICH_AVAILABLE else None
+        self.console = Console()
 
     def _create_unified_table(
         self, comments, title="📝 Comments", show_summary=True, show_assessment=False
     ):
         """Create a unified table for displaying comments with optional filtering"""
         if not comments:
-            if self.console:
-                self.console.print("[yellow]⚠️  No comments found[/yellow]")
-            else:
-                print("⚠️  No comments found")
+            self.console.print("[yellow]⚠️  No comments found[/yellow]")
             return
 
         # Calculate statistics
@@ -1238,10 +1339,24 @@ class StatusDisplay:
         ]
         unresolved_comments = [c for c in comments if not c.is_resolved]
 
+        # Calculate auto-skip statistics
+        auto_skipped_comments = [
+            c
+            for c in skipped_comments
+            if hasattr(c, "auto_skip_reason") and c.auto_skip_reason
+        ]
+        # Comments that were resolved from comment status (contain "✅ Addressed")
+        manually_resolved_comments = [
+            c for c in resolved_comments if "✅ Addressed" in c.body
+        ]
+
         total_comments = len(comments)
         resolved_count = len(resolved_comments)
         skipped_count = len(skipped_comments)
         unresolved_count = len(unresolved_comments)
+        auto_skipped_count = len(auto_skipped_comments)
+        manually_resolved_count = len(manually_resolved_comments)
+
         progress = (
             int(
                 (resolved_count + skipped_count)
@@ -1252,34 +1367,47 @@ class StatusDisplay:
             else 0
         )
 
-        if self.console and show_summary:
-            # Create summary panel
+        if show_summary:
+            # Create summary panel with new format
             summary_text = "[bold blue]📊 Comment Status[/bold blue]\n\n"
-            summary_text += f"[green]✅ Resolved:[/green] {resolved_count}\n"
-            summary_text += f"[yellow]⏭️  Skipped:[/yellow] {skipped_count}\n"
+            summary_text += f"[green]✅ Resolved:[/green] {resolved_count}"
+            if manually_resolved_count > 0:
+                summary_text += (
+                    f" ({manually_resolved_count} resolved from comment status)\n"
+                )
+            else:
+                summary_text += "\n"
+            summary_text += f"[yellow]⏭️  Skipped:[/yellow] {skipped_count}"
+            if auto_skipped_count > 0:
+                summary_text += f" ({auto_skipped_count} auto skipped)\n"
+            else:
+                summary_text += "\n"
             summary_text += f"[red]❌ Unresolved:[/red] {unresolved_count}\n"
             summary_text += f"[bold]Total:[/bold] {total_comments}\n"
             summary_text += f"[bold]Progress:[/bold] {progress}%"
 
-            # Check for auto-skip suggestions
-            auto_skip_comments = [
+            # Show auto-skipped comments with detailed information
+            auto_skipped_comments = [
                 c
                 for c in comments
                 if hasattr(c, "auto_skip_reason")
                 and c.auto_skip_reason
-                and not c.is_resolved
+                and c.is_resolved
+                and c.resolution_type == "skipped"
             ]
-            if auto_skip_comments:
+            if auto_skipped_comments:
                 auto_skip_text = (
-                    "[bold yellow]🤖 Auto-skip suggestions:[/bold yellow]\n\n"
+                    "[bold yellow]🤖 Auto-skipped comments:[/bold yellow]\n\n"
                 )
-                for comment in auto_skip_comments:
+                for comment in auto_skipped_comments:
+                    date_str = comment.created_at.split("T")[0]  # Just the date part
                     auto_skip_text += (
-                        f"• {comment.comment_id}: {comment.auto_skip_reason}\n"
+                        f"• [bold]{comment.comment_id}[/bold] by [blue]{comment.author}[/blue] "
+                        f"({date_str}): [dim]{comment.auto_skip_reason}[/dim]\n"
                     )
                 auto_skip_panel = Panel(
                     auto_skip_text.strip(),
-                    title="Auto-skip Suggestions",
+                    title="Auto-skipped Comments",
                     border_style="yellow",
                 )
                 self.console.print(auto_skip_panel)
@@ -1290,29 +1418,6 @@ class StatusDisplay:
             )
             self.console.print(summary_panel)
             self.console.print()
-        elif show_summary:
-            # Plain text summary
-            print("📊 Comment Status")
-            print(f"✅ Resolved: {resolved_count}")
-            print(f"⏭️  Skipped: {skipped_count}")
-            print(f"❌ Unresolved: {unresolved_count}")
-            print(f"Total: {total_comments}")
-            print(f"Progress: {progress}%")
-            print()
-
-            # Check for auto-skip suggestions (plain text)
-            auto_skip_comments = [
-                c
-                for c in comments
-                if hasattr(c, "auto_skip_reason")
-                and c.auto_skip_reason
-                and not c.is_resolved
-            ]
-            if auto_skip_comments:
-                print("🤖 Auto-skip suggestions:")
-                for comment in auto_skip_comments:
-                    print(f"• {comment.comment_id}: {comment.auto_skip_reason}")
-                print()
 
         # Create processor once if needed for assessment
         processor = CommentProcessor() if show_assessment else None
@@ -1343,95 +1448,78 @@ class StatusDisplay:
 
         # Show all comments in a single table
         if all_comments:
-            if self.console:
-                table = Table(title=title, show_header=True, header_style="blue")
-                table.add_column("ID", style="dim")
-                table.add_column(
-                    "Status",
-                    style="bold",
-                    width=Constants.TABLE_COLUMN_WIDTHS["status"],
-                )
-                table.add_column(
-                    "Priority",
-                    style="bold",
-                    width=Constants.TABLE_COLUMN_WIDTHS["priority"],
-                )
-                table.add_column(
-                    "Category",
-                    style="cyan",
-                    width=Constants.TABLE_COLUMN_WIDTHS["category"],
-                )
-                table.add_column("File", style="green")
-                table.add_column(
-                    "Author",
-                    style="blue",
-                    width=Constants.TABLE_COLUMN_WIDTHS["author"],
-                )
-                table.add_column(
-                    "Date", style="dim", width=Constants.TABLE_COLUMN_WIDTHS["date"]
-                )
+            table = Table(title=title, show_header=True, header_style="blue")
+            table.add_column("ID", style="dim")
+            table.add_column(
+                "Status",
+                style="bold",
+                width=Constants.TABLE_COLUMN_WIDTHS["status"],
+            )
+            table.add_column(
+                "Priority",
+                style="bold",
+                width=Constants.TABLE_COLUMN_WIDTHS["priority"],
+            )
+            table.add_column(
+                "Category",
+                style="cyan",
+                width=Constants.TABLE_COLUMN_WIDTHS["category"],
+            )
+            table.add_column("File", style="green")
+            table.add_column(
+                "Author",
+                style="blue",
+                width=Constants.TABLE_COLUMN_WIDTHS["author"],
+            )
+            table.add_column(
+                "Date", style="dim", width=Constants.TABLE_COLUMN_WIDTHS["date"]
+            )
 
-                for comment, status in all_comments:
-                    priority_color = {
-                        "major": "red",
-                        "minor": "yellow",
-                        "trivial": "blue",
-                        "unknown": "dim",
-                    }.get(comment.priority, "dim")
+            for comment, status in all_comments:
+                priority_color = {
+                    "major": "red",
+                    "minor": "yellow",
+                    "trivial": "blue",
+                    "unknown": "dim",
+                }.get(comment.priority, "dim")
 
-                    # Color the status column
-                    status_color = {
-                        "✅ Resolved": "green",
-                        "⏭️ Skipped": "yellow",
-                        "❌ Unresolved": "red",
-                    }.get(status, "dim")
+                # Color the status column
+                status_color = {
+                    "✅ Resolved": "green",
+                    "⏭️ Skipped": "yellow",
+                    "❌ Unresolved": "red",
+                }.get(status, "dim")
 
-                    file_path = comment.file_path or "General"
-                    date_str = comment.created_at.split("T")[0]  # Just the date part
+                file_path = comment.file_path or "General"
+                date_str = comment.created_at.split("T")[0]  # Just the date part
 
-                    # Add assessment guidance for unresolved comments
-                    if status == "❌ Unresolved" and processor:
-                        assessment = processor.assess_comment_for_action(comment)
-                        file_path = f"{file_path}\n[dim]{assessment}[/dim]"
+                # Add assessment guidance for unresolved comments
+                if status == "❌ Unresolved" and processor:
+                    assessment = processor.assess_comment_for_action(comment)
+                    file_path = f"{file_path}\n[dim]{assessment}[/dim]"
 
-                    table.add_row(
-                        comment.comment_id,
-                        f"[{status_color}]{status}[/{status_color}]",
-                        f"[{priority_color}]{comment.priority.upper()}[/{priority_color}]",
-                        comment.category,
-                        file_path,
-                        comment.author,
-                        date_str,
-                    )
-                self.console.print(table)
-                self.console.print()
-                self.console.print(
-                    "[dim]💡 Use --show <COMMENT_ID> to view full comment content[/dim]"
+                table.add_row(
+                    comment.comment_id,
+                    f"[{status_color}]{status}[/{status_color}]",
+                    f"[{priority_color}]{comment.priority.upper()}[/{priority_color}]",
+                    comment.category,
+                    file_path,
+                    comment.author,
+                    date_str,
                 )
-            else:
-                # Plain text fallback
-                print(f"\n{title}:")
-                for comment, status in all_comments:
-                    file_path = comment.file_path or "General"
-                    date_str = comment.created_at.split("T")[0]
-                    print(
-                        f"  {status} {comment.comment_id} - {file_path} - {comment.author} - {date_str}"
-                    )
-                print()
-                print("💡 Use --show <COMMENT_ID> to view full comment content")
+            self.console.print(table)
+            self.console.print()
+            self.console.print(
+                "[dim]💡 Use --show <COMMENT_ID> to view full comment content[/dim]"
+            )
 
     def show_status(self, unresolved_only: bool = False, show_assessment: bool = False):
         """Show resolution status"""
         comments = self.resolution_manager.load_comments()
         if not comments:
-            if self.console:
-                self.console.print(
-                    "[red]❌ Error: No comments found. Run without --status first to fetch comments.[/red]"
-                )
-            else:
-                logger.error(
-                    "❌ Error: No comments found. Run without --status first to fetch comments."
-                )
+            self.console.print(
+                "[red]❌ Error: No comments found. Run without --status first to fetch comments.[/red]"
+            )
             return
 
         # Update resolution state
@@ -1448,10 +1536,7 @@ class StatusDisplay:
                     show_assessment=show_assessment,
                 )
             else:
-                if self.console:
-                    self.console.print("[green]✅ No unresolved comments![/green]")
-                else:
-                    print("✅ No unresolved comments!")
+                self.console.print("[green]✅ No unresolved comments![/green]")
         else:
             # Show all comments with summary
             self._create_unified_table(comments, "📝 All Comments", show_summary=True)
@@ -1509,24 +1594,18 @@ Examples:
         # Find all resolution files
         local_dir = Path(".local")
         if not local_dir.exists():
-            if RICH_AVAILABLE:
-                console = Console()
-                console.print(
-                    "[yellow]⚠️  No .local directory found - nothing to clean up[/yellow]"
-                )
-            else:
-                logger.warning("⚠️  No .local directory found - nothing to clean up")
+            console = Console()
+            console.print(
+                "[yellow]⚠️  No .local directory found - nothing to clean up[/yellow]"
+            )
             return
 
         resolution_files = list(local_dir.glob("pr-*-resolutions.json"))
         comments_files = list(local_dir.glob("pr-*-comments.json"))
 
         if not resolution_files and not comments_files:
-            if RICH_AVAILABLE:
-                console = Console()
-                console.print("[yellow]⚠️  No PR data files found to clean up[/yellow]")
-            else:
-                logger.warning("⚠️  No PR data files found to clean up")
+            console = Console()
+            console.print("[yellow]⚠️  No PR data files found to clean up[/yellow]")
             return
 
         # Create archive directory
@@ -1546,13 +1625,10 @@ Examples:
             file_path.rename(archive_path)
             archived_count += 1
 
-        if RICH_AVAILABLE:
-            console = Console()
-            console.print(
-                f"[green]✅ Archived {archived_count} files to .local/archive/[/green]"
-            )
-        else:
-            logger.info(f"✅ Archived {archived_count} files to .local/archive/")
+        console = Console()
+        console.print(
+            f"[green]✅ Archived {archived_count} files to .local/archive/[/green]"
+        )
         return
 
     # Handle show command
@@ -1564,15 +1640,10 @@ Examples:
         comments = resolution_manager.load_comments()
 
         if not comments:
-            if RICH_AVAILABLE:
-                console = Console()
-                console.print(
-                    "[red]❌ Error: No comments found. Run without --show first to fetch comments.[/red]"
-                )
-            else:
-                logger.error(
-                    "❌ Error: No comments found. Run without --show first to fetch comments."
-                )
+            console = Console()
+            console.print(
+                "[red]❌ Error: No comments found. Run without --show first to fetch comments.[/red]"
+            )
             return
 
         # Find the specific comment
@@ -1583,79 +1654,49 @@ Examples:
                 break
 
         if not target_comment:
-            if RICH_AVAILABLE:
-                console = Console()
-                console.print(
-                    f"[red]❌ Error: Comment with ID '{args.show}' not found.[/red]"
-                )
-            else:
-                logger.error(f"❌ Error: Comment with ID '{args.show}' not found.")
+            console = Console()
+            console.print(
+                f"[red]❌ Error: Comment with ID '{args.show}' not found.[/red]"
+            )
             return
 
         # Display the comment
-        if RICH_AVAILABLE:
-            console = Console()
+        console = Console()
 
-            # Create a detailed panel for the comment
-            comment_info = (
-                f"[bold blue]Comment ID:[/bold blue] {target_comment.comment_id}\n"
-            )
-            comment_info += f"[bold blue]Author:[/bold blue] {target_comment.author}\n"
+        # Create a detailed panel for the comment
+        comment_info = (
+            f"[bold blue]Comment ID:[/bold blue] {target_comment.comment_id}\n"
+        )
+        comment_info += f"[bold blue]Author:[/bold blue] {target_comment.author}\n"
+        comment_info += f"[bold blue]Created:[/bold blue] {target_comment.created_at}\n"
+        comment_info += f"[bold blue]Updated:[/bold blue] {target_comment.updated_at}\n"
+        comment_info += (
+            f"[bold blue]File:[/bold blue] {target_comment.file_path or 'General'}\n"
+        )
+        comment_info += f"[bold blue]Priority:[/bold blue] {target_comment.priority}\n"
+        comment_info += f"[bold blue]Category:[/bold blue] {target_comment.category}\n"
+        comment_info += f"[bold blue]Status:[/bold blue] {'Resolved' if target_comment.is_resolved else 'Unresolved'}\n"
+        if target_comment.resolution_type:
             comment_info += (
-                f"[bold blue]Created:[/bold blue] {target_comment.created_at}\n"
+                f"[bold blue]Resolution:[/bold blue] {target_comment.resolution_type}\n"
             )
-            comment_info += (
-                f"[bold blue]Updated:[/bold blue] {target_comment.updated_at}\n"
-            )
-            comment_info += f"[bold blue]File:[/bold blue] {target_comment.file_path or 'General'}\n"
-            comment_info += (
-                f"[bold blue]Priority:[/bold blue] {target_comment.priority}\n"
-            )
-            comment_info += (
-                f"[bold blue]Category:[/bold blue] {target_comment.category}\n"
-            )
-            comment_info += f"[bold blue]Status:[/bold blue] {'Resolved' if target_comment.is_resolved else 'Unresolved'}\n"
-            if target_comment.resolution_type:
-                comment_info += f"[bold blue]Resolution:[/bold blue] {target_comment.resolution_type}\n"
-            if target_comment.auto_skip_reason:
-                comment_info += f"[bold blue]Auto-skip reason:[/bold blue] {target_comment.auto_skip_reason}\n"
-            if target_comment.url:
-                comment_info += f"[bold blue]URL:[/bold blue] {target_comment.url}\n"
+        if target_comment.auto_skip_reason:
+            comment_info += f"[bold blue]Auto-skip reason:[/bold blue] {target_comment.auto_skip_reason}\n"
+        if target_comment.url:
+            comment_info += f"[bold blue]URL:[/bold blue] {target_comment.url}\n"
 
-            info_panel = Panel(
-                comment_info.strip(), title="Comment Information", border_style="blue"
-            )
-            console.print(info_panel)
-            console.print()
+        info_panel = Panel(
+            comment_info.strip(), title="Comment Information", border_style="blue"
+        )
+        console.print(info_panel)
+        console.print()
 
-            # Display the comment body
-            body_panel = Panel(
-                target_comment.body, title="Comment Content", border_style="green"
-            )
-            console.print(body_panel)
-        else:
-            # Plain text fallback
-            print(f"Comment ID: {target_comment.comment_id}")
-            print(f"Author: {target_comment.author}")
-            print(f"Created: {target_comment.created_at}")
-            print(f"Updated: {target_comment.updated_at}")
-            print(f"File: {target_comment.file_path or 'General'}")
-            print(f"Priority: {target_comment.priority}")
-            print(f"Category: {target_comment.category}")
-            print(
-                f"Status: {'Resolved' if target_comment.is_resolved else 'Unresolved'}"
-            )
-            if target_comment.resolution_type:
-                print(f"Resolution: {target_comment.resolution_type}")
-            if target_comment.auto_skip_reason:
-                print(f"Auto-skip reason: {target_comment.auto_skip_reason}")
-            if target_comment.url:
-                print(f"URL: {target_comment.url}")
-            print("\n" + "=" * 80)
-            print("COMMENT CONTENT:")
-            print("=" * 80)
-            print(target_comment.body)
-            print("=" * 80)
+        # Display the comment body (escape Rich markup to prevent parsing errors)
+        from rich.text import Text
+
+        body_text = Text(target_comment.body, style="default")
+        body_panel = Panel(body_text, title="Comment Content", border_style="green")
+        console.print(body_panel)
         return
 
     # Validate PR number
@@ -1704,39 +1745,25 @@ Examples:
     all_comments = review_threads + pr_comments + review_comments
 
     if not all_comments:
-        if RICH_AVAILABLE:
-            console = Console()
-            console.print("[yellow]⚠️  No comments found for this PR[/yellow]")
-        else:
-            logger.warning("⚠️  No comments found for this PR")
+        console = Console()
+        console.print("[yellow]⚠️  No comments found for this PR[/yellow]")
         return
 
     # Process comments to extract metadata
-    if RICH_AVAILABLE:
-        console = Console()
-        console.print("[bold green]Processing comments...[/bold green]")
-        processed_comments = comment_processor.process_comments(all_comments)
-        console.print("[green]✅ Comments processed[/green]")
-    else:
-        processed_comments = comment_processor.process_comments(all_comments)
+    console = Console()
+    console.print("[bold green]Processing comments...[/bold green]")
+    processed_comments = comment_processor.process_comments(all_comments)
+    console.print("[green]✅ Comments processed[/green]")
 
-    # Automatically skip command and summary comments (they're not actionable review feedback)
-    command_comment_ids = [
-        comment.comment_id
+    # Automatically skip comments that match auto-skip rules (if not already resolved)
+    auto_skip_comments = [
+        comment
         for comment in processed_comments
-        if comment.category == "command"
+        if comment.auto_skip_reason and not comment.is_resolved
     ]
 
-    summary_comment_ids = [
-        comment.comment_id
-        for comment in processed_comments
-        if comment.category == "summary"
-    ]
-
-    # Skip both command and summary comments
-    auto_skip_ids = command_comment_ids + summary_comment_ids
-
-    if auto_skip_ids:
+    if auto_skip_comments:
+        auto_skip_ids = [comment.comment_id for comment in auto_skip_comments]
         resolution_manager.mark_skipped(auto_skip_ids)
 
     # Automatically resolve comments that have been addressed (contain "✅ Addressed")
@@ -1782,51 +1809,28 @@ Examples:
         json.dump(comments_data, f, indent=2)
 
     # Complete processing
-    if RICH_AVAILABLE:
-        console.print("[green]✅ Comments saved[/green]")
+    console.print("[green]✅ Comments saved[/green]")
 
     # Display comments using unified display
-    if RICH_AVAILABLE:
-        console = Console()
-        console.print(
-            f"[green]✅ Fetched {len(processed_comments)} comments for PR #{args.pr_number}[/green]"
-        )
-        console.print()
+    console.print(
+        f"[green]✅ Fetched {len(processed_comments)} comments for PR #{args.pr_number}[/green]"
+    )
+    console.print()
 
-        # Load existing resolution state and update comments
-        status_display = StatusDisplay(resolution_manager)
-        status_display.resolution_manager.update_comments_resolution_state(
-            processed_comments
-        )
+    # Load existing resolution state and update comments
+    status_display = StatusDisplay(resolution_manager)
+    status_display.resolution_manager.update_comments_resolution_state(
+        processed_comments
+    )
 
-        # Use unified display for fetch summary with actual resolution status
-        status_display._create_unified_table(
-            processed_comments, "📝 All Comments", show_summary=True
-        )
-        console.print()
-        console.print(
-            "[dim]💡 Use --status to see resolution status, --assess for guidance, --resolve/--skip to manage comments[/dim]"
-        )
-
-    else:
-        # Plain text fallback
-        logger.info(
-            f"✅ Fetched {len(processed_comments)} comments for PR #{args.pr_number}"
-        )
-        print("\n📊 Comment Summary:")
-        print(f"  Total: {len(processed_comments)}")
-        print(
-            f"  Major: {len([c for c in processed_comments if c.priority == 'major'])}"
-        )
-        print(
-            f"  Minor: {len([c for c in processed_comments if c.priority == 'minor'])}"
-        )
-        print(
-            f"  Trivial: {len([c for c in processed_comments if c.priority == 'trivial'])}"
-        )
-        print(
-            "\n💡 Use --status to see resolution status, --assess for guidance, --resolve/--skip to manage comments"
-        )
+    # Use unified display for fetch summary with actual resolution status
+    status_display._create_unified_table(
+        processed_comments, "📝 All Comments", show_summary=True
+    )
+    console.print()
+    console.print(
+        "[dim]💡 Use --status to see resolution status, --assess for guidance, --resolve/--skip to manage comments[/dim]"
+    )
 
 
 if __name__ == "__main__":
