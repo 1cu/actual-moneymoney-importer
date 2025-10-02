@@ -276,7 +276,7 @@ beforeEach(() => {
 - Central Zod schema (`configSchema`) describes the entire configuration
 - `budgetSchema` enforces end-to-end encryption requirements (password required when enabled)
 - `getConfig(argv)` handles missing files, TOML parsing, and schema validation
-- Maintain constants such as `DEFAULT_ACTUAL_REQUEST_TIMEOUT_MS` (5 minutes) and `FALLBACK_ACTUAL_REQUEST_TIMEOUT_MS` (45 seconds)
+- Maintain constants such as `DEFAULT_ACTUAL_REQUEST_TIMEOUT_MS` (5 minutes)
 
 ## Configuration and Validation Patterns
 

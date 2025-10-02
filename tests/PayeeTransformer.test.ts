@@ -149,8 +149,8 @@ describe('PayeeTransformer', () => {
 
         await secondTransformer.transformPayees(['Vendor B']);
 
-        // Each transformer instance has its own model cache, but with in-memory caching,
-        // the second call will use the cached result, so only 1 API call is made
+        // Model list is cached in memory across transformer instances,
+        // so only 1 API call is made despite creating two transformers
         expect(listMock).toHaveBeenCalledTimes(1);
     });
 

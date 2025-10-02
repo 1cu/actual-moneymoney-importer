@@ -91,6 +91,7 @@ class Comment:
     line_range: Optional[str] = None  # For compatibility with existing data
     has_code_changes: bool = False  # For compatibility with existing data
     auto_skip_reason: Optional[str] = None  # Auto-skip detection reason
+    thread_id: Optional[str] = None  # Thread ID for review comments
 
 
 @dataclass
@@ -562,6 +563,7 @@ class GitHubAPI:
                 "nodes"
             ]
             for thread in threads:
+                thread_id = thread["id"]  # Store the actual thread ID
                 thread_resolved = bool(thread.get("isResolved", False))
                 for comment_data in thread["comments"]["nodes"]:
                     comment = Comment(
@@ -576,6 +578,7 @@ class GitHubAPI:
                         url=comment_data["url"],
                         is_resolved=thread_resolved,
                         resolution_type=("resolved" if thread_resolved else None),
+                        thread_id=thread_id,  # Store the thread ID for resolution
                     )
                     comments.append(comment)
         except (KeyError, TypeError) as e:
@@ -639,13 +642,21 @@ class GitHubAPI:
             logger.error(f"❌ Error parsing review comments: {e}")
         return comments
 
-    def _comment_id_to_thread_id(self, comment_id: str) -> str:
-        """Convert comment ID to thread ID using GitHub's GraphQL node ID pattern"""
-        # GitHub GraphQL node IDs follow the pattern:
-        # Comment: PRRC_<suffix> -> Thread: PRT_<suffix>
-        if comment_id.startswith("PRRC_"):
-            return comment_id.replace("PRRC_", "PRT_", 1)
-        return comment_id
+    def _comment_id_to_thread_id(self, comment_id: str) -> Optional[str]:
+        """Get thread ID for a comment by looking it up in stored comment data"""
+        try:
+            # Load the cached comments to get the thread ID
+            comments_file = Path(f".local/pr-{self.pr_number}-comments.json")
+            if comments_file.exists():
+                with open(comments_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                for comment in data.get("comments", []):
+                    if comment.get("comment_id") == comment_id:
+                        return comment.get("thread_id")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not get thread ID for comment {comment_id}: {e}")
+        return None
 
     def _get_review_thread_node_id(self, comment_id: str) -> Optional[str]:
         """Get the GraphQL node ID for a review thread from a comment ID"""
@@ -672,10 +683,11 @@ class GitHubAPI:
                 return []
 
             # Create mapping from comment_id to thread_id for efficient lookup
-            comment_to_thread_mapping = {
-                comment_id: self._comment_id_to_thread_id(comment_id)
-                for comment_id in resolved_comments
-            }
+            comment_to_thread_mapping = {}
+            for comment_id in resolved_comments:
+                thread_id = self._comment_id_to_thread_id(comment_id)
+                if thread_id:
+                    comment_to_thread_mapping[comment_id] = thread_id
 
             # Resolve all threads in a single GraphQL mutation
             # Note: GraphQL doesn't support batch mutations, so we'll do them sequentially
@@ -902,7 +914,7 @@ class ResolutionManager:
     def __init__(self, pr_number: int):
         self.pr_number = pr_number
         self.resolution_file = Path(f".local/pr-{pr_number}-resolutions.json")
-        self.comments_file = Path(f".local/pr-{pr_number}-change-comments.json")
+        self.comments_file = Path(f".local/pr-{pr_number}-comments.json")
         self._ensure_local_dir()
 
     def _ensure_local_dir(self):
@@ -1052,7 +1064,7 @@ class ResolutionManager:
         """Determine the type of comment based on its ID and stored data"""
         try:
             # Load the cached comments to check the comment type
-            comments_file = Path(f".local/pr-{self.pr_number}-change-comments.json")
+            comments_file = Path(f".local/pr-{self.pr_number}-comments.json")
             if comments_file.exists():
                 with open(comments_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -1080,7 +1092,7 @@ class ResolutionManager:
         """Get the URL for a comment from cached data"""
         try:
             # Load the cached comments to get the URL
-            comments_file = Path(f".local/pr-{self.pr_number}-change-comments.json")
+            comments_file = Path(f".local/pr-{self.pr_number}-comments.json")
             if comments_file.exists():
                 with open(comments_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -1152,6 +1164,7 @@ class ResolutionManager:
                 "line_range": "line_range",
                 "has_code_changes": "has_code_changes",
                 "auto_skip_reason": "auto_skip_reason",
+                "thread_id": "thread_id",
             }
 
             # Default values to avoid repeated dict lookups
@@ -1501,7 +1514,7 @@ Examples:
             return
 
         resolution_files = list(local_dir.glob("pr-*-resolutions.json"))
-        comments_files = list(local_dir.glob("pr-*-change-comments.json"))
+        comments_files = list(local_dir.glob("pr-*-comments.json"))
 
         if not resolution_files and not comments_files:
             if RICH_AVAILABLE:
@@ -1751,6 +1764,7 @@ Examples:
                 "line_range": comment.line_range,
                 "has_code_changes": comment.has_code_changes,
                 "auto_skip_reason": getattr(comment, "auto_skip_reason", None),
+                "thread_id": getattr(comment, "thread_id", None),
             }
             for comment in processed_comments
         ],
