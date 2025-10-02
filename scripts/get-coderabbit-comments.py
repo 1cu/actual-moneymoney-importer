@@ -97,6 +97,7 @@ class GitHubAPI:
             # Try to get token from gh CLI
             try:
                 import subprocess
+
                 result = subprocess.run(
                     ["gh", "auth", "token"],
                     capture_output=True,
@@ -105,15 +106,22 @@ class GitHubAPI:
                     timeout=5,
                 )
                 token = result.stdout.strip()
-            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            except (
+                subprocess.CalledProcessError,
+                FileNotFoundError,
+                subprocess.TimeoutExpired,
+            ):
                 pass
 
         if not token:
-            logger.error("❌ No GitHub token found. Set GITHUB_TOKEN or run 'gh auth login'")
+            logger.error(
+                "❌ No GitHub token found. Set GITHUB_TOKEN or run 'gh auth login'"
+            )
             sys.exit(1)
 
         try:
             from github import Auth
+
             auth = Auth.Token(token)
             self.github = Github(auth=auth)
             # Test the connection
@@ -127,6 +135,7 @@ class GitHubAPI:
         """Detect repository from git remote with CI fallbacks"""
         try:
             import subprocess
+
             result = subprocess.run(
                 ["git", "remote", "get-url", "origin"],
                 capture_output=True,
@@ -199,10 +208,13 @@ class GitHubAPI:
 
             # Fetch all three types in parallel for better performance
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                 review_future = executor.submit(self._fetch_review_threads_pygithub, pr)
                 pr_future = executor.submit(self._fetch_pr_comments_pygithub, pr)
-                review_comments_future = executor.submit(self._fetch_review_comments_pygithub, pr)
+                review_comments_future = executor.submit(
+                    self._fetch_review_comments_pygithub, pr
+                )
 
                 # Wait for all to complete
                 review_threads = review_future.result()
@@ -572,8 +584,10 @@ class ResolutionManager:
         self.save_resolution_state(state)
 
         # Store change info for status display
-        self._session_changes = getattr(self, '_session_changes', {})
-        self._session_changes['newly_resolved'] = self._session_changes.get('newly_resolved', 0) + len(newly_resolved)
+        self._session_changes = getattr(self, "_session_changes", {})
+        self._session_changes["newly_resolved"] = self._session_changes.get(
+            "newly_resolved", 0
+        ) + len(newly_resolved)
 
         if RICH_AVAILABLE:
             console = Console()
@@ -609,8 +623,10 @@ class ResolutionManager:
         self.save_resolution_state(state)
 
         # Store change info for status display
-        self._session_changes = getattr(self, '_session_changes', {})
-        self._session_changes['newly_skipped'] = self._session_changes.get('newly_skipped', 0) + len(newly_skipped)
+        self._session_changes = getattr(self, "_session_changes", {})
+        self._session_changes["newly_skipped"] = self._session_changes.get(
+            "newly_skipped", 0
+        ) + len(newly_skipped)
 
         if RICH_AVAILABLE:
             console = Console()
@@ -741,13 +757,20 @@ class StatusDisplay:
             summary_text += f"[bold]Progress:[/bold] {progress}%"
 
             # Add session changes if available
-            if hasattr(self.resolution_manager, '_session_changes') and self.resolution_manager._session_changes:
+            if (
+                hasattr(self.resolution_manager, "_session_changes")
+                and self.resolution_manager._session_changes
+            ):
                 changes = self.resolution_manager._session_changes
                 summary_text += "\n\n[bold cyan]📈 This Session:[/bold cyan]"
-                if changes.get('newly_resolved', 0) > 0:
-                    summary_text += f"\n[green]+{changes['newly_resolved']} newly resolved[/green]"
-                if changes.get('newly_skipped', 0) > 0:
-                    summary_text += f"\n[yellow]+{changes['newly_skipped']} newly skipped[/yellow]"
+                if changes.get("newly_resolved", 0) > 0:
+                    summary_text += (
+                        f"\n[green]+{changes['newly_resolved']} newly resolved[/green]"
+                    )
+                if changes.get("newly_skipped", 0) > 0:
+                    summary_text += (
+                        f"\n[yellow]+{changes['newly_skipped']} newly skipped[/yellow]"
+                    )
 
             # Check for auto-skip suggestions
             auto_skip_comments = [
@@ -788,12 +811,15 @@ class StatusDisplay:
             print(f"Progress: {progress}%")
 
             # Add session changes if available
-            if hasattr(self.resolution_manager, '_session_changes') and self.resolution_manager._session_changes:
+            if (
+                hasattr(self.resolution_manager, "_session_changes")
+                and self.resolution_manager._session_changes
+            ):
                 changes = self.resolution_manager._session_changes
                 print("\n📈 This Session:")
-                if changes.get('newly_resolved', 0) > 0:
+                if changes.get("newly_resolved", 0) > 0:
                     print(f"+{changes['newly_resolved']} newly resolved")
-                if changes.get('newly_skipped', 0) > 0:
+                if changes.get("newly_skipped", 0) > 0:
                     print(f"+{changes['newly_skipped']} newly skipped")
             print()
 
@@ -905,7 +931,9 @@ class StatusDisplay:
                     "[red]❌ Error: No comments found. Run without --status first to fetch comments.[/red]"
                 )
             else:
-                print("❌ Error: No comments found. Run without --status first to fetch comments.")
+                print(
+                    "❌ Error: No comments found. Run without --status first to fetch comments."
+                )
             return
 
         # Update comments with resolution state
@@ -932,7 +960,9 @@ class StatusDisplay:
                     "[red]❌ Error: No comments found. Run without --show first to fetch comments.[/red]"
                 )
             else:
-                print("❌ Error: No comments found. Run without --show first to fetch comments.")
+                print(
+                    "❌ Error: No comments found. Run without --show first to fetch comments."
+                )
             return
 
         # Find the comment
@@ -970,9 +1000,7 @@ class StatusDisplay:
 
             # Comment body
             body_panel = Panel(
-                target_comment.body,
-                title="Comment Content",
-                border_style="green"
+                target_comment.body, title="Comment Content", border_style="green"
             )
             self.console.print(body_panel)
         else:
@@ -1140,7 +1168,9 @@ Examples:
                 f"[green]✅ {success_count}/{len(thread_ids)} review threads resolved on GitHub[/green]"
             )
         else:
-            logger.info(f"✅ {success_count}/{len(thread_ids)} review threads resolved on GitHub")
+            logger.info(
+                f"✅ {success_count}/{len(thread_ids)} review threads resolved on GitHub"
+            )
         return
 
     if args.github_unresolve:
@@ -1156,7 +1186,9 @@ Examples:
                 f"[yellow]⏭️ {success_count}/{len(thread_ids)} review threads unresolved on GitHub[/yellow]"
             )
         else:
-            logger.info(f"⏭️ {success_count}/{len(thread_ids)} review threads unresolved on GitHub")
+            logger.info(
+                f"⏭️ {success_count}/{len(thread_ids)} review threads unresolved on GitHub"
+            )
         return
 
     # Handle status commands
