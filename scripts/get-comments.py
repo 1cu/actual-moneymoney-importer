@@ -1332,11 +1332,12 @@ class StatusDisplay:
         for comment in unresolved_comments:
             all_comments.append((comment, "❌ Unresolved"))
 
-        # Sort by status (resolved, skipped, unresolved) then by date
+        # Sort by status (resolved, skipped, unresolved) then by date then by file_path
         def sort_key(item):
             comment, status = item
             status_order = {"✅ Resolved": 0, "⏭️ Skipped": 1, "❌ Unresolved": 2}
-            return (status_order.get(status, 3), comment.created_at)
+            file_path = comment.file_path or ""
+            return (status_order.get(status, 3), comment.created_at, file_path)
 
         all_comments.sort(key=sort_key)
 
