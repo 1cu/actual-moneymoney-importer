@@ -153,8 +153,6 @@
 
 **Remember**: The best code is code that doesn't exist. Delete over refactor, inline over abstract, simplify over optimize.
 
-For detailed guidance, see [`.cursor/rules/coderabbit-comment-handling.mdc`](.cursor/rules/coderabbit-comment-handling.mdc).
-
 ## Testing expectations
 
 - Add or update Vitest coverage in `tests/` whenever changing behaviour

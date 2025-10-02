@@ -73,34 +73,39 @@ All changes must pass:
 
 ### **Automated Comment Processing**
 
-The project includes a sophisticated comment processing script (`scripts/get-coderabbit-comments.py`) that:
+The project includes a sophisticated comment processing script (`scripts/get-comments.py`) that:
 
 - **Fetches comments** from GitHub PRs using the GitHub CLI
 - **Categorizes comments** by type (issue, refactor, nitpick, command, summary)
 - **Extracts metadata** (priority, file path, author, dates)
 - **Provides assessment guidance** for unresolved comments
 - **Manages resolution state** (resolved, skipped, unresolved)
+- **Auto-skip detection** for non-actionable comments
+- **Batch processing** for large PRs
 
 ### **Usage Commands**
 
 ```bash
 # Show all comments with status
-python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --status
+python3 scripts/get-comments.py <PR_NUMBER> --status
 
 # Show only unresolved comments
-python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --status-unresolved
-
-# Show full content of a specific comment
-python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --show <COMMENT_ID>
+python3 scripts/get-comments.py <PR_NUMBER> --status-unresolved
 
 # Show assessment guidance for unresolved comments
-python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --assess
+python3 scripts/get-comments.py <PR_NUMBER> --assess
+
+# Show full content of a specific comment
+python3 scripts/get-comments.py <PR_NUMBER> --show <COMMENT_ID>
 
 # Mark comments as resolved (fixed)
-python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --resolve <COMMENT_ID1>,<COMMENT_ID2>
+python3 scripts/get-comments.py <PR_NUMBER> --resolve <COMMENT_ID1>,<COMMENT_ID2>
 
 # Mark comments as skipped (ignored)
-python3 scripts/get-coderabbit-comments.py <PR_NUMBER> --skip <COMMENT_ID1>,<COMMENT_ID2>
+python3 scripts/get-comments.py <PR_NUMBER> --skip <COMMENT_ID1>,<COMMENT_ID2>
+
+# Archive all PR data files
+python3 scripts/get-comments.py --cleanup
 ```
 
 ### **Assessment Guidance System**
@@ -142,11 +147,11 @@ The script provides intelligent assessment guidance:
 ### **Decision Process**
 
 1. **Read the comment content** - Use `--show <COMMENT_ID>` to view full details
-2. **Use assessment guidance** - The script provides intelligent recommendations
-3. **Question every suggestion** - Is this fix truly necessary?
-4. **Consider complexity** - Does it add unnecessary complexity?
-5. **Look for simpler solutions** - Can this be solved more simply?
-6. **Follow project guidelines** - Does it align with complexity prevention?
+1. **Use assessment guidance** - The script provides intelligent recommendations
+1. **Question every suggestion** - Is this fix truly necessary?
+1. **Consider complexity** - Does it add unnecessary complexity?
+1. **Look for simpler solutions** - Can this be solved more simply?
+1. **Follow project guidelines** - Does it align with complexity prevention?
 
 ### **Anti-Patterns to Avoid**
 
@@ -167,5 +172,3 @@ The script provides intelligent assessment guidance:
 - **Evaluate each comment individually** based on content and context
 
 **Remember**: The best code is code that doesn't exist. Delete over refactor, inline over abstract, simplify over optimize.
-
-For detailed guidance, see [`.cursor/rules/coderabbit-comment-handling.mdc`](.cursor/rules/coderabbit-comment-handling.mdc).
