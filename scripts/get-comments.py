@@ -1314,6 +1314,9 @@ class StatusDisplay:
                     print(f"• {comment.comment_id}: {comment.auto_skip_reason}")
                 print()
 
+        # Create processor once if needed for assessment
+        processor = CommentProcessor() if show_assessment else None
+
         # Combine all comments with status
         all_comments = []
 
@@ -1386,8 +1389,7 @@ class StatusDisplay:
                     date_str = comment.created_at.split("T")[0]  # Just the date part
 
                     # Add assessment guidance for unresolved comments
-                    if status == "❌ Unresolved" and show_assessment:
-                        processor = CommentProcessor()
+                    if status == "❌ Unresolved" and processor:
                         assessment = processor.assess_comment_for_action(comment)
                         file_path = f"{file_path}\n[dim]{assessment}[/dim]"
 

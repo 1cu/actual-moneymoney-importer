@@ -12,7 +12,7 @@
 
 - Export a default `CommandModule<ArgumentsCamelCase>`
 - Keep handlers async and delegate to a `handle*` helper to keep the exported module lightweight
-- Always resolve configuration via `getConfig(argv)` so shared CLI flags stay consistent
+- Always resolve configuration via `loadConfig(argv)` so shared CLI flags stay consistent
 - Instantiate `Logger` with the requested log level and reuse it for all logging
 
 ### Command Module Structure
@@ -275,7 +275,7 @@ beforeEach(() => {
 
 - Central Zod schema (`configSchema`) describes the entire configuration
 - `budgetSchema` enforces end-to-end encryption requirements (password required when enabled)
-- `getConfig(argv)` handles missing files, TOML parsing, and schema validation
+- `loadConfig(argv)` handles missing files, TOML parsing, and schema validation
 - Maintain constants such as `DEFAULT_ACTUAL_REQUEST_TIMEOUT_MS` (5 minutes)
 
 ## Configuration and Validation Patterns
