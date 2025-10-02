@@ -876,6 +876,31 @@ class CommentProcessor:
         ):
             return "metadata_only"
 
+        # Skip CodeRabbit review summary comments with actionable count (check this first)
+        if (
+            "actionable comments posted" in body_lower
+            and "review details" in body_lower
+            and "configuration used" in body_lower
+            and ("plan:" in body_lower or "plan: pro" in body_lower or "review profile" in body_lower)
+        ):
+            return "review_summary_meta"
+
+        # Skip CodeRabbit review status comments
+        if (
+            "this is an auto-generated comment by coderabbit" in body_lower
+            and "review status" in body_lower
+        ):
+            return "coderabbit_review_status"
+
+        # Skip review summaries that contain learnings and configuration but are meta-comments
+        if (
+            "learnings" in body_lower
+            and "configuration" in body_lower
+            and "files selected for processing" in body_lower
+            and "additional context used" in body_lower
+        ):
+            return "review_summary_with_context"
+
         return None
 
     def assess_comment_for_action(self, comment: Comment) -> str:
