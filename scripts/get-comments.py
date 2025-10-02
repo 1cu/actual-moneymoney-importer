@@ -1078,6 +1078,8 @@ class ResolutionManager:
                         if "discussion_r" in url:
                             if position is not None:
                                 return "review_comment"  # Line-specific comment
+                            elif comment.get("thread_id"):
+                                return "review_comment"  # Has thread_id, can be resolved on GitHub
                             else:
                                 return "review_body"  # Review body comment
                         else:
