@@ -113,24 +113,28 @@ The script provides intelligent assessment guidance:
 ### **Evaluation Framework**
 
 1. **🔴 CRITICAL - Must Fix:**
-    - Security vulnerabilities (credential exposure, data leaks)
-    - Data integrity issues (silent data loss, corruption)
-    - System stability (crashes, infinite loops)
+
+- Security vulnerabilities (credential exposure, data leaks)
+- Data integrity issues (silent data loss, corruption)
+- System stability (crashes, infinite loops)
 
 1. **🟠 MAJOR - Should Fix:**
-    - Missing error handling for external service calls
-    - Resilience improvements with simple fallback mechanisms
-    - User experience improvements (clear error messages)
+
+- Missing error handling for external service calls
+- Resilience improvements with simple fallback mechanisms
+- User experience improvements (clear error messages)
 
 1. **🟡 MINOR - Nice to Have:**
-    - Error message clarity improvements
-    - Documentation and code comments
-    - Additional debug logging (when valuable)
+
+- Error message clarity improvements
+- Documentation and code comments
+- Additional debug logging (when valuable)
 
 1. **🔵 TRIVIAL - Evaluate:**
-    - Configuration file improvements (often simple fixes)
-    - Code style suggestions (evaluate based on content)
-    - Documentation updates (assess value vs. effort)
+
+- Configuration file improvements (often simple fixes)
+- Code style suggestions (evaluate based on content)
+- Documentation updates (assess value vs. effort)
 
 ### **Decision Process**
 

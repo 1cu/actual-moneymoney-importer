@@ -77,7 +77,7 @@
 
 - Integrates with the OpenAI API to normalise payee names
 - Validate configuration in the constructor (require `openAiApiKey` when enabled)
-- Cache model lookups on disk and keep the in-memory `transformationCache` for repeated payees
+- Reuse the in-memory `transformationCache` for repeated payees; no disk cache is required after the simplification
 - Respect the masking configuration when logging payee names
 
 ### `types/`
