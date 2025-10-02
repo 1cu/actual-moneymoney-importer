@@ -13,8 +13,6 @@ Examples:
     python3 get-coderabbit-comments.py 123 --show COMMENT_ID
     python3 get-coderabbit-comments.py 123 --resolve COMMENT_ID1,COMMENT_ID2
     python3 get-coderabbit-comments.py 123 --skip COMMENT_ID1,COMMENT_ID2
-    python3 get-coderabbit-comments.py 123 --github-resolve THREAD_ID1,THREAD_ID2
-    python3 get-coderabbit-comments.py 123 --github-unresolve THREAD_ID1,THREAD_ID2
 """
 
 import argparse
@@ -22,15 +20,13 @@ import json
 import os
 import re
 import sys
+import subprocess
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
-
-from github import Github
-from github.GithubException import GithubException
 
 try:
     from rich.console import Console
@@ -47,15 +43,43 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
+# Constants for magic numbers
+class Constants:
+    """Constants to unify magic numbers throughout the script"""
+
+    # Unified values
+    TIMEOUT = 30  # Single timeout for all operations
+    BATCH_SIZE = 100  # Single batch size for all operations
+    MAX_WORKERS = 3  # Single thread pool size
+    GRAPHQL_LIMIT = 100  # Single GraphQL limit for all queries
+
+    # Thresholds
+    LARGE_PR_THRESHOLD = 100
+    PARALLEL_PROCESSING_THRESHOLD = 10
+
+    # Display settings
+    TABLE_COLUMN_WIDTHS = {
+        "status": 12,
+        "priority": 8,
+        "category": 10,
+        "author": 12,
+        "date": 10,
+    }
+
+    # Progress calculation
+    PROGRESS_PERCENTAGE_BASE = 100
+
+
 @dataclass
 class Comment:
     """Represents a GitHub PR comment"""
 
-    comment_id: str
+    comment_id: str  # GraphQL node ID (e.g., PRRC_kwDOOQ6Yxs6Ooaqh)
     body: str
     author: str
     created_at: str
     updated_at: str
+    database_id: Optional[int] = None  # Integer database ID (e.g., 2392959649)
     file_path: Optional[str] = None  # Primary field for file path
     position: Optional[int] = None
     url: str = ""
@@ -79,69 +103,24 @@ class ResolutionState:
 
 
 class GitHubAPI:
-    """Handles GitHub API interactions using PyGithub"""
+    """Handles GitHub API interactions"""
 
-    def __init__(self):
+    def __init__(self, pr_number: Optional[str] = None):
         self.owner = ""
         self.repo = ""
-        self.github = None
-        self.repository = None
-        self._initialize_github()
+        self.pr_number = pr_number
+        self._thread_mapping = None  # Cache for comment_id -> thread_id mapping
         self._detect_repository()
-
-    def _initialize_github(self):
-        """Initialize GitHub API client"""
-        # Try to get token from environment or GitHub CLI
-        token = os.getenv("GITHUB_TOKEN")
-        if not token:
-            # Try to get token from gh CLI
-            try:
-                import subprocess
-
-                result = subprocess.run(
-                    ["gh", "auth", "token"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=5,
-                )
-                token = result.stdout.strip()
-            except (
-                subprocess.CalledProcessError,
-                FileNotFoundError,
-                subprocess.TimeoutExpired,
-            ):
-                pass
-
-        if not token:
-            logger.error(
-                "❌ No GitHub token found. Set GITHUB_TOKEN or run 'gh auth login'"
-            )
-            sys.exit(1)
-
-        try:
-            from github import Auth
-
-            auth = Auth.Token(token)
-            self.github = Github(auth=auth)
-            # Test the connection
-            self.github.get_user().login
-            logger.info("🔍 GitHub API authenticated successfully")
-        except GithubException as e:
-            logger.error(f"❌ GitHub authentication failed: {e}")
-            sys.exit(1)
 
     def _detect_repository(self):
         """Detect repository from git remote with CI fallbacks"""
         try:
-            import subprocess
-
             result = subprocess.run(
                 ["git", "remote", "get-url", "origin"],
                 capture_output=True,
                 text=True,
                 check=True,
-                timeout=5,
+                timeout=Constants.TIMEOUT,
             )
             url = result.stdout.strip()
             if "github.com" in url:
@@ -183,171 +162,569 @@ class GitHubAPI:
                     f"🔍 Detected repository from GITHUB_REPOSITORY: {self.owner}/{self.repo}"
                 )
                 return
-            sys.exit(1)
-
-        # Initialize repository object
-        try:
-            self.repository = self.github.get_repo(f"{self.owner}/{self.repo}")
-        except GithubException as e:
-            logger.error(f"❌ Error accessing repository {self.owner}/{self.repo}: {e}")
+            # Try gh CLI as fallback
+            try:
+                result = subprocess.run(
+                    ["gh", "repo", "view", "--json", "owner,name"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=Constants.TIMEOUT,
+                )
+                repo_data = json.loads(result.stdout)
+                self.owner = repo_data["owner"]["login"]
+                self.repo = repo_data["name"]
+                logger.info(
+                    f"🔍 Detected repository from gh CLI: {self.owner}/{self.repo}"
+                )
+                return
+            except (
+                subprocess.CalledProcessError,
+                ValueError,
+                FileNotFoundError,
+                subprocess.TimeoutExpired,
+                OSError,
+                json.JSONDecodeError,
+            ) as gh_error:
+                logger.error(f"❌ gh CLI fallback also failed: {gh_error}")
             sys.exit(1)
 
     def fetch_comments(
         self, pr_number: int
     ) -> Tuple[List[Comment], List[Comment], List[Comment]]:
-        """Fetch comments from GitHub API using PyGithub"""
+        """Fetch comments from GitHub API"""
+        import concurrent.futures
+
         if RICH_AVAILABLE:
             console = Console()
             console.print("[bold blue]Fetching comments...[/bold blue]")
         else:
             logger.info(f"Fetching comments for PR #{pr_number}...")
 
+        # Fetch all three types in parallel for better performance
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=Constants.MAX_WORKERS
+        ) as executor:
+            review_future = executor.submit(self._fetch_review_threads, pr_number)
+            pr_future = executor.submit(self._fetch_pr_comments, pr_number)
+            review_comments_future = executor.submit(
+                self._fetch_review_comments, pr_number
+            )
+
+            # Wait for all to complete
+            review_threads = review_future.result()
+            pr_comments = pr_future.result()
+            review_comments = review_comments_future.result()
+
+        if RICH_AVAILABLE:
+            console.print("[green]✅ Comments fetched[/green]")
+        else:
+            logger.info("✅ Comments fetched")
+
+        return review_threads, pr_comments, review_comments
+
+    def _fetch_review_threads(self, pr_number: int) -> List[Comment]:
+        """Fetch review threads using GitHub CLI with batch processing for large PRs"""
+        # First, check if this is a large PR
+        count_query = """
+        query($owner:String!, $name:String!, $number:Int!) {
+          repository(owner:$owner, name:$name) {
+            pullRequest(number:$number) {
+              reviewThreads(first:1) { totalCount }
+            }
+          }
+        }
+        """
+
         try:
-            # Get the pull request
-            pr = self.repository.get_pull(pr_number)
+            result = subprocess.run(
+                [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "-F",
+                    f"query={count_query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=Constants.TIMEOUT,
+            )
 
-            # Fetch all three types in parallel for better performance
-            import concurrent.futures
+            data = json.loads(result.stdout)
+            total_count = data["data"]["repository"]["pullRequest"]["reviewThreads"][
+                "totalCount"
+            ]
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                review_future = executor.submit(self._fetch_review_threads_pygithub, pr)
-                pr_future = executor.submit(self._fetch_pr_comments_pygithub, pr)
-                review_comments_future = executor.submit(
-                    self._fetch_review_comments_pygithub, pr
+            if total_count > Constants.LARGE_PR_THRESHOLD:
+                logger.warning(
+                    f"⚠️ Large PR detected: {total_count} review threads. Using batch processing..."
                 )
-
-                # Wait for all to complete
-                review_threads = review_future.result()
-                pr_comments = pr_future.result()
-                review_comments = review_comments_future.result()
-
-            if RICH_AVAILABLE:
-                console.print("[green]✅ Comments fetched[/green]")
+                return self._fetch_review_threads_batched(pr_number, total_count)
             else:
-                logger.info("✅ Comments fetched")
+                return self._fetch_review_threads_single(pr_number)
 
-            return review_threads, pr_comments, review_comments
+        except Exception as e:
+            logger.warning(f"⚠️ Could not check PR size, using single fetch: {e}")
+            return self._fetch_review_threads_single(pr_number)
 
-        except GithubException as e:
-            logger.error(f"❌ Error fetching PR #{pr_number}: {e}")
-            return [], [], []
+    def _fetch_review_threads_single(self, pr_number: int) -> List[Comment]:
+        """Fetch review threads in a single query (for smaller PRs)"""
+        query = """
+        query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
+          repository(owner:$owner, name:$name) {
+            pullRequest(number:$number) {
+              reviewThreads(first:%d, after:$cursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  id
+                  isResolved
+                  comments(first:%d) {
+                    nodes {
+                      id
+                      databaseId
+                      body path position url createdAt updatedAt
+                      author { login }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """ % (Constants.GRAPHQL_LIMIT, Constants.GRAPHQL_LIMIT)
 
-    def _fetch_review_threads_pygithub(self, pr) -> List[Comment]:
-        """Fetch review threads using PyGithub (using review comments with thread info)"""
-        comments = []
         try:
-            # PyGithub does not have a direct get_review_threads method.
-            # We iterate through review comments and infer thread resolution.
-            for review_comment in pr.get_review_comments():
-                thread_resolved = False
-                # Check if the comment belongs to a resolved thread
-                if (
-                    hasattr(review_comment, "pull_request_review_thread")
-                    and review_comment.pull_request_review_thread
-                ):
-                    thread_resolved = (
-                        review_comment.pull_request_review_thread.is_resolved
-                    )
+            result = subprocess.run(
+                [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "--paginate",
+                    "-F",
+                    f"query={query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=Constants.TIMEOUT,
+            )
 
-                comment_obj = Comment(
-                    comment_id=str(review_comment.id),
-                    body=review_comment.body,
-                    author=review_comment.user.login,
-                    created_at=review_comment.created_at.isoformat(),
-                    updated_at=review_comment.updated_at.isoformat(),
-                    file_path=review_comment.path,
-                    position=review_comment.position,
-                    url=review_comment.html_url,
-                    is_resolved=thread_resolved,
-                    resolution_type=("resolved" if thread_resolved else None),
+            data = json.loads(result.stdout)
+            return self._parse_review_threads(data)
+        except (
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as e:
+            logger.error(f"❌ Error fetching review threads: {e}")
+            return []
+
+    def _fetch_review_threads_batched(
+        self, pr_number: int, total_count: int
+    ) -> List[Comment]:
+        """Fetch review threads in batches for large PRs"""
+        all_comments: List[Comment] = []
+        batch_size = Constants.BATCH_SIZE
+        cursor = None
+
+        logger.info(
+            f"📦 Fetching {total_count} review threads in batches of {batch_size}..."
+        )
+
+        while len(all_comments) < total_count:
+            query = """
+            query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
+              repository(owner:$owner, name:$name) {
+                pullRequest(number:$number) {
+                  reviewThreads(first:%d, after:$cursor) {
+                    pageInfo { hasNextPage endCursor }
+                    nodes {
+                      id
+                      isResolved
+                      comments(first:%d) {
+                        nodes {
+                          id
+                          databaseId
+                          body path position url createdAt updatedAt
+                          author { login }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """ % (batch_size, Constants.GRAPHQL_LIMIT)
+
+            try:
+                cmd = [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "-F",
+                    f"query={query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ]
+                if cursor:
+                    cmd.extend(["-F", f"cursor={cursor}"])
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=Constants.TIMEOUT,
                 )
-                comments.append(comment_obj)
-        except GithubException as e:
-            logger.error(f"❌ Error fetching review threads (via comments): {e}")
-        return comments
 
-    def _fetch_pr_comments_pygithub(self, pr) -> List[Comment]:
-        """Fetch PR comments (issue comments) using PyGithub"""
-        comments = []
+                data = json.loads(result.stdout)
+                threads = data["data"]["repository"]["pullRequest"]["reviewThreads"][
+                    "nodes"
+                ]
+                page_info = data["data"]["repository"]["pullRequest"]["reviewThreads"][
+                    "pageInfo"
+                ]
+
+                # Parse this batch
+                batch_comments = self._parse_review_threads(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {"reviewThreads": {"nodes": threads}}
+                            }
+                        }
+                    }
+                )
+                all_comments.extend(batch_comments)
+
+                logger.info(
+                    f"📦 Fetched {len(batch_comments)} comments from batch ({len(all_comments)}/{total_count} total)"
+                )
+
+                if not page_info["hasNextPage"]:
+                    break
+
+                cursor = page_info["endCursor"]
+
+            except Exception as e:
+                logger.error(f"❌ Error in batch processing: {e}")
+                break
+
+        logger.info(
+            f"✅ Batch processing complete: {len(all_comments)} comments fetched"
+        )
+        return all_comments
+
+    def _fetch_pr_comments(self, pr_number: int) -> List[Comment]:
+        """Fetch PR comments using GitHub CLI"""
+        query = (
+            """
+        query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
+          repository(owner:$owner, name:$name) {
+            pullRequest(number:$number) {
+              comments(first:%d, after:$cursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  id
+                  databaseId
+                  body url createdAt updatedAt
+                  author { login }
+                }
+              }
+            }
+          }
+        }
+        """
+            % Constants.GRAPHQL_LIMIT
+        )
+
         try:
-            # Get issue comments (these are top-level PR comments, not tied to specific lines)
-            for comment in pr.get_issue_comments():
-                comment_obj = Comment(
-                    comment_id=str(comment.id),
-                    body=comment.body,
-                    author=comment.user.login,
-                    created_at=comment.created_at.isoformat(),
-                    updated_at=comment.updated_at.isoformat(),
-                    url=comment.html_url,
-                )
-                comments.append(comment_obj)
-        except GithubException as e:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "--paginate",
+                    "-F",
+                    f"query={query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=Constants.TIMEOUT,
+            )
+
+            data = json.loads(result.stdout)
+            return self._parse_pr_comments(data)
+        except (
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as e:
             logger.error(f"❌ Error fetching PR comments: {e}")
-        return comments
+            return []
 
-    def _fetch_review_comments_pygithub(self, pr) -> List[Comment]:
-        """Fetch review comments (line-specific comments within reviews) using PyGithub"""
+    def _fetch_review_comments(self, pr_number: int) -> List[Comment]:
+        """Fetch review comments (outside diff range) using GitHub CLI"""
+        query = """
+        query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
+          repository(owner:$owner, name:$name) {
+            pullRequest(number:$number) {
+              reviews(first:%d, after:$cursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  id
+                  body
+                  url
+                  createdAt
+                  updatedAt
+                  author { login }
+                  comments(first:%d) {
+                    nodes {
+                      id
+                      databaseId
+                      body
+                      url
+                      createdAt
+                      updatedAt
+                      author { login }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """ % (Constants.GRAPHQL_LIMIT, Constants.GRAPHQL_LIMIT)
+
+        try:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "api",
+                    "graphql",
+                    "--paginate",
+                    "-F",
+                    f"query={query}",
+                    "-F",
+                    f"owner={self.owner}",
+                    "-F",
+                    f"name={self.repo}",
+                    "-F",
+                    f"number={int(pr_number)}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=Constants.TIMEOUT,
+            )
+
+            data = json.loads(result.stdout)
+            return self._parse_review_comments(data)
+        except (
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as e:
+            logger.error(f"❌ Error fetching review comments: {e}")
+            return []
+
+    def _parse_review_threads(self, data: Dict[str, Any]) -> List[Comment]:
+        """Parse review threads data"""
         comments = []
         try:
-            # Get review comments directly from the pull request
-            # These are the comments made on specific lines of code within a review
-            for comment in pr.get_review_comments():
-                comment_obj = Comment(
-                    comment_id=str(comment.id),
-                    body=comment.body,
-                    author=comment.user.login,
-                    created_at=comment.created_at.isoformat(),
-                    updated_at=comment.updated_at.isoformat(),
-                    file_path=comment.path,
-                    position=comment.position,
-                    url=comment.html_url,
-                    # Review comments themselves don't have a direct 'is_resolved' status
-                    # Their resolution is tied to the thread they belong to, which is handled in _fetch_review_threads_pygithub
-                    is_resolved=False,
-                    resolution_type=None,
-                )
-                comments.append(comment_obj)
-
-            # Additionally, fetch comments from reviews themselves (the overall review body)
-            for review in pr.get_reviews():
-                if review.body and review.body.strip():
-                    comment_obj = Comment(
-                        comment_id=str(review.id),  # Use review ID for review body
-                        body=review.body,
-                        author=review.user.login,
-                        created_at=review.submitted_at.isoformat(),
-                        updated_at=review.submitted_at.isoformat(),
-                        url=review.html_url,
-                        is_resolved=False,  # Review bodies are not "resolved" in the same way
-                        resolution_type=None,
+            threads = data["data"]["repository"]["pullRequest"]["reviewThreads"][
+                "nodes"
+            ]
+            for thread in threads:
+                thread_resolved = bool(thread.get("isResolved", False))
+                for comment_data in thread["comments"]["nodes"]:
+                    comment = Comment(
+                        comment_id=comment_data["id"],
+                        database_id=comment_data.get("databaseId"),
+                        body=comment_data["body"],
+                        author=comment_data["author"]["login"],
+                        created_at=comment_data["createdAt"],
+                        updated_at=comment_data["updatedAt"],
+                        file_path=comment_data.get("path"),
+                        position=comment_data.get("position"),
+                        url=comment_data["url"],
+                        is_resolved=thread_resolved,
+                        resolution_type=("resolved" if thread_resolved else None),
                     )
-                    comments.append(comment_obj)
-
-        except GithubException as e:
-            logger.error(f"❌ Error fetching review comments: {e}")
+                    comments.append(comment)
+        except (KeyError, TypeError) as e:
+            logger.error(f"❌ Error parsing review threads: {e}")
         return comments
 
-    def resolve_review_thread(self, thread_id: str) -> bool:
-        """Resolve a review thread directly on GitHub using PyGithub"""
+    def _parse_pr_comments(self, data: Dict[str, Any]) -> List[Comment]:
+        """Parse PR comments data"""
+        comments = []
         try:
-            # Get the review thread
-            thread = self.github.get_review_thread(thread_id)
-            thread.resolve()
-            return True
-        except GithubException as e:
-            logger.error(f"❌ Error resolving review thread {thread_id}: {e}")
-            return False
+            comments_data = data["data"]["repository"]["pullRequest"]["comments"][
+                "nodes"
+            ]
+            for comment_data in comments_data:
+                comment = Comment(
+                    comment_id=comment_data["id"],
+                    database_id=comment_data.get("databaseId"),
+                    body=comment_data["body"],
+                    author=comment_data["author"]["login"],
+                    created_at=comment_data["createdAt"],
+                    updated_at=comment_data["updatedAt"],
+                    url=comment_data["url"],
+                )
+                comments.append(comment)
+        except (KeyError, TypeError) as e:
+            logger.error(f"❌ Error parsing PR comments: {e}")
+        return comments
 
-    def unresolve_review_thread(self, thread_id: str) -> bool:
-        """Unresolve a review thread directly on GitHub using PyGithub"""
+    def _parse_review_comments(self, data: Dict[str, Any]) -> List[Comment]:
+        """Parse review comments data (outside diff range)"""
+        comments = []
         try:
-            # Get the review thread
-            thread = self.github.get_review_thread(thread_id)
-            thread.unresolve()
-            return True
-        except GithubException as e:
-            logger.error(f"❌ Error unresolving review thread {thread_id}: {e}")
-            return False
+            reviews_data = data["data"]["repository"]["pullRequest"]["reviews"]["nodes"]
+            for review in reviews_data:
+                # Add the review body as a comment if it exists
+                if review.get("body") and review["body"].strip():
+                    comment = Comment(
+                        comment_id=review["id"],
+                        database_id=review.get("databaseId"),
+                        body=review["body"],
+                        author=review["author"]["login"],
+                        created_at=review["createdAt"],
+                        updated_at=review["updatedAt"],
+                        url=review["url"],
+                    )
+                    comments.append(comment)
+
+                # Add individual review comments
+                for comment_data in review["comments"]["nodes"]:
+                    comment = Comment(
+                        comment_id=comment_data["id"],
+                        database_id=comment_data.get("databaseId"),
+                        body=comment_data["body"],
+                        author=comment_data["author"]["login"],
+                        created_at=comment_data["createdAt"],
+                        updated_at=comment_data["updatedAt"],
+                        url=comment_data["url"],
+                    )
+                    comments.append(comment)
+        except (KeyError, TypeError) as e:
+            logger.error(f"❌ Error parsing review comments: {e}")
+        return comments
+
+    def _comment_id_to_thread_id(self, comment_id: str) -> str:
+        """Convert comment ID to thread ID using GitHub's GraphQL node ID pattern"""
+        # GitHub GraphQL node IDs follow the pattern:
+        # Comment: PRRC_<suffix> -> Thread: PRT_<suffix>
+        if comment_id.startswith("PRRC_"):
+            return comment_id.replace("PRRC_", "PRT_", 1)
+        return comment_id
+
+    def _get_review_thread_node_id(self, comment_id: str) -> Optional[str]:
+        """Get the GraphQL node ID for a review thread from a comment ID"""
+        return self._comment_id_to_thread_id(comment_id)
+
+    def resolve_review_threads_batch(self, comment_ids: List[str]) -> List[str]:
+        """Resolve multiple review threads in a single batch operation"""
+        try:
+            # Get unique thread IDs for all comments using simple conversion
+            thread_ids = set()
+            resolved_comments = []
+
+            for comment_id in comment_ids:
+                thread_id = self._comment_id_to_thread_id(comment_id)
+                if thread_id:
+                    thread_ids.add(thread_id)
+                    resolved_comments.append(comment_id)
+                else:
+                    logger.warning(
+                        f"⚠️ Could not convert comment ID to thread ID: {comment_id}"
+                    )
+
+            if not thread_ids:
+                return []
+
+            # Create mapping from comment_id to thread_id for efficient lookup
+            comment_to_thread_mapping = {
+                comment_id: self._comment_id_to_thread_id(comment_id)
+                for comment_id in resolved_comments
+            }
+
+            # Resolve all threads in a single GraphQL mutation
+            # Note: GraphQL doesn't support batch mutations, so we'll do them sequentially
+            # but we've already optimized the thread lookup
+            successful_resolutions = []
+
+            for thread_id in thread_ids:
+                query = f"""
+                mutation {{
+                    resolveReviewThread(input: {{threadId: "{thread_id}"}}) {{
+                        thread {{
+                            id
+                            isResolved
+                        }}
+                    }}
+                }}
+                """
+
+                result = subprocess.run(
+                    ["gh", "api", "graphql", "-f", f"query={query}"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+
+                if result.returncode == 0:
+                    response = json.loads(result.stdout)
+                    if (
+                        response.get("data", {})
+                        .get("resolveReviewThread", {})
+                        .get("thread", {})
+                        .get("isResolved")
+                    ):
+                        # Find which comments belong to this thread
+                        for comment_id in resolved_comments:
+                            if (
+                                comment_to_thread_mapping.get(str(comment_id))
+                                == thread_id
+                            ):
+                                successful_resolutions.append(comment_id)
+
+            return successful_resolutions
+
+        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
+            logger.error(f"❌ Error resolving review threads batch: {e}")
+            return []
+
+    def resolve_review_thread(self, comment_id: str) -> bool:
+        """Resolve a single review thread (for backward compatibility)"""
+        resolved = self.resolve_review_threads_batch([comment_id])
+        return len(resolved) > 0
 
 
 class CommentProcessor:
@@ -397,8 +774,8 @@ class CommentProcessor:
             return comments
 
         # Use parallel processing for large comment sets
-        if len(comments) > 10:
-            with ThreadPoolExecutor(max_workers=4) as executor:
+        if len(comments) > Constants.PARALLEL_PROCESSING_THRESHOLD:
+            with ThreadPoolExecutor(max_workers=Constants.MAX_WORKERS) as executor:
                 # Submit all comment processing tasks
                 futures = []
                 for comment in comments:
@@ -558,12 +935,14 @@ class ResolutionManager:
         with open(self.resolution_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
-    def mark_resolved(self, comment_ids: List[str]):
-        """Mark comments as resolved"""
+    def mark_resolved(self, comment_ids: List[str], github_api=None):
+        """Mark comments as resolved both locally and on GitHub"""
         state = self.load_resolution_state()
 
         # Track newly resolved comments
         newly_resolved = []
+        github_resolved = []
+
         for comment_id in comment_ids:
             if comment_id not in state.resolved_comments:
                 newly_resolved.append(comment_id)
@@ -589,23 +968,135 @@ class ResolutionManager:
             "newly_resolved", 0
         ) + len(newly_resolved)
 
+        # Try to resolve on GitHub if API is available
+        if github_api:
+            # Separate comments by type for efficient processing
+            review_comments = []
+            other_comments = []
+
+            for comment_id in comment_ids:
+                try:
+                    comment_type = self._get_comment_type(comment_id)
+                    if comment_type == "review_comment":
+                        review_comments.append(comment_id)
+                    else:
+                        other_comments.append(comment_id)
+                        if comment_type == "issue_comment":
+                            logger.info(
+                                f"📝 Issue comment {comment_id} marked locally (GitHub resolution not applicable)"
+                            )
+                        elif comment_type == "review_body":
+                            logger.info(
+                                f"📝 Review body {comment_id} marked locally (GitHub resolution not applicable)"
+                            )
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Could not determine comment type for {comment_id}: {e}"
+                    )
+                    other_comments.append(comment_id)
+
+            # Batch resolve all review comments at once
+            if review_comments:
+                try:
+                    resolved_review_comments = github_api.resolve_review_threads_batch(
+                        review_comments
+                    )
+                    github_resolved.extend(resolved_review_comments)
+
+                    for comment_id in resolved_review_comments:
+                        comment_url = self._get_comment_url(comment_id)
+                        if comment_url:
+                            logger.info(
+                                f"🌐 Review comment {comment_id} resolved on GitHub: {comment_url}"
+                            )
+                        else:
+                            logger.info(
+                                f"🌐 Review comment {comment_id} resolved on GitHub"
+                            )
+
+                    # Log any that failed
+                    failed_comments = set(review_comments) - set(
+                        resolved_review_comments
+                    )
+                    for comment_id in failed_comments:
+                        logger.info(
+                            f"📝 Review comment {comment_id} marked locally (GitHub resolution failed)"
+                        )
+
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Could not resolve review comments on GitHub: {e}"
+                    )
+                    for comment_id in review_comments:
+                        logger.info(
+                            f"📝 Review comment {comment_id} marked locally (GitHub resolution failed)"
+                        )
+
         if RICH_AVAILABLE:
             console = Console()
             console.print(
                 f"[green]✅ {len(comment_ids)} comments marked as resolved (fixed)[/green]"
             )
+            if github_resolved:
+                console.print(
+                    f"[green]🌐 {len(github_resolved)} also resolved on GitHub[/green]"
+                )
         else:
             logger.info(f"✅ {len(comment_ids)} comments marked as resolved (fixed)")
+            if github_resolved:
+                logger.info(f"🌐 {len(github_resolved)} also resolved on GitHub")
+
+    def _get_comment_type(self, comment_id: str) -> str:
+        """Determine the type of comment based on its ID and stored data"""
+        try:
+            # Load the cached comments to check the comment type
+            comments_file = Path(f".local/pr-{self.pr_number}-change-comments.json")
+            if comments_file.exists():
+                with open(comments_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                for comment in data.get("comments", []):
+                    if comment.get("comment_id") == comment_id:
+                        url = comment.get("url", "")
+                        position = comment.get("position")
+
+                        # Determine type based on URL and attributes
+                        if "discussion_r" in url:
+                            if position is not None:
+                                return "review_comment"  # Line-specific comment
+                            else:
+                                return "review_body"  # Review body comment
+                        else:
+                            return "issue_comment"  # Top-level PR comment
+        except Exception as e:
+            logger.warning(f"⚠️ Could not determine comment type for {comment_id}: {e}")
+
+        # Default fallback - assume it's a review comment if we can't determine
+        return "review_comment"
+
+    def _get_comment_url(self, comment_id: str) -> str:
+        """Get the URL for a comment from cached data"""
+        try:
+            # Load the cached comments to get the URL
+            comments_file = Path(f".local/pr-{self.pr_number}-change-comments.json")
+            if comments_file.exists():
+                with open(comments_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                for comment in data.get("comments", []):
+                    if comment.get("comment_id") == comment_id:
+                        return comment.get("url", "")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not get URL for comment {comment_id}: {e}")
+        return ""
 
     def mark_skipped(self, comment_ids: List[str]):
         """Mark comments as skipped"""
         state = self.load_resolution_state()
 
-        # Track newly skipped comments
-        newly_skipped = []
+        # Add to skipped, remove from resolved
         for comment_id in comment_ids:
             if comment_id not in state.skipped_comments:
-                newly_skipped.append(comment_id)
                 state.skipped_comments.append(comment_id)
             if comment_id in state.resolved_comments:
                 state.resolved_comments.remove(comment_id)
@@ -621,13 +1112,6 @@ class ResolutionManager:
             )
 
         self.save_resolution_state(state)
-
-        # Store change info for status display
-        self._session_changes = getattr(self, "_session_changes", {})
-        self._session_changes["newly_skipped"] = self._session_changes.get(
-            "newly_skipped", 0
-        ) + len(newly_skipped)
-
         if RICH_AVAILABLE:
             console = Console()
             console.print(
@@ -742,7 +1226,11 @@ class StatusDisplay:
         skipped_count = len(skipped_comments)
         unresolved_count = len(unresolved_comments)
         progress = (
-            int((resolved_count + skipped_count) / total_comments * 100)
+            int(
+                (resolved_count + skipped_count)
+                / total_comments
+                * Constants.PROGRESS_PERCENTAGE_BASE
+            )
             if total_comments > 0
             else 0
         )
@@ -755,22 +1243,6 @@ class StatusDisplay:
             summary_text += f"[red]❌ Unresolved:[/red] {unresolved_count}\n"
             summary_text += f"[bold]Total:[/bold] {total_comments}\n"
             summary_text += f"[bold]Progress:[/bold] {progress}%"
-
-            # Add session changes if available
-            if (
-                hasattr(self.resolution_manager, "_session_changes")
-                and self.resolution_manager._session_changes
-            ):
-                changes = self.resolution_manager._session_changes
-                summary_text += "\n\n[bold cyan]📈 This Session:[/bold cyan]"
-                if changes.get("newly_resolved", 0) > 0:
-                    summary_text += (
-                        f"\n[green]+{changes['newly_resolved']} newly resolved[/green]"
-                    )
-                if changes.get("newly_skipped", 0) > 0:
-                    summary_text += (
-                        f"\n[yellow]+{changes['newly_skipped']} newly skipped[/yellow]"
-                    )
 
             # Check for auto-skip suggestions
             auto_skip_comments = [
@@ -809,18 +1281,6 @@ class StatusDisplay:
             print(f"❌ Unresolved: {unresolved_count}")
             print(f"Total: {total_comments}")
             print(f"Progress: {progress}%")
-
-            # Add session changes if available
-            if (
-                hasattr(self.resolution_manager, "_session_changes")
-                and self.resolution_manager._session_changes
-            ):
-                changes = self.resolution_manager._session_changes
-                print("\n📈 This Session:")
-                if changes.get("newly_resolved", 0) > 0:
-                    print(f"+{changes['newly_resolved']} newly resolved")
-                if changes.get("newly_skipped", 0) > 0:
-                    print(f"+{changes['newly_skipped']} newly skipped")
             print()
 
             # Check for auto-skip suggestions (plain text)
@@ -864,13 +1324,31 @@ class StatusDisplay:
         if all_comments:
             if self.console:
                 table = Table(title=title, show_header=True, header_style="blue")
-                table.add_column("ID", style="dim", width=12)
-                table.add_column("Status", style="bold", width=12)
-                table.add_column("Priority", style="bold", width=8)
-                table.add_column("Category", style="cyan", width=10)
+                table.add_column("ID", style="dim")
+                table.add_column(
+                    "Status",
+                    style="bold",
+                    width=Constants.TABLE_COLUMN_WIDTHS["status"],
+                )
+                table.add_column(
+                    "Priority",
+                    style="bold",
+                    width=Constants.TABLE_COLUMN_WIDTHS["priority"],
+                )
+                table.add_column(
+                    "Category",
+                    style="cyan",
+                    width=Constants.TABLE_COLUMN_WIDTHS["category"],
+                )
                 table.add_column("File", style="green")
-                table.add_column("Author", style="blue", width=12)
-                table.add_column("Date", style="dim", width=10)
+                table.add_column(
+                    "Author",
+                    style="blue",
+                    width=Constants.TABLE_COLUMN_WIDTHS["author"],
+                )
+                table.add_column(
+                    "Date", style="dim", width=Constants.TABLE_COLUMN_WIDTHS["date"]
+                )
 
                 for comment, status in all_comments:
                     priority_color = {
@@ -931,94 +1409,32 @@ class StatusDisplay:
                     "[red]❌ Error: No comments found. Run without --status first to fetch comments.[/red]"
                 )
             else:
-                print(
+                logger.error(
                     "❌ Error: No comments found. Run without --status first to fetch comments."
                 )
             return
 
-        # Update comments with resolution state
+        # Update resolution state
         self.resolution_manager.update_comments_resolution_state(comments)
 
-        # Filter comments if needed
         if unresolved_only:
-            comments = [c for c in comments if not c.is_resolved]
-
-        # Show the table
-        self._create_unified_table(
-            comments,
-            title="📝 Comments Status",
-            show_summary=True,
-            show_assessment=show_assessment,
-        )
-
-    def show_comment(self, comment_id: str):
-        """Show full content of a specific comment"""
-        comments = self.resolution_manager.load_comments()
-        if not comments:
-            if self.console:
-                self.console.print(
-                    "[red]❌ Error: No comments found. Run without --show first to fetch comments.[/red]"
+            # Filter to show only unresolved comments
+            unresolved_comments = [c for c in comments if not c.is_resolved]
+            if unresolved_comments:
+                self._create_unified_table(
+                    unresolved_comments,
+                    "❌ Unresolved Comments",
+                    show_summary=False,
+                    show_assessment=show_assessment,
                 )
             else:
-                print(
-                    "❌ Error: No comments found. Run without --show first to fetch comments."
-                )
-            return
-
-        # Find the comment
-        target_comment = None
-        for comment in comments:
-            if comment.comment_id == comment_id:
-                target_comment = comment
-                break
-
-        if not target_comment:
-            if self.console:
-                self.console.print(f"[red]❌ Comment {comment_id} not found[/red]")
-            else:
-                print(f"❌ Comment {comment_id} not found")
-            return
-
-        # Display the comment
-        if self.console:
-            # Rich display
-            self.console.print(f"[bold blue]📝 Comment {comment_id}[/bold blue]")
-            self.console.print()
-
-            # Comment details
-            details = f"[bold]Author:[/bold] {target_comment.author}\n"
-            details += f"[bold]Created:[/bold] {target_comment.created_at}\n"
-            details += f"[bold]Updated:[/bold] {target_comment.updated_at}\n"
-            if target_comment.file_path:
-                details += f"[bold]File:[/bold] {target_comment.file_path}\n"
-            if target_comment.url:
-                details += f"[bold]URL:[/bold] {target_comment.url}\n"
-
-            details_panel = Panel(details, title="Comment Details", border_style="blue")
-            self.console.print(details_panel)
-            self.console.print()
-
-            # Comment body
-            body_panel = Panel(
-                target_comment.body, title="Comment Content", border_style="green"
-            )
-            self.console.print(body_panel)
+                if self.console:
+                    self.console.print("[green]✅ No unresolved comments![/green]")
+                else:
+                    print("✅ No unresolved comments!")
         else:
-            # Plain text display
-            print(f"📝 Comment {comment_id}")
-            print()
-            print(f"Author: {target_comment.author}")
-            print(f"Created: {target_comment.created_at}")
-            print(f"Updated: {target_comment.updated_at}")
-            if target_comment.file_path:
-                print(f"File: {target_comment.file_path}")
-            if target_comment.url:
-                print(f"URL: {target_comment.url}")
-            print()
-            print("Content:")
-            print("-" * 50)
-            print(target_comment.body)
-            print("-" * 50)
+            # Show all comments with summary
+            self._create_unified_table(comments, "📝 All Comments", show_summary=True)
 
 
 def main():
@@ -1034,8 +1450,6 @@ Examples:
   %(prog)s 123 --skip 2386777572        # Mark single comment as skipped (ignored)
   %(prog)s 123 --resolve 2386777571,2386777573  # Mark multiple comments as resolved
   %(prog)s 123 --skip 2386777572,2386777574      # Mark multiple comments as skipped
-  %(prog)s 123 --github-resolve THREAD_ID1,THREAD_ID2  # Resolve review threads on GitHub
-  %(prog)s 123 --github-unresolve THREAD_ID1,THREAD_ID2  # Unresolve review threads on GitHub
   %(prog)s 123 --status                 # Show resolution status
   %(prog)s 123 --status-unresolved      # Show only unresolved comments
   %(prog)s --cleanup                    # Archive all PR data files to .local/archive/
@@ -1059,14 +1473,6 @@ Examples:
     parser.add_argument(
         "--show",
         help="Show full content of a specific comment by ID",
-    )
-    parser.add_argument(
-        "--github-resolve",
-        help="Resolve review threads directly on GitHub (requires thread IDs)",
-    )
-    parser.add_argument(
-        "--github-unresolve",
-        help="Unresolve review threads directly on GitHub (requires thread IDs)",
     )
     parser.add_argument(
         "--cleanup",
@@ -1129,8 +1535,101 @@ Examples:
             parser.error("PR number is required for --show command")
 
         resolution_manager = ResolutionManager(args.pr_number)
-        status_display = StatusDisplay(resolution_manager)
-        status_display.show_comment(args.show)
+        comments = resolution_manager.load_comments()
+
+        if not comments:
+            if RICH_AVAILABLE:
+                console = Console()
+                console.print(
+                    "[red]❌ Error: No comments found. Run without --show first to fetch comments.[/red]"
+                )
+            else:
+                logger.error(
+                    "❌ Error: No comments found. Run without --show first to fetch comments."
+                )
+            return
+
+        # Find the specific comment
+        target_comment = None
+        for comment in comments:
+            if comment.comment_id == args.show:
+                target_comment = comment
+                break
+
+        if not target_comment:
+            if RICH_AVAILABLE:
+                console = Console()
+                console.print(
+                    f"[red]❌ Error: Comment with ID '{args.show}' not found.[/red]"
+                )
+            else:
+                logger.error(f"❌ Error: Comment with ID '{args.show}' not found.")
+            return
+
+        # Display the comment
+        if RICH_AVAILABLE:
+            console = Console()
+
+            # Create a detailed panel for the comment
+            comment_info = (
+                f"[bold blue]Comment ID:[/bold blue] {target_comment.comment_id}\n"
+            )
+            comment_info += f"[bold blue]Author:[/bold blue] {target_comment.author}\n"
+            comment_info += (
+                f"[bold blue]Created:[/bold blue] {target_comment.created_at}\n"
+            )
+            comment_info += (
+                f"[bold blue]Updated:[/bold blue] {target_comment.updated_at}\n"
+            )
+            comment_info += f"[bold blue]File:[/bold blue] {target_comment.file_path or 'General'}\n"
+            comment_info += (
+                f"[bold blue]Priority:[/bold blue] {target_comment.priority}\n"
+            )
+            comment_info += (
+                f"[bold blue]Category:[/bold blue] {target_comment.category}\n"
+            )
+            comment_info += f"[bold blue]Status:[/bold blue] {'Resolved' if target_comment.is_resolved else 'Unresolved'}\n"
+            if target_comment.resolution_type:
+                comment_info += f"[bold blue]Resolution:[/bold blue] {target_comment.resolution_type}\n"
+            if target_comment.auto_skip_reason:
+                comment_info += f"[bold blue]Auto-skip reason:[/bold blue] {target_comment.auto_skip_reason}\n"
+            if target_comment.url:
+                comment_info += f"[bold blue]URL:[/bold blue] {target_comment.url}\n"
+
+            info_panel = Panel(
+                comment_info.strip(), title="Comment Information", border_style="blue"
+            )
+            console.print(info_panel)
+            console.print()
+
+            # Display the comment body
+            body_panel = Panel(
+                target_comment.body, title="Comment Content", border_style="green"
+            )
+            console.print(body_panel)
+        else:
+            # Plain text fallback
+            print(f"Comment ID: {target_comment.comment_id}")
+            print(f"Author: {target_comment.author}")
+            print(f"Created: {target_comment.created_at}")
+            print(f"Updated: {target_comment.updated_at}")
+            print(f"File: {target_comment.file_path or 'General'}")
+            print(f"Priority: {target_comment.priority}")
+            print(f"Category: {target_comment.category}")
+            print(
+                f"Status: {'Resolved' if target_comment.is_resolved else 'Unresolved'}"
+            )
+            if target_comment.resolution_type:
+                print(f"Resolution: {target_comment.resolution_type}")
+            if target_comment.auto_skip_reason:
+                print(f"Auto-skip reason: {target_comment.auto_skip_reason}")
+            if target_comment.url:
+                print(f"URL: {target_comment.url}")
+            print("\n" + "=" * 80)
+            print("COMMENT CONTENT:")
+            print("=" * 80)
+            print(target_comment.body)
+            print("=" * 80)
         return
 
     # Validate PR number
@@ -1140,13 +1639,12 @@ Examples:
     # Initialize components
     resolution_manager = ResolutionManager(args.pr_number)
 
-    # Initialize session changes tracking
-    resolution_manager._session_changes = {}
-
     # Handle resolution commands
     if args.resolve:
         comment_ids = [cid.strip() for cid in args.resolve.split(",")]
-        resolution_manager.mark_resolved(comment_ids)
+        # Initialize GitHub API for remote resolution
+        github_api = GitHubAPI(args.pr_number)
+        resolution_manager.mark_resolved(comment_ids, github_api)
         return
 
     if args.skip:
@@ -1154,47 +1652,8 @@ Examples:
         resolution_manager.mark_skipped(comment_ids)
         return
 
-    # Handle GitHub resolution commands
-    if args.github_resolve:
-        thread_ids = [tid.strip() for tid in args.github_resolve.split(",")]
-        github_api = GitHubAPI()
-        success_count = 0
-        for thread_id in thread_ids:
-            if github_api.resolve_review_thread(thread_id):
-                success_count += 1
-        if RICH_AVAILABLE:
-            console = Console()
-            console.print(
-                f"[green]✅ {success_count}/{len(thread_ids)} review threads resolved on GitHub[/green]"
-            )
-        else:
-            logger.info(
-                f"✅ {success_count}/{len(thread_ids)} review threads resolved on GitHub"
-            )
-        return
-
-    if args.github_unresolve:
-        thread_ids = [tid.strip() for tid in args.github_unresolve.split(",")]
-        github_api = GitHubAPI()
-        success_count = 0
-        for thread_id in thread_ids:
-            if github_api.unresolve_review_thread(thread_id):
-                success_count += 1
-        if RICH_AVAILABLE:
-            console = Console()
-            console.print(
-                f"[yellow]⏭️ {success_count}/{len(thread_ids)} review threads unresolved on GitHub[/yellow]"
-            )
-        else:
-            logger.info(
-                f"⏭️ {success_count}/{len(thread_ids)} review threads unresolved on GitHub"
-            )
-        return
-
     # Handle status commands
     if args.status or args.status_unresolved or args.assess:
-        # Initialize session changes tracking for status display
-        resolution_manager._session_changes = {}
         status_display = StatusDisplay(resolution_manager)
         if args.assess:
             # Show assessment guidance for unresolved comments

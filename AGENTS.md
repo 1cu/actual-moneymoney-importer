@@ -141,7 +141,7 @@ The script provides intelligent assessment guidance:
 
 ### **Decision Process**
 
-1. **Read the comment content** - Don't skip based on priority alone
+1. **Read the comment content** - Use `--show <COMMENT_ID>` to view full details
 2. **Use assessment guidance** - The script provides intelligent recommendations
 3. **Question every suggestion** - Is this fix truly necessary?
 4. **Consider complexity** - Does it add unnecessary complexity?
