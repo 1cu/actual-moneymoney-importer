@@ -45,10 +45,13 @@ const budgetSchema = z
         accountMapping: z.record(z.string(), z.string()),
     })
     .superRefine((val, ctx) => {
-        if (
-            val.e2eEncryption.enabled &&
-            (val.e2eEncryption.password === undefined || val.e2eEncryption.password === '')
-        ) {
+        const isEncryptionEnabled = val.e2eEncryption.enabled;
+        const isPasswordMissing =
+            val.e2eEncryption.password === undefined ||
+            val.e2eEncryption.password === '' ||
+            val.e2eEncryption.password.trim() === '';
+
+        if (isEncryptionEnabled && isPasswordMissing) {
             ctx.addIssue({
                 code: ZodIssueCode.custom,
                 message: 'Password must not be empty if end-to-end encryption is enabled',
