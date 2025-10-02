@@ -8,13 +8,17 @@
         "build": "tsc",
         "typecheck": "tsc --noEmit --incremental -p tsconfig.json",
         "start": "node dist/index.js",
-        "lint:eslint": "eslint .",
-        "lint:complexity": "ENABLE_COMPLEXITY_RULES=true eslint .",
-        "lint:prettier": "prettier --check .",
-        "lint:prettier:fix": "prettier --write .",
+        "lint:eslint": "eslint --cache .",
+        "lint:eslint:fix": "eslint --cache --fix .",
+        "lint:prettier": "prettier --check --cache --log-level warn .",
+        "lint:prettier:fix": "prettier --write --cache --log-level warn .",
+        "lint:markdown": "markdownlint-cli2 '*.md' 'src/**/*.md' 'tests/**/*.md' 'docs/**/*.md'",
+        "lint:markdown:fix": "markdownlint-cli2 --fix '*.md' 'src/**/*.md' 'tests/**/*.md' 'docs/**/*.md'",
+        "lint:all": "npm run lint:eslint && npm run lint:prettier && npm run lint:markdown",
         "prepare": "husky",
         "test": "npm run build && vitest run",
-        "test:typecheck": "tsc --noEmit -p tsconfig.test.json"
+        "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
+        "ci:local": "npm run lint:all && npm run typecheck && npm run test:typecheck && npm test"
     },
     "type": "module",
     "keywords": [
@@ -45,7 +49,7 @@
         "zod": "^3.25.76"
     },
     "engines": {
-        "node": ">=20.9.0"
+        "node": ">=24.0.0"
     },
     "devDependencies": {
         "@commitlint/cli": "^20.0.0",
@@ -53,9 +57,10 @@
         "@eslint/js": "^9.36.0",
         "@types/yargs": "^17.0.33",
         "eslint": "^9.36.0",
-        "globals": "^16.4.0",
         "eslint-plugin-sonarjs": "^3.0.5",
+        "globals": "^16.4.0",
         "husky": "^9.1.7",
+        "markdownlint-cli2": "^0.18.1",
         "prettier": "^3.6.2",
         "semantic-release": "^24.2.9",
         "typescript": "^5.9.2",

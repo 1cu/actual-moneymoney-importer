@@ -15,7 +15,6 @@ export const EXAMPLE_CONFIG = `
 enabled = false
 openAiApiKey = "<openAiKey>"
 openAiModel = "gpt-3.5-turbo"
-# maskPayeeNamesInLogs = true
 # skipModelValidation = false # Optional: Skip contacting OpenAI to verify the model name
 # customPrompt = "Your custom prompt here..." # Optional: Override default prompt
 # [payeeTransformation.modelConfig] # Optional: Model-specific settings
@@ -26,7 +25,8 @@ openAiModel = "gpt-3.5-turbo"
 # Import settings
 [import]
 importUncheckedTransactions = true
-# maskPayeeNamesInLogs = true # Optional: replace payee names in import logs with deterministic placeholders
+ # Import log masking: when payeeTransformation.enabled = true, payee names in logs are masked for privacy
+synchronizeClearedStatus = true # Keep Actual cleared status in sync (default: true)
 
 # Actual servers, you can add multiple servers
 [[actualServers]]

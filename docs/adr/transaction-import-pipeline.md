@@ -48,20 +48,20 @@ sequenceDiagram
 
 ### Stage contracts
 
-| Stage | Responsibility | Input | Output |
-| --- | --- | --- | --- |
-| `TransactionFetcher` | Retrieve MoneyMoney transactions for the configured accounts and timeframe. | `ImportConfig`, Actual API client, logger | Array of raw MoneyMoney transactions |
-| `TransactionFilter` | Remove ignored transactions, deduplicate, and enforce earliest import date. | Raw transactions, ignore rules, logger | Array of filtered transactions |
-| `TransactionTransformer` | Convert raw transactions into Actual-ready entries including payee/category transformations. | Filtered transactions, mapping config, logger | Array of normalised transaction DTOs |
-| `TransactionReconciler` | Compare normalised entries against existing Actual data to determine inserts vs updates. | Normalised transactions, Actual API client | Reconciled batch with actionable operations |
-| `TransactionPersister` | Apply reconciled operations to Actual and produce telemetry. | Reconciled batch, Actual API client | Persistence result summary |
+| Stage                    | Responsibility                                                                               | Input                                         | Output                                      |
+| ------------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------- |
+| `TransactionFetcher`     | Retrieve MoneyMoney transactions for the configured accounts and timeframe.                  | `ImportConfig`, Actual API client, logger     | Array of raw MoneyMoney transactions        |
+| `TransactionFilter`      | Remove ignored transactions, deduplicate, and enforce earliest import date.                  | Raw transactions, ignore rules, logger        | Array of filtered transactions              |
+| `TransactionTransformer` | Convert raw transactions into Actual-ready entries including payee/category transformations. | Filtered transactions, mapping config, logger | Array of normalised transaction DTOs        |
+| `TransactionReconciler`  | Compare normalised entries against existing Actual data to determine inserts vs updates.     | Normalised transactions, Actual API client    | Reconciled batch with actionable operations |
+| `TransactionPersister`   | Apply reconciled operations to Actual and produce telemetry.                                 | Reconciled batch, Actual API client           | Persistence result summary                  |
 
 ### Migration notes
 
 1. Introduce interfaces for each stage (`TransactionFetcher`, etc.) that accept dependencies via constructor or function parameters to keep them testable.
-2. Incrementally move existing logic out of `Importer.importTransactions`, stage by stage, ensuring each refactor is covered by unit tests before proceeding.
-3. The orchestrator should default to a pass-through context until each dedicated stage is implemented, enabling partial migrations without breaking behaviour.
-4. Update CLI integration tests after all stages land to validate dry-run/live parity and error messaging.
+1. Incrementally move existing logic out of `Importer.importTransactions`, stage by stage, ensuring each refactor is covered by unit tests before proceeding.
+1. The orchestrator should default to a pass-through context until each dedicated stage is implemented, enabling partial migrations without breaking behaviour.
+1. Update CLI integration tests after all stages land to validate dry-run/live parity and error messaging.
 
 ## Consequences
 

@@ -7,19 +7,13 @@ import tseslint from 'typescript-eslint';
 
 const { config: defineConfig, configs: tsConfigs } = tseslint;
 
-const enableComplexityRules = process.env.ENABLE_COMPLEXITY_RULES === 'true';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const eslintProject = path.resolve(__dirname, 'tsconfig.eslint.json');
 
-const complexityRules = enableComplexityRules
-    ? {
-          complexity: ['error', { max: 40 }],
-          'sonarjs/cognitive-complexity': ['error', 60],
-      }
-    : {};
-
 const sharedRules = {
     'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
+    complexity: ['error', 15],
+    'sonarjs/cognitive-complexity': ['error', 20],
     '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -42,11 +36,34 @@ const sharedRules = {
         },
     ],
     'no-unreachable': 'error',
+    '@typescript-eslint/no-unsafe-assignment': 'error',
+    '@typescript-eslint/no-unsafe-call': 'error',
+    '@typescript-eslint/no-unsafe-member-access': 'error',
+    '@typescript-eslint/no-unsafe-return': 'error',
+    '@typescript-eslint/no-unsafe-argument': 'error',
 };
 
 export default defineConfig(
     {
-        ignores: ['dist/**', 'node_modules/**', 'coverage/**', '**/*.js', '**/*.mjs'],
+        ignores: [
+            'dist/**',
+            'node_modules/**',
+            'coverage/**',
+            '**/*.js',
+            '**/*.mjs',
+            '__pycache__/**',
+            '.mypy_cache/**',
+            '**/*.pyc',
+            '**/*.pyo',
+            '**/*.pyd',
+            '.Python',
+            'env/**',
+            'venv/**',
+            '.venv/**',
+            'ENV/**',
+            'env.bak/**',
+            'venv.bak/**',
+        ],
     },
     eslint.configs.recommended,
     tsConfigs.recommended,
@@ -64,12 +81,23 @@ export default defineConfig(
         },
         rules: {
             ...sharedRules,
-            ...complexityRules,
+            // Source files: 400 lines max (utility files, commands)
+            'max-lines': ['error', 400],
         },
     }),
     defineConfig({
-        files: ['src/utils/config-format.ts'],
+        files: ['src/index.ts', 'src/commands/**/*.ts'],
         rules: {
+            ...sharedRules,
+            // Entry points and commands: 300 lines max (should be focused)
+            'max-lines': ['error', 300],
+        },
+    }),
+    defineConfig({
+        files: ['src/utils/config.ts'],
+        rules: {
+            // Configuration files: 200 lines max (should be simple)
+            'max-lines': ['error', 200],
             '@typescript-eslint/no-unnecessary-condition': ['error', { allowConstantLoopConditions: false }],
             '@typescript-eslint/strict-boolean-expressions': [
                 'warn',
@@ -102,11 +130,17 @@ export default defineConfig(
         },
         rules: {
             ...sharedRules,
+            // Test files: 300 lines max (should be simple)
+            'max-lines': ['error', 300],
+            // Keep some safety rules for tests to catch import/type errors
             '@typescript-eslint/no-unsafe-member-access': 'warn',
             '@typescript-eslint/no-unsafe-call': 'warn',
             '@typescript-eslint/no-unsafe-assignment': 'warn',
             '@typescript-eslint/no-unsafe-return': 'warn',
             '@typescript-eslint/no-unsafe-argument': 'warn',
+            // Add rules to catch import/export issues
+            '@typescript-eslint/consistent-type-imports': 'error',
+            '@typescript-eslint/no-import-type-side-effects': 'error',
         },
     })
 );

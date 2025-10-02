@@ -15,7 +15,6 @@ interface LoggerOptions {
 
 class Logger {
     private logLevel: LogLevel;
-
     private readonly structuredLogs: boolean;
 
     public constructor(logLevel = LogLevel.INFO, options?: LoggerOptions) {
@@ -57,7 +56,7 @@ class Logger {
                 level: levelName,
                 timestamp,
                 message,
-                hints,
+                hints: hints.length > 0 ? hints : undefined,
             } satisfies Record<string, unknown>;
 
             const serialised = JSON.stringify(payload);

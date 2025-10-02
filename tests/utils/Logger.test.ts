@@ -38,6 +38,7 @@ describe('Logger', () => {
         expect(errorSpy).not.toHaveBeenCalled();
 
         logSpy.mockClear();
+        errorSpy.mockClear();
 
         const error = new Error('kaboom');
         error.stack = ['Error: kaboom', '    at fake.ts:1:1'].join('\n');
@@ -65,8 +66,11 @@ describe('Logger', () => {
         logger.info('classic message', 'hint text');
 
         expect(logSpy).toHaveBeenCalled();
-        const [firstArg, secondArg] = logSpy.mock.calls[0];
-        expect(String(firstArg)).toContain('[INFO]');
-        expect(String(secondArg)).toBe(`[${FIXED_DATE.toISOString()}]`);
+        const callArgs = logSpy.mock.calls[0];
+        if (callArgs && callArgs.length >= 2) {
+            const [firstArg, secondArg] = callArgs as [unknown, unknown];
+            expect(String(firstArg)).toContain('[INFO]');
+            expect(String(secondArg)).toBe(`[${FIXED_DATE.toISOString()}]`);
+        }
     });
 });

@@ -108,6 +108,6 @@
         // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
         "skipLibCheck": true /* Remains required: Actual API bundles conflicting ambient modules and deps lacking types (mitt, sql.js, bun-types). */
     },
-    "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx"],
-    "exclude": ["tests", "vitest.config.ts"]
+    "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "tests/**/*.ts"],
+    "exclude": ["vitest.config.ts"]
 }

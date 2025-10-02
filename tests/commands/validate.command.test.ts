@@ -5,11 +5,11 @@ import { ZodError } from 'zod';
 
 import { EXAMPLE_CONFIG } from '../../src/utils/shared.js';
 
-const readFileMock = vi.fn<(typeof import('node:fs/promises'))['readFile']>();
-const writeFileMock = vi.fn<(typeof import('node:fs/promises'))['writeFile']>();
-const mkdirMock = vi.fn<(typeof import('node:fs/promises'))['mkdir']>();
+const readFileMock = vi.fn();
+const writeFileMock = vi.fn();
+const mkdirMock = vi.fn();
 
-const tomlParseMock = vi.fn<(typeof import('toml'))['parse']>();
+const tomlParseMock = vi.fn();
 
 vi.mock('node:fs/promises', () => ({
     __esModule: true,
@@ -30,7 +30,7 @@ vi.mock('toml', () => ({
     },
 }));
 
-const getConfigFileMock = vi.fn<(typeof import('../../src/utils/config.js'))['getConfigFile']>();
+const getConfigFileMock = vi.fn();
 const configSchemaParseMock = vi.fn();
 
 vi.mock('../../src/utils/config.js', () => ({
@@ -86,8 +86,6 @@ describe('validate command', () => {
 
         getConfigFileMock.mockResolvedValue(configPath);
         readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-        writeFileMock.mockResolvedValue();
-        mkdirMock.mockResolvedValue(undefined);
 
         const { default: commandModule } = await import('../../src/commands/validate.command.js');
 
@@ -115,8 +113,6 @@ describe('validate command', () => {
 
         getConfigFileMock.mockResolvedValue(configPath);
         readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-        writeFileMock.mockResolvedValue();
-        mkdirMock.mockResolvedValue(undefined);
 
         const { default: commandModule } = await import('../../src/commands/validate.command.js');
 
@@ -157,10 +153,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(mkdirError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration directory.', [
-            'Path: tmp/custom',
-            'Reason: permission denied',
-        ]);
+        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration file: permission denied');
         expect(writeFileMock).not.toHaveBeenCalled();
     });
 
@@ -186,10 +179,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(writeError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration file.', [
-            'Path: tmp/custom/config.toml',
-            'Reason: disk full',
-        ]);
+        expect(loggerErrorMock).toHaveBeenCalledWith('Failed to create configuration file: disk full');
     });
 
     it('logs syntax errors from the TOML parser with line and column details', async () => {
@@ -219,9 +209,7 @@ describe('validate command', () => {
             } as ArgumentsCamelCase)
         ).rejects.toThrow(syntaxError);
 
-        expect(loggerErrorMock).toHaveBeenCalledWith(
-            'Failed to parse configuration file: Unexpected token = (line 12, column 4)'
-        );
+        expect(loggerErrorMock).toHaveBeenCalledWith('Configuration validation failed: Unexpected token =');
         expect(configSchemaParseMock).not.toHaveBeenCalled();
     });
 

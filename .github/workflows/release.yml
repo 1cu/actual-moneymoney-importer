@@ -16,16 +16,13 @@ jobs:
             - name: Setup Node
               uses: actions/setup-node@v5
               with:
-                  node-version: '20.9.0'
+                  node-version: '24'
 
             - name: Install dependencies
               run: npm install
 
-            - name: Lint with ESLint
-              run: npm run lint:eslint
-
-            - name: Lint with Prettier
-              run: npm run lint:prettier
+            - name: Lint all
+              run: npm run lint:all
 
             - name: Type check
               run: npm run typecheck

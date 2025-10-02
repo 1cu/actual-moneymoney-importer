@@ -72,11 +72,9 @@ describe('AccountMap', () => {
         const accountMap = new AccountMap(budgetConfig, logger, actualApi);
 
         await expect(accountMap.loadFromConfig()).rejects.toThrow(
-            "Failed to resolve account mapping for budget 'budget-test'. MoneyMoney account reference 'missing-account' did not match any MoneyMoney accounts."
+            "MoneyMoney account reference 'missing-account' not found"
         );
-        expect(logger.error).toHaveBeenCalledWith(
-            "MoneyMoney account reference 'missing-account' did not match any MoneyMoney accounts."
-        );
+        expect(logger.error).toHaveBeenCalledWith("MoneyMoney account reference 'missing-account' not found");
     });
 
     it('throws when an Actual account reference is unresolved without filters', async () => {
@@ -95,11 +93,9 @@ describe('AccountMap', () => {
         const accountMap = new AccountMap(budgetConfig, logger, actualApi);
 
         await expect(accountMap.loadFromConfig()).rejects.toThrow(
-            "Failed to resolve account mapping for budget 'budget-test'. Actual account reference 'missing-actual' did not match any Actual accounts."
+            "Actual account reference 'missing-actual' not found"
         );
-        expect(logger.error).toHaveBeenCalledWith(
-            "Actual account reference 'missing-actual' did not match any Actual accounts."
-        );
+        expect(logger.error).toHaveBeenCalledWith("Actual account reference 'missing-actual' not found");
     });
 
     it('skips unresolved mappings outside the filtered account list', async () => {
@@ -142,6 +138,49 @@ describe('AccountMap', () => {
         const [monMonAccount, actualAccount] = entry;
         expect(monMonAccount).toBe(moneyMoneyPrimary);
         expect(actualAccount.id).toBe('actual-primary');
+        expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('silently skips missing accounts when requiresResolution is false', async () => {
+        const budgetConfig = createBudgetConfig({
+            'existing-account': 'actual-existing',
+            'missing-money-account': 'actual-missing',
+            'money-missing': 'actual-existing',
+        });
+        getAccountsMock.mockResolvedValue([
+            {
+                uuid: 'existing-account',
+                accountNumber: 'DE06',
+                name: 'Existing Account',
+            },
+        ]);
+        const actualApi = createActualApi([
+            {
+                id: 'actual-existing',
+                name: 'Existing Actual',
+                type: 'checking',
+                offbudget: false,
+                closed: false,
+            },
+        ]);
+        const logger = createTestLogger();
+        const accountMap = new AccountMap(budgetConfig, logger, actualApi);
+
+        // Only include the existing account in the filter
+        await accountMap.loadFromConfig({ accountRefs: ['existing-account'] });
+
+        const mapping = accountMap.getMap();
+        expect(mapping.size).toBe(1);
+        const [entry] = Array.from(mapping.entries());
+        expect(entry).toBeDefined();
+        if (!entry) {
+            throw new Error('Mapping entry missing');
+        }
+        const [monMonAccount, actualAccount] = entry;
+        expect(monMonAccount.uuid).toBe('existing-account');
+        expect(actualAccount.id).toBe('actual-existing');
+
+        // Verify no errors were logged for the missing accounts
         expect(logger.error).not.toHaveBeenCalled();
     });
 });

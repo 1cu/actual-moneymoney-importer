@@ -6,7 +6,7 @@ import ActualApi from '../utils/ActualApi.js';
 import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import PayeeTransformer from '../utils/PayeeTransformer.js';
-import { loadConfig, logDefaultedConfigDecisions } from '../utils/config.js';
+import { loadConfig } from '../utils/config.js';
 import { DATE_FORMAT } from '../utils/shared.js';
 import type { Config, ActualServerConfig, ActualBudgetConfig } from '../utils/config.js';
 
@@ -156,13 +156,15 @@ const processBudget = async (
 
 const handleCommand = async (argv: ArgumentsCamelCase) => {
     const logLevel = (argv.logLevel ?? LogLevel.INFO) as number;
-    const structuredLogs = Boolean(argv.structuredLogs);
-    const logger = new Logger(logLevel, { structuredLogs });
+    const logger = new Logger(logLevel);
 
-    const { config, defaultDecisions } = await loadConfig(argv);
+    const { config } = await loadConfig(argv);
 
-    if (defaultDecisions.length > 0) {
-        logDefaultedConfigDecisions(logger, defaultDecisions);
+    // Debug: Log safe configuration summary at debug level
+    if (logLevel >= LogLevel.DEBUG) {
+        logger.debug(
+            `Configuration loaded - servers: ${config.actualServers.length}, payee transformation: ${config.payeeTransformation.enabled}`
+        );
     }
 
     const payeeTransformer = config.payeeTransformation.enabled

@@ -78,17 +78,16 @@ ready:
 
 1. Install dependencies after cloning the repository:
 
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 
 1. Run the quality gates to ensure linting, type checks, the build, and tests
    all pass:
 
-   ```bash
-   npm run lint:eslint && npm run lint:complexity && \
-   npm run lint:prettier && npm run typecheck && npm test
-   ```
+    ```bash
+    npm run lint:all && npm run typecheck && npm test
+    ```
 
 1. Read through the detailed [contributor guide](./CONTRIBUTING.md) for workflow
    expectations, helpful scripts, and documentation requirements.
@@ -120,15 +119,13 @@ A basic configuration document looks like this:
 [payeeTransformation]
 enabled = false
 openAiApiKey = "<openAiKey>"  # Your OpenAI API key
-openAiModel = "gpt-3.5-turbo"  # Optional: Specify the OpenAI model to use
-# maskPayeeNamesInLogs = true     # Optional: keep payee names obfuscated in
+openAiModel = "gpt-4o-mini"  # Optional: Specify the OpenAI model to use
 # payee transformation debug logs
 
 # Import settings
 [import]
 importUncheckedTransactions = true
 synchronizeClearedStatus = true
-# maskPayeeNamesInLogs = true  # Optional: replace payee names in import logs
 # with deterministic placeholders
 
 # Actual servers, you can add multiple servers
@@ -183,16 +180,9 @@ human-readable formats (e.g., "AMAZN S.A.R.L" to "Amazon"). To use this feature:
    configured model identifier without contacting the OpenAI model listing
    endpoint
 
-By default, payee transformation debug logs mask payee names unless you opt out
-with `maskPayeeNamesInLogs = false`. This keeps sensitive payee data hidden even
-when running with verbose logging levels.
-
-Importer debug logs display raw payee names unless you enable
-`maskPayeeNamesInLogs`. When masking is enabled, payees are replaced with
-deterministic placeholders (e.g., `PAYEE#1234ABCD`) so you can still trace
-individual entries without exposing the original names. Note:
-`[payeeTransformation].maskPayeeNamesInLogs` controls PayeeTransformer debug
-logs, while `[import].maskPayeeNamesInLogs` controls Importer logs.
+When payee transformation is enabled, importer debug logs replace payees with deterministic placeholders
+(e.g., `PAYEE#1234ABCD`) so you can trace individual entries without exposing original names. When the
+feature is disabled, importer debug logs show raw payee names.
 
 #### Custom Prompts
 
@@ -239,6 +229,29 @@ your environment restricts model listing requests.
 - **Ignore patterns**: Filter transactions with case-insensitive `*` wildcards
   for comments, payees, and purposes
 
+### Default Configuration Values
+
+When configuration values are not explicitly set, the following defaults are used:
+
+| Configuration Key                                  | Default Value   | Description                                         |
+| -------------------------------------------------- | --------------- | --------------------------------------------------- |
+| `payeeTransformation.enabled`                      | `false`         | Disable AI payee transformation by default          |
+| `payeeTransformation.openAiModel`                  | `"gpt-4o-mini"` | Use cost-effective model for transformations        |
+| `payeeTransformation.cacheTransformedPayees`       | `true`          | Cache transformations to avoid repeated API calls   |
+| `import.importUncheckedTransactions`              | `true`          | Import transactions as unchecked by default         |
+| `import.synchronizeClearedStatus`                 | `true`          | Synchronize cleared status between MoneyMoney and Actual |
+| `import.maskPayeesInLogs`                         | `true`          | Mask payee names in logs for privacy                |
+| `import.importSince`                              | `null`          | No date filter by default (import all transactions) |
+| `import.importUntil`                              | `null`          | No end date filter by default                       |
+| `import.ignorePatterns.comments`                 | `[]`            | No comment patterns to ignore                       |
+| `import.ignorePatterns.payees`                    | `[]`            | No payee patterns to ignore                         |
+| `import.ignorePatterns.purposes`                  | `[]`            | No purpose patterns to ignore                       |
+| `actualServers`                                    | `[]`            | No servers configured by default                    |
+| `actualServers[].budgets[].e2eEncryption.enabled`  | `false`         | No encryption by default                            |
+| `actualServers[].budgets[].e2eEncryption.password` | `null`          | No encryption password by default                   |
+
+**Debug Configuration**: Use `--logLevel 3` to see the full effective configuration.
+
 ## Usage
 
 ### Validation
@@ -251,8 +264,7 @@ actual-monmon validate
 
 You can increase or decrease CLI verbosity with `--logLevel` (`0 = ERROR`,
 `1 = WARN`, `2 = INFO`, `3 = DEBUG`). Combine it with `--config` to validate a
-different configuration file, and use `--structuredLogs` when you need
-machine-readable JSON output for log aggregation:
+different configuration file:
 
 ```bash
 actual-monmon validate --config ./config.toml --logLevel 3
@@ -277,7 +289,6 @@ You can limit the scope of an import with additional flags:
 - `--from YYYY-MM-DD` / `--to YYYY-MM-DD` – bound the transaction date range.
 - `--dry-run` – simulate the import without persisting any changes.
 - `--logLevel <0-3>` – control CLI verbosity (defaults to `2`, INFO).
-- `--structuredLogs` – emit JSON-formatted logs instead of coloured text.
 - `--config <path>` – load a configuration file from a custom path.
 
 ### Console Output Filtering
@@ -287,8 +298,8 @@ The CLI automatically filters noisy Actual SDK console output to provide a clean
 #### How Console Filtering Works
 
 - **Automatic Suppression**: Noisy Actual SDK output is automatically detected and suppressed
-- **Categorized Debug Logging**: When `--logLevel 3` (DEBUG) is enabled, suppressed messages are logged with categories:
 
+- **Categorized Debug Logging**: When `--logLevel 3` (DEBUG) is enabled, suppressed messages are logged with categories:
   - `[NETWORK:SYNC]` - Network synchronization messages
   - `[DATA:BUDGET]` - Budget loading and saving operations
   - `[DATA:RECONCILIATION]` - Transaction reconciliation processes
@@ -318,9 +329,6 @@ The console filtering system includes performance optimizations:
 # See all console output including filtered messages
 actual-monmon import --logLevel 3
 
-# Use structured JSON logs for log aggregation
-actual-monmon import --logLevel 3 --structuredLogs
-
 # Normal operation (filtered output)
 actual-monmon import
 ```
@@ -338,9 +346,7 @@ actual-monmon --help
 For detailed workflows, see [CONTRIBUTING.md](./CONTRIBUTING.md). Helpful npm
 scripts when working on the project:
 
-- `npm run lint:eslint` – run ESLint against the TypeScript sources.
-- `npm run lint:complexity` – enforce the cyclomatic (max 40) and cognitive (max
-  60\) complexity budgets for the source tree.
+- `npm run lint:all` – run all linters (ESLint, Prettier, Markdown).
 - `npm run lint:prettier` – check formatting with Prettier.
 - `npm run typecheck` – perform a strict TypeScript type check without emitting
   files.
@@ -352,8 +358,7 @@ Run `mdformat <files>` locally when updating docs to keep diffs clean.
 
 The repository includes Husky hooks to keep the working tree clean:
 
-- `pre-commit` runs `npm run lint:prettier`, `npm run lint:eslint`, and
-  `npm run lint:complexity` to block formatting, lint, or complexity violations.
+- `pre-commit` runs `npm run lint:prettier:fix`, `npm run lint:markdown:fix`, `npm run lint:eslint`, `npm run typecheck`, `npm run test:typecheck`, and `npm test` to block formatting, lint, type, or test violations.
 - `pre-push` runs the quality gates so that pushes only succeed when the entire
   local CI suite is green.
 

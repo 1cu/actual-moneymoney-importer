@@ -99,94 +99,57 @@ export class AccountMap {
     }
 
     public async loadFromConfig(options: LoadFromConfigOptions = {}): Promise<void> {
-        if (this.mapping) return;
-        if (this._isLoading) {
-            this.logger.debug('Account mapping is already being loaded, skipping concurrent request.');
-            return;
-        }
+        if (this.mapping || this._isLoading) return;
         this._isLoading = true;
 
-        const accountMapping = this.budgetConfig.accountMapping ?? {};
-        if (typeof accountMapping !== 'object' || accountMapping === null) {
-            throw new Error(
-                'Invalid budget configuration: accountMapping must be an object like { moneyMoneyRef: actualRef }.'
-            );
+        try {
+            const accountMapping = this.budgetConfig.accountMapping ?? {};
+            if (typeof accountMapping !== 'object' || accountMapping === null) {
+                throw new Error('Invalid budget configuration: accountMapping must be an object');
+            }
+
+            const [moneyMoneyAccounts, actualAccounts] = await Promise.all([
+                getAccounts(),
+                this.actualApi.getAccounts(),
+            ]);
+            this.moneyMoneyAccounts = moneyMoneyAccounts;
+            this.actualAccounts = actualAccounts as Array<ActualAccount>;
+
+            const parsedAccountMapping: Map<MonMonAccount, ActualAccount> = new Map();
+            const accountRefsFilter =
+                options.accountRefs && options.accountRefs.length > 0 ? new Set(options.accountRefs) : null;
+
+            for (const [moneyMoneyRef, actualRef] of Object.entries(accountMapping as Record<string, string>)) {
+                this.processAccountMapping(moneyMoneyRef, actualRef, accountRefsFilter, parsedAccountMapping);
+            }
+
+            this.mapping = parsedAccountMapping;
+        } finally {
+            this._isLoading = false;
         }
-        const parsedAccountMapping: Map<MonMonAccount, ActualAccount> = new Map();
+    }
 
-        const accountRefsFilter =
-            options.accountRefs && options.accountRefs.length > 0 ? new Set(options.accountRefs) : null;
-        const unresolvedErrors: string[] = [];
+    private processAccountMapping(
+        moneyMoneyRef: string,
+        actualRef: string,
+        accountRefsFilter: Set<string> | null,
+        parsedAccountMapping: Map<MonMonAccount, ActualAccount>
+    ): void {
+        const moneyMoneyAccount = this.getMoneyMoneyAccountByRef(moneyMoneyRef);
+        const actualAccount = this.getActualAccountByRef(actualRef);
+        const requiresResolution = accountRefsFilter === null || accountRefsFilter.has(moneyMoneyRef);
 
-        const [moneyMoneyAccounts, actualAccounts] = await Promise.all([getAccounts(), this.actualApi.getAccounts()]);
-        this.moneyMoneyAccounts = moneyMoneyAccounts;
-        this.logger.debug(`Found ${this.moneyMoneyAccounts.length} accounts in MoneyMoney.`);
-        this.actualAccounts = actualAccounts as Array<ActualAccount>;
-        this.logger.debug(`Found ${this.actualAccounts.length} accounts in Actual.`);
+        if (requiresResolution && !moneyMoneyAccount) {
+            this.logger.error(`MoneyMoney account reference '${moneyMoneyRef}' not found`);
+            throw new Error(`MoneyMoney account reference '${moneyMoneyRef}' not found`);
+        }
+        if (requiresResolution && !actualAccount) {
+            this.logger.error(`Actual account reference '${actualRef}' not found`);
+            throw new Error(`Actual account reference '${actualRef}' not found`);
+        }
 
-        const entries = Object.entries(accountMapping as Record<string, string>);
-        this.logger.debug(`Account mapping contains ${entries.length} entries.`);
-
-        for (const [moneyMoneyRef, actualRef] of entries) {
-            const moneyMoneyAccount = this.getMoneyMoneyAccountByRef(moneyMoneyRef);
-
-            const actualAccount = this.getActualAccountByRef(actualRef);
-
-            const requiresResolution = accountRefsFilter === null || accountRefsFilter.has(moneyMoneyRef);
-
-            if (!moneyMoneyAccount) {
-                const message = `MoneyMoney account reference '${moneyMoneyRef}' did not match any MoneyMoney accounts.`;
-
-                if (requiresResolution) {
-                    this.logger.error(message);
-                    unresolvedErrors.push(message);
-                } else {
-                    this.logger.debug(
-                        `Skipping account mapping for MoneyMoney reference '${moneyMoneyRef}' because it is not part of the import filter.`
-                    );
-                }
-            }
-
-            if (!actualAccount) {
-                const message = `Actual account reference '${actualRef}' did not match any Actual accounts.`;
-
-                if (requiresResolution) {
-                    this.logger.error(message);
-                    unresolvedErrors.push(message);
-                } else {
-                    this.logger.debug(
-                        `Skipping account mapping for Actual reference '${actualRef}' because it is not part of the import filter.`
-                    );
-                }
-            }
-
-            if (!moneyMoneyAccount || !actualAccount) {
-                continue;
-            }
-
-            this.logger.debug(
-                `MoneyMoney account '${moneyMoneyAccount.name}' will import to Actual account '${actualAccount.name}'.`
-            );
-
+        if (moneyMoneyAccount && actualAccount) {
             parsedAccountMapping.set(moneyMoneyAccount, actualAccount);
         }
-
-        if (unresolvedErrors.length > 0) {
-            const header = `Failed to resolve account mapping for budget '${this.budgetConfig.syncId}'.`;
-            const details =
-                unresolvedErrors.length === 1 ? ` ${unresolvedErrors[0]}` : `\n - ${unresolvedErrors.join('\n - ')}`;
-            throw new Error(`${header}${details}`);
-        }
-
-        this.logger.info('Parsed account mapping', [
-            '[MoneyMoney Account] → [Actual Account]',
-            ...Array.from(parsedAccountMapping.entries()).map(
-                ([monMonAccount, actualAccount]) =>
-                    `${monMonAccount.name} (${monMonAccount.uuid ?? 'unknown'}) → ${actualAccount.name} (${actualAccount.id})`
-            ),
-        ]);
-
-        this.mapping = parsedAccountMapping;
-        this._isLoading = false;
     }
 }
