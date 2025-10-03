@@ -32,6 +32,16 @@ describe('Importer', () => {
     let importer: Importer;
     let config: Config;
     let budgetConfig: ActualBudgetConfig;
+    type ImportArgs = Parameters<Importer['importTransactions']>[0];
+    const runImport = async (overrides: Partial<ImportArgs> = {}) => {
+        await importer.importTransactions({
+            accountRefs: ['mm-account-1'],
+            from: new Date('2024-01-01'),
+            to: new Date('2024-01-31'),
+            isDryRun: false,
+            ...overrides,
+        });
+    };
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -93,12 +103,7 @@ describe('Importer', () => {
         const mockTransactions = [createMockTransaction()];
         vi.mocked(getTransactions).mockResolvedValue(mockTransactions);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: false,
-        });
+        await runImport();
 
         expect(mockAccountMap.getMap).toHaveBeenCalledWith(['mm-account-1']);
         expect(getTransactions).toHaveBeenCalledWith(
@@ -123,12 +128,7 @@ describe('Importer', () => {
     it('handles empty MoneyMoney transactions', async () => {
         vi.mocked(getTransactions).mockResolvedValue([]);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: false,
-        });
+        await runImport();
 
         expect(mockActualApi.importTransactions).not.toHaveBeenCalled();
     });
@@ -158,12 +158,7 @@ describe('Importer', () => {
     it('handles dry run mode', async () => {
         vi.mocked(getTransactions).mockResolvedValue([createMockTransaction()]);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: true,
-        });
+        await runImport({ isDryRun: true });
 
         expect(mockActualApi.importTransactions).not.toHaveBeenCalled();
         expect(mockPayeeTransformer.transformPayees).not.toHaveBeenCalled();
@@ -185,12 +180,7 @@ describe('Importer', () => {
             createMockTransaction({ id: 2, name: 'New Transaction' }),
         ]);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: false,
-        });
+        await runImport();
 
         expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
             'actual-account-1',
@@ -198,16 +188,37 @@ describe('Importer', () => {
         );
     });
 
+    it('applies ignore patterns to payee, comment, and purpose fields', async () => {
+        config.import.ignorePatterns = {
+            payeePatterns: ['spam*'],
+            commentPatterns: ['ignore*'],
+            purposePatterns: ['internal*'],
+        };
+
+        vi.mocked(getTransactions).mockResolvedValue([
+            createMockTransaction({ id: 1, name: 'Spam Vendor' }),
+            createMockTransaction({ id: 2, name: 'Commented Transaction', comment: 'Ignore this transaction' }),
+            createMockTransaction({ id: 3, name: 'Purpose Transaction', purpose: 'Internal transfer' }),
+            createMockTransaction({ id: 4, name: 'Allowed Transaction' }),
+        ]);
+
+        await runImport();
+
+        const firstCall = vi.mocked(mockActualApi.importTransactions).mock.calls[0];
+        expect(firstCall).toBeDefined();
+        const [, importedTransactions] = firstCall as [string, Array<Record<string, unknown>>];
+        const payeeNames = importedTransactions.map((transaction) => transaction.payee_name);
+        expect(payeeNames).toContain('Allowed Transaction');
+        expect(payeeNames).not.toContain('Spam Vendor');
+        expect(payeeNames).not.toContain('Commented Transaction');
+        expect(payeeNames).not.toContain('Purpose Transaction');
+    });
+
     it('creates starting balance transaction when no prior history exists', async () => {
         mockActualApi.getTransactions = vi.fn().mockResolvedValue([]);
         vi.mocked(getTransactions).mockResolvedValue([createMockTransaction()]);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: false,
-        });
+        await runImport();
 
         expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
             'actual-account-1',
@@ -220,12 +231,7 @@ describe('Importer', () => {
         mockPayeeTransformer.transformPayees = vi.fn().mockRejectedValue(new Error('OpenAI error'));
         vi.mocked(getTransactions).mockResolvedValue([createMockTransaction()]);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: false,
-        });
+        await runImport();
 
         expect(mockPayeeTransformer.transformPayees).toHaveBeenCalled();
     });
@@ -237,12 +243,7 @@ describe('Importer', () => {
             createMockTransaction({ booked: false, checkmark: false }),
         ]);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: false,
-        });
+        await runImport();
 
         expect(mockActualApi.importTransactions).toHaveBeenCalledWith(
             'actual-account-1',
@@ -278,13 +279,7 @@ describe('Importer', () => {
             },
         ]);
 
-        await importer.importTransactions({
-            accountRefs: ['mm-account-1'],
-            from: new Date('2024-01-01'),
-            to: new Date('2024-01-31'),
-            isDryRun: false,
-        });
-
+        await runImport();
         expect(mockActualApi.importTransactions).not.toHaveBeenCalled();
     });
 });

@@ -73,9 +73,20 @@ class Importer {
         if (!this.config.import.importUncheckedTransactions) {
             monMonTransactions = monMonTransactions.filter((t) => t.booked);
         }
-        if (this.config.import.ignorePatterns?.payeePatterns) {
+        const ignorePatterns = this.config.import.ignorePatterns;
+        if (ignorePatterns?.payeePatterns) {
             monMonTransactions = monMonTransactions.filter(
-                (t) => !this.matchesPattern(t.name, this.config.import.ignorePatterns!.payeePatterns)
+                (t) => !this.matchesPattern(t.name, ignorePatterns.payeePatterns)
+            );
+        }
+        if (ignorePatterns?.commentPatterns) {
+            monMonTransactions = monMonTransactions.filter(
+                (t) => !this.matchesPattern(t.comment, ignorePatterns.commentPatterns)
+            );
+        }
+        if (ignorePatterns?.purposePatterns) {
+            monMonTransactions = monMonTransactions.filter(
+                (t) => !this.matchesPattern(t.purpose, ignorePatterns.purposePatterns)
             );
         }
         return monMonTransactions;
