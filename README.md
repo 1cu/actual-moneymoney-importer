@@ -49,7 +49,7 @@ The application will be accessible as a CLI tool with the name `actual-monmon`.
 
 ## Dependencies
 
-- Node.js **v20.9.0 or newer** (see `package.json` `engines` field)
+- Node.js **v24.0.0 or newer** (see `package.json` `engines` field)
 - A licensed copy of MoneyMoney on macOS to access the transaction database
 
 **Note on zod version**: This project must remain on zod v3 due to a peer
@@ -63,7 +63,7 @@ v4 once openai ships a compatible update.
 New to the project? Follow these steps to get your development environment
 ready:
 
-1. Confirm you are running Node.js **v20.9.0 or newer**.
+1. Confirm you are running Node.js **v24.0.0 or newer**.
 
 1. Install dependencies after cloning the repository:
 
