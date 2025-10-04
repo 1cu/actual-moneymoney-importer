@@ -81,7 +81,7 @@ You can scope imports with the `--server`, `--budget`, and `--account` options o
 
 Examples:
 
-```
+```bash
 # Import only these accounts
 actual-monmon import -a "DKB Giro" -a "DKB Visa"
 actual-monmon import -a "DKB Giro,DKB Visa"

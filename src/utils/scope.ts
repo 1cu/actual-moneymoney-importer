@@ -24,9 +24,7 @@ const matches = (matcher: Matcher, candidates: Array<string | undefined>) => {
         return true;
     }
 
-    return candidates.some(
-        (candidate) => candidate && matcher(candidate)
-    );
+    return candidates.some((candidate) => candidate && matcher(candidate));
 };
 
 const resolveServerCandidates = (server: ActualServerConfig) => {
