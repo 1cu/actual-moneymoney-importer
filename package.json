@@ -8,8 +8,7 @@
         "start": "node dist/index.js",
         "lint:eslint": "eslint src",
         "lint:prettier": "prettier --check 'src/**/*.ts'",
-        "lint:fix": "eslint src --fix && prettier --write 'src/**/*.ts'",
-        "prepare": "husky install"
+        "lint:fix": "eslint src --fix && prettier --write 'src/**/*.ts'"
     },
     "type": "module",
     "keywords": [
