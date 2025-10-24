@@ -7,9 +7,10 @@ A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney<
 <p>
 
 > **This is a fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney) with additional features and improvements.**
-> 
-> **Upstream repository**: [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney)  
+>
+> **Upstream repository**: [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney)
 > **Fork maintenance guide**: See [FORK_MAINTENANCE.md](./FORK_MAINTENANCE.md) for development workflow
+
 <p align="center">
 <img src="https://badgers.space/github/checks/NikxDa/actual-moneymoney/main">
 </p>
@@ -19,7 +20,7 @@ A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney<
 Install with NPM:
 
 ```bash
-$ npm i -g actual-moneymoney
+npm i -g actual-moneymoney
 ```
 
 The application will be accessible as a CLI tool with the name `actual-monmon`.
@@ -32,7 +33,7 @@ The application needs to be configured with a TOML document in order to function
 
 A configuration document looks like this:
 
-```
+```toml
 # Payee transformation
 [payeeTransformation]
 enabled = false
@@ -68,11 +69,11 @@ password = ""
 
 A short summary:
 
--   **Payee transformation** allows the automatic conversion of payee names to human-readable formats, e.g. "AMAZN S.A.R.L" to "Amazon". In order for this to function, you also need to provide a valid OpenAI API key. You can generate this key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). You can optionally override the default prompt with custom instructions if you need different transformation rules.
--   **Import settings** allow you to customize the import behavior, e.g. whether unchecked transactions should be imported.
--   **Actual servers** specify which servers should be imported to
--   **Budget configurations** describe the budget files per server which are import targets. The sync ID can be grabbed from the Actual web interface by navigating to settings, then advanced settings. If the budget file is end-to-end encrypted, the details need to be provided here.
--   **Account mapping** maps each MoneyMoney account to an Actual account. MoneyMoney accounts can be described by their UUID (accessible via the AppleScript API of MoneyMoney only, at this time), account number (IBAN, credit card no, etc.) or their name (in this order). Actual accounts can be described by their UUID (can be copied from the URL in a browser window) or their name (in that order). If a name occurs multiple times, the first one will be used. Invalid mappings or additional accounts are ignored.
+- **Payee transformation** allows the automatic conversion of payee names to human-readable formats, e.g. "AMAZN S.A.R.L" to "Amazon". In order for this to function, you also need to provide a valid OpenAI API key. You can generate this key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). You can optionally override the default prompt with custom instructions if you need different transformation rules.
+- **Import settings** allow you to customize the import behavior, e.g. whether unchecked transactions should be imported.
+- **Actual servers** specify which servers should be imported to
+- **Budget configurations** describe the budget files per server which are import targets. The sync ID can be grabbed from the Actual web interface by navigating to settings, then advanced settings. If the budget file is end-to-end encrypted, the details need to be provided here.
+- **Account mapping** maps each MoneyMoney account to an Actual account. MoneyMoney accounts can be described by their UUID (accessible via the AppleScript API of MoneyMoney only, at this time), account number (IBAN, credit card no, etc.) or their name (in this order). Actual accounts can be described by their UUID (can be copied from the URL in a browser window) or their name (in that order). If a name occurs multiple times, the first one will be used. Invalid mappings or additional accounts are ignored.
 
 Once you have configured your importer, run `actual-monmon validate` again to verify that the configuration has the correct format.
 
@@ -92,7 +93,7 @@ The following configuration options can optionally be added
 
 Ignore patterns allow you to specify payee names, comments, or purposes which should be ignored. _Note:_ Currently, the strings are treated as is, meaning they are case-sensitive, and will be checked for inclusion, not exact matches.
 
-```
+```toml
 [import.ignorePatterns]
 commentPatterns = ["[actual-ignore]"]
 payeePatterns = []
@@ -105,7 +106,7 @@ The above configuration would ignore all transactions that have a comment contai
 
 Each budget can specify an earliest import date. This can be useful when starting to use the importer with an already existing budget in order to prevent duplicates from being imported. The importer will ignore any transactions from before the specified date.
 
-```
+```toml
 [[actualServers.budgets]]
 earliestImportDate = "2024-01-01" # Format is YYYY-MM-DD
 ```

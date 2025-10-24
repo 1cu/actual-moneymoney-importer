@@ -88,12 +88,14 @@ Set `develop` as default branch on GitHub so it's what people see and what you c
 ## Quick Reference
 
 ### Check for upstream updates
+
 ```bash
 git fetch upstream
 git log main..upstream/main --oneline
 ```
 
 ### Sync with upstream (when updates available)
+
 ```bash
 git checkout main
 git merge upstream/main --ff-only
@@ -104,6 +106,7 @@ git push origin develop
 ```
 
 ### Create a new feature
+
 ```bash
 git checkout develop
 git checkout -b feat/feature-name
@@ -115,6 +118,7 @@ git push origin develop
 ```
 
 ### Tag a release
+
 ```bash
 git checkout develop
 git tag v2.11.0-fork.1
