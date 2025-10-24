@@ -8,13 +8,17 @@ import validateCommand from './commands/validate.command.js';
 import Logger from './utils/Logger.js';
 import { APPLICATION_DIRECTORY } from './utils/shared.js';
 
+// Display version and fork information
+console.log('🔀 Running on develop fork');
+console.log('');
+
 try {
     fs.accessSync(APPLICATION_DIRECTORY);
 } catch (_err) {
     fs.mkdirSync(APPLICATION_DIRECTORY, { recursive: true });
 }
 
-const _ = yargs(hideBin(process.argv))
+yargs(hideBin(process.argv))
     .option('config', {
         type: 'string',
         description: 'Path to the configuration file',
@@ -36,4 +40,4 @@ const _ = yargs(hideBin(process.argv))
         }
 
         process.exit(1);
-    }).argv;
+    });

@@ -21,7 +21,7 @@ type GetUserFilesResponse = {
 
 class ActualApi {
     protected isInitialized = false;
-    private api: typeof actual | null = null;
+    // private _api: typeof actual | null = null;
 
     constructor(
         private serverConfig: ActualServerConfig,
@@ -99,7 +99,7 @@ class ActualApi {
                 budgetConfig.syncId,
                 budgetConfig.e2eEncryption.enabled
                     ? {
-                          password: budgetConfig.e2eEncryption.password,
+                          password: budgetConfig.e2eEncryption.password ?? '',
                       }
                     : undefined
             );

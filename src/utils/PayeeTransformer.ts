@@ -53,7 +53,7 @@ class PayeeTransformer {
                 temperature: 0,
             });
 
-            const output = response.choices[0].message?.content as string;
+            const output = response.choices[0]?.message?.content as string;
 
             try {
                 return JSON.parse(output) as { [key: string]: string };

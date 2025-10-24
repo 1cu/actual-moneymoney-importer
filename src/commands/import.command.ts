@@ -92,12 +92,26 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
                 `Budget: ${budgetConfig.syncId}`
             );
 
-            await importer.importTransactions({
-                accountRefs,
-                from: fromDate,
-                to: toDate,
+            const importOptions: {
+                accountRefs?: string[];
+                from?: Date;
+                to?: Date;
+                isDryRun: boolean;
+            } = {
                 isDryRun,
-            });
+            };
+
+            if (accountRefs) {
+                importOptions.accountRefs = accountRefs;
+            }
+            if (fromDate) {
+                importOptions.from = fromDate;
+            }
+            if (toDate) {
+                importOptions.to = toDate;
+            }
+
+            await importer.importTransactions(importOptions);
 
             await actualApi.shutdown();
         }

@@ -59,10 +59,18 @@ class Importer {
             }`
         );
 
-        let monMonTransactions = await getTransactions({
+        const getTransactionsOptions: {
+            from: Date;
+            to?: Date;
+        } = {
             from: importDate,
-            to: toDate,
-        });
+        };
+
+        if (toDate) {
+            getTransactionsOptions.to = toDate;
+        }
+
+        let monMonTransactions = await getTransactions(getTransactionsOptions);
 
         if (monMonTransactions.length === 0) {
             this.logger.info(
@@ -119,7 +127,7 @@ class Importer {
                     acc[transaction.accountUuid] = [];
                 }
 
-                acc[transaction.accountUuid].push(transaction);
+                acc[transaction.accountUuid]?.push(transaction);
 
                 return acc;
             },
@@ -160,8 +168,8 @@ class Importer {
                 const startTransaction: CreateTransaction = {
                     date: format(
                         monMonTransactions.length > 0
-                            ? monMonTransactions[monMonTransactions.length - 1]
-                                  .valueDate
+                            ? (monMonTransactions.at(-1)?.valueDate ??
+                                  new Date())
                             : new Date(),
                         DATE_FORMAT
                     ),
@@ -223,7 +231,9 @@ class Importer {
                 if (transformedPayees !== null) {
                     createTransactions.forEach((t) => {
                         t.payee_name =
-                            transformedPayees[t.imported_payee as string];
+                            transformedPayees[t.imported_payee as string] ??
+                            t.imported_payee ??
+                            '';
                     });
                 } else {
                     this.logger.warn(
@@ -231,7 +241,7 @@ class Importer {
                     );
 
                     createTransactions.forEach((t) => {
-                        t.payee_name = t.imported_payee;
+                        t.payee_name = t.imported_payee ?? '';
                     });
                 }
             } else {
@@ -242,7 +252,7 @@ class Importer {
                 );
 
                 createTransactions.forEach((t) => {
-                    t.payee_name = t.imported_payee;
+                    t.payee_name = t.imported_payee ?? '';
                 });
             }
 
@@ -256,7 +266,7 @@ class Importer {
                     this.logger.error('Some errors occurred during import:');
                     for (let i = 0; i < result.errors.length; i++) {
                         this.logger.error(
-                            `Error ${i + 1}: ${result.errors[i].message}`
+                            `Error ${i + 1}: ${result.errors[i]?.message ?? 'Unknown error'}`
                         );
                     }
                 }
@@ -278,17 +288,22 @@ class Importer {
     private async convertToActualTransaction(
         transaction: MonMonTransaction
     ): Promise<CreateTransaction> {
-        return {
+        const createTransaction: CreateTransaction = {
             date: format(transaction.valueDate, 'yyyy-MM-dd'),
             amount: Math.round(transaction.amount * 100),
             imported_id: this.getIdForMoneyMoneyTransaction(transaction),
-            imported_payee: transaction.name,
-            cleared: this.config.import.synchronizeClearedStatus
-                ? transaction.booked
-                : undefined,
-            notes: transaction.purpose,
-            // payee_name: transaction.name,
+            imported_payee: transaction.name ?? '',
         };
+
+        if (this.config.import.synchronizeClearedStatus) {
+            createTransaction.cleared = transaction.booked;
+        }
+
+        if (transaction.purpose) {
+            createTransaction.notes = transaction.purpose;
+        }
+
+        return createTransaction;
     }
 
     private getIdForMoneyMoneyTransaction(transaction: MonMonTransaction) {
@@ -299,7 +314,7 @@ class Importer {
         account: MonMonAccount,
         transactions: MonMonTransaction[]
     ) {
-        const monMonAccountBalance = account.balance[0][0];
+        const monMonAccountBalance = account.balance[0]?.[0] ?? 0;
         const totalExpenses = transactions.reduce(
             (acc, transaction) =>
                 acc + (transaction.booked ? transaction.amount : 0),
