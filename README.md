@@ -1,10 +1,15 @@
 <p align="center">
     <img src="./assets/actual-moneymoney.png" height="150">
 </p>
-<h1 align="center">Actual-MoneyMoney</h1>
+<h1 align="center">Actual-MoneyMoney (Fork)</h1>
 <p align="center">
 A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney</a> transactions into <a href="https://actualbudget.org">Actual Budget</a>, written in TypeScript
 <p>
+
+> **This is a fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney) with additional features and improvements.**
+> 
+> **Upstream repository**: [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney)  
+> **Fork maintenance guide**: See [FORK_MAINTENANCE.md](./FORK_MAINTENANCE.md) for development workflow
 <p align="center">
 <img src="https://badgers.space/github/checks/NikxDa/actual-moneymoney/main">
 </p>
