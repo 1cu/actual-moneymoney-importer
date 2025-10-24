@@ -40,4 +40,5 @@ yargs(hideBin(process.argv))
         }
 
         process.exit(1);
-    });
+    })
+    .parse();
