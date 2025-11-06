@@ -1,8 +1,9 @@
 {
   "branches": [
+    "main",
     {
       "name": "develop",
-      "prerelease": "fork.1"
+      "prerelease": "fork"
     }
   ],
   "plugins": [
