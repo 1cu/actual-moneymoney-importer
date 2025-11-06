@@ -3,6 +3,8 @@ on: [push, pull_request]
 jobs:
     test:
         name: test
+        permissions:
+            contents: read
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v5
@@ -14,6 +16,8 @@ jobs:
             - run: bun run build
 
     commitlint:
+        permissions:
+            contents: read
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v5
