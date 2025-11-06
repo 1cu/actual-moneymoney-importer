@@ -2,8 +2,7 @@ name: release
 on:
     push:
         branches:
-            - main
-            - next
+            - develop
 jobs:
     release:
         runs-on: ubuntu-latest
@@ -11,6 +10,7 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v5
               with:
+                  fetch-depth: 0
                   persist-credentials: false
 
             - name: Setup Node
