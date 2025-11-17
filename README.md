@@ -38,7 +38,7 @@ A configuration document looks like this:
 [payeeTransformation]
 enabled = false
 openAiApiKey = "<openAiKey>"  # Your OpenAI API key
-openAiModel = "gpt-3.5-turbo"  # Optional: Specify the OpenAI model to use (default: gpt-3.5-turbo)
+openAiModel = "gpt-5-nano"  # Optional: Specify the OpenAI model to use (default: gpt-5-nano)
 prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
 
 # Import settings

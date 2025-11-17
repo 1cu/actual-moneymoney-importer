@@ -47,7 +47,7 @@ const actualServerSchema = z.object({
 const payeeTransformationSchema = z.object({
     enabled: z.boolean(),
     openAiApiKey: z.string().optional(),
-    openAiModel: z.string().optional().default('gpt-3.5-turbo'),
+    openAiModel: z.string().optional().default('gpt-5-nano'),
     prompt: z.string().optional(),
 });
 
