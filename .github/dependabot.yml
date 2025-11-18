@@ -12,8 +12,3 @@ updates:
           - dependency-name: zod
             update-types: ["version-update:semver-major"]
             versions: [">=4.0.0"]
-      automerged_updates:
-          - match:
-            update_type: "patch"
-          - match:
-            update_type: "minor"
