@@ -3,7 +3,7 @@ updates:
     - package-ecosystem: npm
       directory: '/'
       schedule:
-          interval: daily
+          interval: weekly
       commit-message:
           prefix: chore
           prefix-development: chore
@@ -12,3 +12,8 @@ updates:
           - dependency-name: zod
             update-types: ["version-update:semver-major"]
             versions: [">=4.0.0"]
+      automerged_updates:
+          - match:
+            update_type: "patch"
+          - match:
+            update_type: "minor"
