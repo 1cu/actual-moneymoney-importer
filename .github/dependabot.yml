@@ -8,3 +8,7 @@ updates:
           prefix: chore
           prefix-development: chore
           include: scope
+      ignore:
+          - dependency-name: zod
+            update-types: ["version-update:semver-major"]
+            versions: [">=4.0.0"]
