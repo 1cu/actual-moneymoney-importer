@@ -233,6 +233,15 @@ class Importer {
                             '';
                     });
                 } else {
+                    const onError =
+                        this.config.payeeTransformation.onTransformError;
+
+                    if (onError === 'fail') {
+                        throw new Error(
+                            'Payee transformation failed. Check the error messages above for details.'
+                        );
+                    }
+
                     this.logger.warn(
                         'Payee transformation failed. Using default payee names...'
                     );

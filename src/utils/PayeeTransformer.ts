@@ -53,7 +53,7 @@ class PayeeTransformer {
                 response_format: {
                     type: 'json_object',
                 },
-                temperature: 0,
+                temperature: this.config.temperature,
             });
 
             const output = response.choices[0]?.message?.content as string;
@@ -69,6 +69,17 @@ class PayeeTransformer {
             }
         } catch (error) {
             if (error instanceof Error) {
+                // Check if it's a temperature incompatibility error
+                if (
+                    error.message.includes('temperature') &&
+                    error.message.includes('does not support')
+                ) {
+                    throw new Error(
+                        `Incompatible configuration: Model '${this.config.openAiModel}' does not support temperature=${this.config.temperature}. ` +
+                            `Please update the 'temperature' setting in your configuration file. Error: ${error.message}`
+                    );
+                }
+
                 this.logger.error(
                     `Error in payee transformation: ${error.message}`
                 );

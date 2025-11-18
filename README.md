@@ -39,6 +39,8 @@ A configuration document looks like this:
 enabled = false
 openAiApiKey = "<openAiKey>"  # Your OpenAI API key
 openAiModel = "gpt-5-nano"  # Optional: Specify the OpenAI model to use (default: gpt-5-nano)
+temperature = 1  # Optional: Temperature for OpenAI API (0-2, default: 1). Note: gpt-5-nano only supports temperature=1
+onTransformError = "warn"  # Optional: How to handle transformation errors: "warn" (default) or "fail"
 prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
 
 # Import settings
@@ -69,7 +71,7 @@ password = ""
 
 A short summary:
 
-- **Payee transformation** allows the automatic conversion of payee names to human-readable formats, e.g. "AMAZN S.A.R.L" to "Amazon". In order for this to function, you also need to provide a valid OpenAI API key. You can generate this key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). You can optionally override the default prompt with custom instructions if you need different transformation rules.
+- **Payee transformation** allows the automatic conversion of payee names to human-readable formats, e.g. "AMAZN S.A.R.L" to "Amazon". In order for this to function, you also need to provide a valid OpenAI API key. You can generate this key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). You can optionally override the default prompt with custom instructions if you need different transformation rules. The `temperature` parameter controls the randomness of the AI responses (0 = deterministic, 2 = very random). Note that some models like `gpt-5-nano` only support specific temperature values. The `onTransformError` setting controls whether the import should fail (`"fail"`) or continue with a warning (`"warn"`) when payee transformation encounters an error.
 - **Import settings** allow you to customize the import behavior, e.g. whether unchecked transactions should be imported.
 - **Actual servers** specify which servers should be imported to
 - **Budget configurations** describe the budget files per server which are import targets. The sync ID can be grabbed from the Actual web interface by navigating to settings, then advanced settings. If the budget file is end-to-end encrypted, the details need to be provided here.

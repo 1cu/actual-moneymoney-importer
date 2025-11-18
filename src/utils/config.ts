@@ -48,6 +48,8 @@ const payeeTransformationSchema = z.object({
     enabled: z.boolean(),
     openAiApiKey: z.string().optional(),
     openAiModel: z.string().optional().default('gpt-5-nano'),
+    temperature: z.number().min(0).max(2).optional().default(1),
+    onTransformError: z.enum(['warn', 'fail']).optional().default('warn'),
     prompt: z.string().optional(),
 });
 
