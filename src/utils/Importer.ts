@@ -220,9 +220,23 @@ class Importer {
                     (t) => t.imported_payee as string
                 );
 
+                // Fetch existing payees from Actual
+                const existingPayees = await this.actualApi.getPayees();
+                const existingPayeeNames = existingPayees
+                    .filter(
+                        (p: { name: string; transfer_acct?: string }) =>
+                            p.name && !p.transfer_acct
+                    )
+                    .map((p: { name: string }) => p.name);
+
+                this.logger.debug(
+                    `Found ${existingPayeeNames.length} existing payees in Actual budget`
+                );
+
                 const transformedPayees =
                     await this.payeeTransformer.transformPayees(
-                        transactionPayees
+                        transactionPayees,
+                        existingPayeeNames
                     );
 
                 if (transformedPayees !== null) {

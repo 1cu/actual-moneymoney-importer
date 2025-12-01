@@ -123,6 +123,14 @@ class ActualApi {
         );
     }
 
+    async getPayees(): Promise<
+        Array<{ id: string; name: string; transfer_acct?: string }>
+    > {
+        await this.ensureInitialization();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return this.suppressConsoleLog(() => (actual as any).getPayees());
+    }
+
     async shutdown() {
         await this.ensureInitialization();
         await this.suppressConsoleLog(() => actual.shutdown());

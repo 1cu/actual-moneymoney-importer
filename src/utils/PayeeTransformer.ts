@@ -23,8 +23,11 @@ class PayeeTransformer {
         });
     }
 
-    public async transformPayees(payeeList: string[]) {
-        const prompt = this.generatePrompt();
+    public async transformPayees(
+        payeeList: string[],
+        existingPayeeNames: string[] = []
+    ) {
+        const prompt = this.generatePrompt(existingPayeeNames);
 
         if (payeeList.length === 0) {
             this.logger.debug(
@@ -116,35 +119,51 @@ class PayeeTransformer {
         return this.config.openAiModel;
     }
 
-    private generatePrompt() {
+    private generatePrompt(existingPayeeNames: string[] = []) {
+        const existingPayeesSection =
+            existingPayeeNames.length > 0
+                ? `
+
+            IMPORTANT: The following payee names already exist in the budget. When transforming payees,
+            you MUST prefer using these existing names when they match the transaction. This helps maintain
+            consistency in the budget.
+
+            Existing payees:
+            ${existingPayeeNames.join('\n')}
+
+            For example:
+            - If you see "AMAZON.COM/BILLWA" and "Amazon" already exists, use "Amazon"
+            - If you see "COSTCO WHOLESALE" and "Costco" already exists, use "Costco"
+            - If you see "STARBUCKS #12345" and "Starbucks" already exists, use "Starbucks"
+            - Only create a new payee name if no existing payee is a clear match
+            `
+                : '';
+
+        // If custom prompt is provided, append existing payees section to it
         if (this.config.prompt?.trim()) {
-            return this.config.prompt;
+            return this.config.prompt + existingPayeesSection;
         }
 
-        return `
-            You are now a model trained to classify bank account transactions. You will receive
-            a list of payees as they appear in the source transactions, and you will return
-            a cleaned up, human-readable version of the payees. Return a JSON formatted object, where
-            the old payee names are mapped to the new ones. Make sure the new payee names are clear
-            and concise, and omit any unnecessary details. For example, if the payee is "Amazon.com",
-            you should return "Amazon". If the payee is "AMAZON.COM/BILLWA", you should also return
-            "Amazon". You are free to make some assumptions about the payees. If you don't know the
-            payee, return "Unknown". If for some reason you cannot create a JSON object, return {}.
+        // Default prompt optimized for GPT 4o-mini/5.1-nano
+        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce a JSON object that maps each original string to a single cleaned, human-readable merchant name. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
 
-            Examples:
+Examples (input separated by newline, output shown as JSON):
 
-            Input: -
-            Output: {}
+Input:
+-
+Output:
+{}
 
-            Input: Amzn Mktp US*1234567890
-            Output: { "Amzn Mktp US*1234567890": "Amazon" }
+Input:
+AMZN Mktp US*1234567890
+Output:
+{"AMZN Mktp US*1234567890": "Amazon"}
 
-            Input: AMAZON.COM/BILLWA\nAMAZON.COM
-            Output: { "AMAZON.COM/BILLWA": "Amazon", "AMAZON.COM": "Amazon" }
-
-            If there is no list, return an empty object. Do not under any circumstances return anything that
-            is not valid JSON.
-        `;
+Input:
+AMAZON.COM/BILLWA
+AMAZON.COM
+Output:
+{"AMAZON.COM/BILLWA":"Amazon", "AMAZON.COM":"Amazon"}`;
     }
 }
 
