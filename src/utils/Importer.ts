@@ -144,6 +144,22 @@ class Importer {
 
         const accountMapping = this.accountMap.getMap(accountRefs);
 
+        // Fetch existing payees once for all accounts (optimization)
+        let existingPayeeNames: string[] = [];
+        if (this.payeeTransformer && !isDryRun) {
+            const existingPayees = await this.actualApi.getPayees();
+            existingPayeeNames = existingPayees
+                .filter(
+                    (p: { name: string; transfer_acct?: string }) =>
+                        p.name && !p.transfer_acct
+                )
+                .map((p: { name: string }) => p.name);
+
+            this.logger.debug(
+                `Found ${existingPayeeNames.length} existing payees in Actual budget`
+            );
+        }
+
         // Iterate over account mapping
         for (const [monMonAccount, actualAccount] of accountMapping) {
             const monMonTransactions =
@@ -212,30 +228,21 @@ class Importer {
             );
 
             if (this.payeeTransformer && !isDryRun) {
-                this.logger.debug(
-                    `Cleaning up payee names for ${createTransactions.length} transaction/s using OpenAI...`
-                );
-
+                // Deduplicate payee names to reduce API calls and token usage
                 const transactionPayees = createTransactions.map(
                     (t) => t.imported_payee as string
                 );
-
-                // Fetch existing payees from Actual
-                const existingPayees = await this.actualApi.getPayees();
-                const existingPayeeNames = existingPayees
-                    .filter(
-                        (p: { name: string; transfer_acct?: string }) =>
-                            p.name && !p.transfer_acct
-                    )
-                    .map((p: { name: string }) => p.name);
+                const uniquePayees = [...new Set(transactionPayees)].filter(
+                    (p) => p && p.trim()
+                );
 
                 this.logger.debug(
-                    `Found ${existingPayeeNames.length} existing payees in Actual budget`
+                    `Cleaning up ${uniquePayees.length} unique payee names (from ${createTransactions.length} transactions) using OpenAI...`
                 );
 
                 const transformedPayees =
                     await this.payeeTransformer.transformPayees(
-                        transactionPayees,
+                        uniquePayees,
                         existingPayeeNames
                     );
 
