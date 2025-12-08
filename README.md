@@ -9,7 +9,6 @@ A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney<
 > **This is a fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney) with additional features and improvements.**
 >
 > **Upstream repository**: [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney)
-> **Fork maintenance guide**: See [FORK_MAINTENANCE.md](./FORK_MAINTENANCE.md) for development workflow
 
 <p align="center">
 <img src="https://badgers.space/github/checks/NikxDa/actual-moneymoney/main">
@@ -71,7 +70,7 @@ password = ""
 
 A short summary:
 
-- **Payee transformation** allows the automatic conversion of payee names to human-readable formats, e.g. "AMAZN S.A.R.L" to "Amazon". In order for this to function, you also need to provide a valid OpenAI API key. You can generate this key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). You can optionally override the default prompt with custom instructions if you need different transformation rules. The `temperature` parameter controls the randomness of the AI responses (0 = deterministic, 2 = very random). Note that some models like `gpt-5-nano` only support specific temperature values. The `onTransformError` setting controls whether the import should fail (`"fail"`) or continue with a warning (`"warn"`) when payee transformation encounters an error.
+- **Payee transformation** converts payee names to human-readable formats using AI (e.g. "AMAZN S.A.R.L" to "Amazon"). Requires an OpenAI API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). The AI is provided with existing payees from your budget to prefer matching existing names over creating duplicates. Custom prompts, `temperature` (0-2, model-dependent), and `onTransformError` ("warn" or "fail") can be configured.
 - **Import settings** allow you to customize the import behavior, e.g. whether unchecked transactions should be imported.
 - **Actual servers** specify which servers should be imported to
 - **Budget configurations** describe the budget files per server which are import targets. The sync ID can be grabbed from the Actual web interface by navigating to settings, then advanced settings. If the budget file is end-to-end encrypted, the details need to be provided here.
@@ -85,7 +84,19 @@ Once configured, importing is as simple as running `actual-monmon import`. Make 
 
 The importer will not track previous imports, so if you wait more than one month between imports, you might need to manually specify the last import date. Running the importer twice in the same month is no problem, as duplicate transactions will automatically be detected and skipped.
 
-You can import a specific account with the `--account` option on the import command. Specify it multiple times to import from multiple accounts at a time. For example, to import only transactions from the MoneyMoney account with the name Acc1 and the account with a specific IBAN, you can use: `actual-monmon import --account Acc1 --account DE01...52`. The resolution of an account name follows the same patterns as the configuration keys.
+Imports can be scoped with `--server`, `--budget`, and `--account` options. Each flag is case-insensitive, can be repeated, and accepts comma-separated values.
+
+```bash
+# Import specific accounts
+actual-monmon import -a "DKB Giro" -a "DKB Visa"
+actual-monmon import -a "DKB Giro,DKB Visa"
+
+# Restrict to server and budget
+actual-monmon import -s myServerA -b HomeBudget
+
+# Combine filters
+actual-monmon import -s myServerA -b HomeBudget -a "Groceries,Utilities"
+```
 
 ## Advanced Configuration
 
