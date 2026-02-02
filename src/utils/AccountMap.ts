@@ -122,7 +122,7 @@ export class AccountMap {
 
         for (const [moneyMoneyRef, actualRef] of Object.entries(
             accountMapping
-        )) {
+        ) as [string, string][]) {
             const moneyMoneyAccount =
                 this.getMoneyMoneyAccountByRef(moneyMoneyRef);
 
