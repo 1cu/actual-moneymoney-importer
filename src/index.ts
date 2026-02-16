@@ -29,9 +29,18 @@ yargs(hideBin(process.argv))
     })
     .command(importCommand)
     .command(validateCommand)
+    .demandCommand(1, 'Please specify a command.')
     .showHelpOnFail(false)
-    .fail((msg, err) => {
+    .fail((msg, err, yargsInstance) => {
         const logger = new Logger();
+        const isMissingCommand = !err && msg === 'Please specify a command.';
+
+        yargsInstance.showHelp();
+        console.log('');
+
+        if (isMissingCommand) {
+            process.exit(0);
+        }
 
         if (err) {
             logger.error(err.message);
