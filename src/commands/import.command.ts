@@ -51,6 +51,12 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
         );
     }
 
+    if (fromDate && toDate && fromDate > toDate) {
+        throw new Error(
+            `Invalid date range: 'from' (${argv.from}) must be on or before 'to' (${argv.to}).`
+        );
+    }
+
     for (const serverConfig of config.actualServers) {
         logger.debug(`Checking MoneyMoney database access...`);
         const isUnlocked = await checkDatabaseUnlocked();
@@ -144,7 +150,7 @@ export default {
             )
             .string('to')
             .describe(
-                'from',
+                'to',
                 `Import transactions up to this date (${DATE_FORMAT})`
             );
     },

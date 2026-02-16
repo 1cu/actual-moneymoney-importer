@@ -19,6 +19,8 @@ try {
 }
 
 yargs(hideBin(process.argv))
+    .scriptName('actual-monmon')
+    .usage('$0 <command> [options]')
     .option('config', {
         type: 'string',
         description: 'Path to the configuration file',
@@ -26,9 +28,13 @@ yargs(hideBin(process.argv))
     .option('logLevel', {
         type: 'number',
         description: 'The log level to use (0-4)',
+        choices: [0, 1, 2, 3, 4],
     })
     .command(importCommand)
     .command(validateCommand)
+    .strictCommands()
+    .strictOptions()
+    .recommendCommands()
     .demandCommand(1, 'Please specify a command.')
     .showHelpOnFail(false)
     .fail((msg, err, yargsInstance) => {
@@ -50,4 +56,4 @@ yargs(hideBin(process.argv))
 
         process.exit(1);
     })
-    .parse();
+    .parseAsync();
