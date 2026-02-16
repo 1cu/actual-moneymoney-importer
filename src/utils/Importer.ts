@@ -315,6 +315,15 @@ class Importer {
     private async convertToActualTransaction(
         transaction: MonMonTransaction
     ): Promise<CreateTransaction> {
+        const transactionNotes = [
+            transaction.purpose,
+            transaction.comment && this.config.import.importComments
+                ? `${this.config.import.commentPrefix}${transaction.comment}`
+                : undefined,
+        ]
+            .filter(Boolean)
+            .join(' | ');
+
         const createTransaction: CreateTransaction = {
             date: format(transaction.valueDate, 'yyyy-MM-dd'),
             amount: Math.round(transaction.amount * 100),
@@ -326,8 +335,8 @@ class Importer {
             createTransaction.cleared = transaction.booked;
         }
 
-        if (transaction.purpose) {
-            createTransaction.notes = transaction.purpose;
+        if (transactionNotes) {
+            createTransaction.notes = transactionNotes;
         }
 
         return createTransaction;
