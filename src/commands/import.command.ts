@@ -12,7 +12,9 @@ import { DATE_FORMAT } from '../utils/shared.js';
 const handleCommand = async (argv: ArgumentsCamelCase) => {
     const config = await getConfig(argv);
 
-    const logLevel = (argv.logLevel || LogLevel.INFO) as number;
+    const logLevel = (argv.logLevel ??
+        argv.loglevel ??
+        LogLevel.INFO) as number;
     const logger = new Logger(logLevel);
 
     const payeeTransformer = config.payeeTransformation.enabled
@@ -134,21 +136,25 @@ export default {
             .boolean('dry-run')
             .describe('dry-run', 'Do not import data')
             .string('account')
+            .alias('account', 'a')
             .describe(
                 'account',
                 'Import only transactions from the specified MoneyMoney account identifier'
             )
             .string('budget')
+            .alias('budget', 'b')
             .describe(
                 'budget',
                 'Import only to the specified Actual budget identifier'
             )
             .string('from')
+            .alias('from', 'f')
             .describe(
                 'from',
                 `Import transactions on or after this date (${DATE_FORMAT})`
             )
             .string('to')
+            .alias('to', 't')
             .describe(
                 'to',
                 `Import transactions up to this date (${DATE_FORMAT})`

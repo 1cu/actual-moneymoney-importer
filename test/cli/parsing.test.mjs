@@ -51,6 +51,20 @@ test('fails for out-of-range log level', () => {
     assert.match(result.output, /logLevel/i);
 });
 
+test('fails for out-of-range log level via --loglevel alias', () => {
+    const result = runCli(['validate', '--loglevel', '8']);
+
+    assert.equal(result.status, 1);
+    assert.match(result.output, /Invalid values/i);
+});
+
+test('fails for out-of-range log level via -l alias', () => {
+    const result = runCli(['validate', '-l', '8']);
+
+    assert.equal(result.status, 1);
+    assert.match(result.output, /Invalid values/i);
+});
+
 test('prints root help and exits successfully with --help', () => {
     const result = runCli(['--help']);
 
@@ -58,4 +72,16 @@ test('prints root help and exits successfully with --help', () => {
     assert.match(result.output, /Commands:/);
     assert.match(result.output, /import/);
     assert.match(result.output, /validate/);
+});
+
+test('shows short aliases for root and import options in help', () => {
+    const result = runCli(['import', '--help']);
+
+    assert.equal(result.status, 0);
+    assert.match(result.output, /-c,\s*--config/i);
+    assert.match(result.output, /-l,\s*--logLevel/i);
+    assert.match(result.output, /-a,\s*--account/i);
+    assert.match(result.output, /-b,\s*--budget/i);
+    assert.match(result.output, /-f,\s*--from/i);
+    assert.match(result.output, /-t,\s*--to/i);
 });

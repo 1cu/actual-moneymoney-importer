@@ -2,8 +2,9 @@ import actual from '@actual-app/api';
 import { format } from 'date-fns';
 import fs from 'fs/promises';
 import fetch from 'node-fetch';
+import { withApiLogControl } from './ActualApiLogControl.js';
 import { ActualServerConfig } from './config.js';
-import Logger from './Logger.js';
+import Logger, { LogLevel } from './Logger.js';
 import { DEFAULT_DATA_DIR } from './shared.js';
 
 type UserFile = {
@@ -47,7 +48,7 @@ class ActualApi {
             `Initializing Actual instance for server ${this.serverConfig.serverUrl} with data directory ${actualDataDir}`
         );
 
-        await this.suppressConsoleLog(async () => {
+        await this.withLogControl(async () => {
             await actual.init({
                 dataDir: actualDataDir,
                 serverURL: this.serverConfig.serverUrl,
@@ -66,14 +67,14 @@ class ActualApi {
 
     async sync() {
         await this.ensureInitialization();
-        await this.suppressConsoleLog(async () => {
+        await this.withLogControl(async () => {
             await actual.internal.send('sync');
         });
     }
 
     async getAccounts() {
         await this.ensureInitialization();
-        const accounts = await this.suppressConsoleLog(async () => {
+        const accounts = await this.withLogControl(async () => {
             return await actual.getAccounts();
         });
         return accounts;
@@ -94,7 +95,7 @@ class ActualApi {
 
         this.logger.debug(`Loading budget with syncId ${budgetId}...`);
 
-        await this.suppressConsoleLog(async () => {
+        await this.withLogControl(async () => {
             await actual.downloadBudget(
                 budgetConfig.syncId,
                 budgetConfig.e2eEncryption.enabled
@@ -107,7 +108,7 @@ class ActualApi {
     }
 
     importTransactions(accountId: string, transactions: CreateTransaction[]) {
-        return this.suppressConsoleLog(() =>
+        return this.withLogControl(() =>
             actual.importTransactions(accountId, transactions, {
                 defaultCleared: false,
             })
@@ -118,7 +119,7 @@ class ActualApi {
         const startDate = format(new Date(2000, 1, 1), 'yyyy-MM-dd');
         const endDate = format(new Date(), 'yyyy-MM-dd');
 
-        return this.suppressConsoleLog(() =>
+        return this.withLogControl(() =>
             actual.getTransactions(accountId, startDate, endDate)
         );
     }
@@ -128,12 +129,12 @@ class ActualApi {
     > {
         await this.ensureInitialization();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return this.suppressConsoleLog(() => (actual as any).getPayees());
+        return this.withLogControl(() => (actual as any).getPayees());
     }
 
     async shutdown() {
         await this.ensureInitialization();
-        await this.suppressConsoleLog(() => actual.shutdown());
+        await this.withLogControl(() => actual.shutdown());
     }
 
     private async getUserToken() {
@@ -182,17 +183,11 @@ class ActualApi {
         return responseData.data.filter((f) => f.deleted === 0);
     }
 
-    private async suppressConsoleLog<T>(callback: () => T | Promise<T>) {
-        const originalConsoleLog = console.log;
-        console.log = (message: string) => {
-            this.logger.actual(message);
-        };
-
-        try {
-            return await callback();
-        } finally {
-            console.log = originalConsoleLog;
-        }
+    private async withLogControl<T>(callback: () => T | Promise<T>) {
+        return await withApiLogControl(
+            this.logger.logLevel >= LogLevel.ACTUAL,
+            callback
+        );
     }
 }
 

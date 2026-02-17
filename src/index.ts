@@ -22,10 +22,12 @@ yargs(hideBin(process.argv))
     .scriptName('actual-monmon')
     .usage('$0 <command> [options]')
     .option('config', {
+        alias: 'c',
         type: 'string',
         description: 'Path to the configuration file',
     })
     .option('logLevel', {
+        alias: ['loglevel', 'l'],
         type: 'number',
         description: 'The log level to use (0-4)',
         choices: [0, 1, 2, 3, 4],
