@@ -24,23 +24,6 @@ npm i -g actual-moneymoney
 
 The application will be accessible as a CLI tool with the name `actual-monmon`.
 
-## Fork releases
-
-This fork publishes releases from the `develop` branch.
-
-Release notes are generated automatically by `semantic-release` from
-conventional commits.
-
-- `feat`: minor version bump
-- `fix`: patch version bump
-- `BREAKING CHANGE` footer or `!`: major version bump
-
-To preview the next release version and notes locally:
-
-```bash
-npm run release:dry-run
-```
-
 ## Configuration
 
 Details on parameters are available by running `actual-monmon --help`.
