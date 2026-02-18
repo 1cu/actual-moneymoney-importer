@@ -9,10 +9,6 @@ import validateCommand from './commands/validate.command.js';
 import Logger from './utils/Logger.js';
 import { APPLICATION_DIRECTORY } from './utils/shared.js';
 
-// Display version and fork information
-console.log('🔀 Running on develop fork');
-console.log('');
-
 try {
     fs.accessSync(APPLICATION_DIRECTORY);
 } catch (_err) {

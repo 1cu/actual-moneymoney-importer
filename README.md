@@ -46,7 +46,7 @@ prompt = "<custom prompt>"  # Optional: Override the default payee transformatio
 [import]
 importUncheckedTransactions = true
 synchronizeClearedStatus = true
-synchronizeCategories = true
+synchronizeCategories = false  # Optional: category sync is opt-in
 categorySyncOnExisting = "ask" # ask|new|always
 importComments = false # Optional: Import MoneyMoney comments into Actual 
 commentPrefix = "MoneyMoney Comment: " # Optional: Set a prefix for MoneyMoney comments inside the notes
@@ -82,6 +82,7 @@ A short summary:
 
 - **Payee transformation** converts payee names to human-readable formats using AI (e.g. "AMAZN S.A.R.L" to "Amazon"). Requires an OpenAI API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). The AI is provided with existing payees from your budget to prefer matching existing names over creating duplicates. Custom prompts, `temperature` (0-2, model-dependent), and `onTransformError` ("warn" or "fail") can be configured.
 - **Import settings** allow you to customize the import behavior, e.g. whether unchecked transactions should be imported.
+- **Category sync is opt-in**: set `import.synchronizeCategories = true` to enable category assignment/update during import.
 - **Actual servers** specify which servers should be imported to
 - **Budget configurations** describe the budget files per server which are import targets. The sync ID can be grabbed from the Actual web interface by navigating to settings, then advanced settings. If the budget file is end-to-end encrypted, the details need to be provided here.
 - **Account mapping** maps each MoneyMoney account to an Actual account. MoneyMoney accounts can be described by their UUID (accessible via the AppleScript API of MoneyMoney only, at this time), account number (IBAN, credit card no, etc.) or their name (in this order). Actual accounts can be described by their UUID (can be copied from the URL in a browser window) or their name (in that order). If a name occurs multiple times, the first one will be used. Invalid mappings or additional accounts are ignored.

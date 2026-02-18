@@ -25,7 +25,7 @@ openAiApiKey = "<openAiKey>"
 [import]
 importUncheckedTransactions = true
 synchronizeClearedStatus = true
-synchronizeCategories = true
+synchronizeCategories = false
 categorySyncOnExisting = "ask" # ask|new|always
 importComments = false
 commentPrefix = "MoneyMoney Comment: "

@@ -12,7 +12,10 @@ test('classifyCategoryUpdate returns backfill for empty current category', () =>
         isUncategorized: false,
     });
 
-    assert.equal(result, 'backfill');
+    assert.deepEqual(result, {
+        type: 'backfill',
+        targetCategoryId: 'target-1',
+    });
 });
 
 test('classifyCategoryUpdate returns conflict for differing categories', () => {
@@ -22,7 +25,11 @@ test('classifyCategoryUpdate returns conflict for differing categories', () => {
         isUncategorized: false,
     });
 
-    assert.equal(result, 'conflict');
+    assert.deepEqual(result, {
+        type: 'conflict',
+        targetCategoryId: 'target-1',
+        currentCategoryId: 'current-1',
+    });
 });
 
 test('classifyCategoryUpdate returns noop for equal categories', () => {
@@ -32,7 +39,7 @@ test('classifyCategoryUpdate returns noop for equal categories', () => {
         isUncategorized: false,
     });
 
-    assert.equal(result, 'noop');
+    assert.deepEqual(result, { type: 'noop' });
 });
 
 test('classifyCategoryUpdate returns noop for uncategorized source', () => {
@@ -42,7 +49,7 @@ test('classifyCategoryUpdate returns noop for uncategorized source', () => {
         isUncategorized: true,
     });
 
-    assert.equal(result, 'noop');
+    assert.deepEqual(result, { type: 'noop' });
 });
 
 test('classifyCategoryUpdate returns noop for unmapped target', () => {
@@ -52,7 +59,7 @@ test('classifyCategoryUpdate returns noop for unmapped target', () => {
         isUncategorized: false,
     });
 
-    assert.equal(result, 'noop');
+    assert.deepEqual(result, { type: 'noop' });
 });
 
 test('classifyCategoryUpdate returns noop when both categories are undefined', () => {
@@ -62,7 +69,7 @@ test('classifyCategoryUpdate returns noop when both categories are undefined', (
         isUncategorized: false,
     });
 
-    assert.equal(result, 'noop');
+    assert.deepEqual(result, { type: 'noop' });
 });
 
 test('parsePromptDecision preserves A/N shortcuts before n/no', () => {
@@ -80,5 +87,7 @@ test('parsePromptDecision handles yes/no/all/none words and invalid', () => {
     assert.equal(parsePromptDecision('  y  '), true);
     assert.equal(parsePromptDecision('all'), 'all');
     assert.equal(parsePromptDecision('none'), 'none');
+    assert.equal(parsePromptDecision('q'), 'quit');
+    assert.equal(parsePromptDecision('quit'), 'quit');
     assert.equal(parsePromptDecision('  ???  '), 'invalid');
 });

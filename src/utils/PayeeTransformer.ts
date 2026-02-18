@@ -72,6 +72,13 @@ class PayeeTransformer {
             }
         } catch (error) {
             if (error instanceof Error) {
+                if (this.isModelUnavailableError(error)) {
+                    throw this.createModelUnavailableError(
+                        this.config.openAiModel,
+                        error.message
+                    );
+                }
+
                 // Check if it's a temperature incompatibility error
                 if (
                     error.message.includes('temperature') &&
@@ -112,8 +119,7 @@ class PayeeTransformer {
                 `The specified model '${this.config.openAiModel}' is invalid. The following models are available:`,
                 availableModels
             );
-
-            throw new Error('Invalid OpenAI model specified.');
+            throw this.createModelUnavailableError(this.config.openAiModel);
         }
 
         return this.config.openAiModel;
@@ -164,6 +170,23 @@ AMAZON.COM/BILLWA
 AMAZON.COM
 Output:
 {"AMAZON.COM/BILLWA":"Amazon", "AMAZON.COM":"Amazon"}`;
+    }
+
+    private isModelUnavailableError(error: Error) {
+        const message = error.message.toLowerCase();
+        return (
+            message.includes('model') &&
+            (message.includes('does not exist') ||
+                message.includes('not found') ||
+                message.includes('invalid model') ||
+                message.includes('unknown model'))
+        );
+    }
+
+    private createModelUnavailableError(model: string, cause?: string) {
+        return new Error(
+            `OpenAI model '${model}' is unavailable. Set 'payeeTransformation.openAiModel' in your config to an available model and try again.${cause ? ` Original error: ${cause}` : ''}`
+        );
     }
 }
 

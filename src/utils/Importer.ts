@@ -15,7 +15,14 @@ import PayeeTransformer from './PayeeTransformer.js';
 import { DATE_FORMAT } from './shared.js';
 
 type ExistingCategorySyncPolicy = Config['import']['categorySyncOnExisting'];
-type CategoryUpdateClassification = 'backfill' | 'conflict' | 'noop';
+type CategoryUpdateClassification =
+    | { type: 'backfill'; targetCategoryId: string }
+    | {
+          type: 'conflict';
+          targetCategoryId: string;
+          currentCategoryId: string;
+      }
+    | { type: 'noop' };
 
 type ExistingTransactionPair = {
     monMonTransaction: MonMonTransaction;
@@ -32,6 +39,17 @@ type ExistingCategoryUpdate = {
 };
 
 type PromptMode = 'prompt' | 'all' | 'none';
+type PromptDecision = boolean | 'all' | 'none' | 'quit';
+type PromptState = {
+    mode: PromptMode;
+    promptInterface?: ReturnType<typeof createInterface>;
+};
+type CategoryUpdatePlan = {
+    pendingUpdates: ExistingCategoryUpdate[];
+    backfillCount: number;
+    conflictCount: number;
+    skippedConflictCount: number;
+};
 
 export const classifyCategoryUpdate = ({
     currentCategoryId,
@@ -43,23 +61,27 @@ export const classifyCategoryUpdate = ({
     isUncategorized: boolean;
 }): CategoryUpdateClassification => {
     if (isUncategorized || !targetCategoryId) {
-        return 'noop';
+        return { type: 'noop' };
     }
 
     if (!currentCategoryId) {
-        return 'backfill';
+        return { type: 'backfill', targetCategoryId };
     }
 
     if (currentCategoryId === targetCategoryId) {
-        return 'noop';
+        return { type: 'noop' };
     }
 
-    return 'conflict';
+    return {
+        type: 'conflict',
+        targetCategoryId,
+        currentCategoryId,
+    };
 };
 
 export const parsePromptDecision = (
     answer: string
-): boolean | 'all' | 'none' | 'invalid' => {
+): PromptDecision | 'invalid' => {
     const trimmed = answer.trim();
     const normalized = trimmed.toLowerCase();
 
@@ -85,6 +107,10 @@ export const parsePromptDecision = (
 
     if (normalized === 'none') {
         return 'none';
+    }
+
+    if (normalized === 'q' || normalized === 'quit') {
+        return 'quit';
     }
 
     return 'invalid';
@@ -268,9 +294,7 @@ class Importer {
         const unmappedCategoryWarnings = new Set<string>();
         const shouldSyncCategories = this.config.import.synchronizeCategories;
 
-        let promptMode: PromptMode = 'prompt';
-        let promptInterface: ReturnType<typeof createInterface> | undefined =
-            undefined;
+        const promptState: PromptState = { mode: 'prompt' };
 
         try {
             for (const [monMonAccount, actualAccount] of accountMapping) {
@@ -279,48 +303,13 @@ class Importer {
 
                 const existingActualTransactions =
                     await this.actualApi.getTransactions(actualAccount.id);
-
-                const existingByImportedId = new Map<string, ReadTransaction>();
-                const duplicateImportedIds = new Set<string>();
-                for (const transaction of existingActualTransactions) {
-                    if (!transaction.imported_id) {
-                        continue;
-                    }
-
-                    if (existingByImportedId.has(transaction.imported_id)) {
-                        duplicateImportedIds.add(transaction.imported_id);
-                    }
-                    existingByImportedId.set(
-                        transaction.imported_id,
-                        transaction
-                    );
-                }
-                if (duplicateImportedIds.size > 0) {
-                    this.logger.warn(
-                        `Detected ${duplicateImportedIds.size} duplicate imported_id values in Actual account '${actualAccount.name}'. Category sync uses the most recent match per imported_id.`
-                    );
-                }
-
-                const newMonMonTransactions: MonMonTransaction[] = [];
-                const existingPairs: ExistingTransactionPair[] | undefined =
-                    shouldSyncCategories ? [] : undefined;
-
-                for (const transaction of accountTransactions) {
-                    const importedId =
-                        this.getIdForMoneyMoneyTransaction(transaction);
-                    const existingTransaction =
-                        existingByImportedId.get(importedId);
-
-                    if (existingTransaction) {
-                        existingPairs?.push({
-                            monMonTransaction: transaction,
-                            actualTransaction: existingTransaction,
-                        });
-                        continue;
-                    }
-
-                    newMonMonTransactions.push(transaction);
-                }
+                const { newMonMonTransactions, existingPairs } =
+                    this.buildAccountTransactionBuckets({
+                        accountTransactions,
+                        existingActualTransactions,
+                        actualAccountName: actualAccount.name,
+                        shouldSyncCategories,
+                    });
 
                 const createTransactions: CreateTransaction[] = [];
                 for (const transaction of newMonMonTransactions) {
@@ -470,139 +459,21 @@ class Importer {
                     continue;
                 }
 
-                const pendingUpdates: ExistingCategoryUpdate[] = [];
-                let backfillCount = 0;
-                let conflictCount = 0;
-                let skippedConflictCount = 0;
-
-                for (const pair of existingPairs ?? []) {
-                    const categoryResolution =
-                        this.categoryMap.getMappedActualCategoryId(
-                            pair.monMonTransaction.categoryUuid
-                        );
-
-                    const targetCategoryId =
-                        categoryResolution.actualCategoryId;
-                    const currentCategoryId =
-                        pair.actualTransaction.category || undefined;
-                    const classification = classifyCategoryUpdate({
-                        currentCategoryId,
-                        targetCategoryId,
-                        isUncategorized: categoryResolution.isUncategorized,
-                    });
-
-                    if (classification === 'noop') {
-                        continue;
-                    }
-
-                    if (classification === 'backfill') {
-                        // Type narrowing: classifyCategoryUpdate guarantees targetCategoryId for backfill.
-                        pendingUpdates.push(
-                            buildExistingCategoryUpdate({
-                                pair,
-                                targetCategoryId: targetCategoryId as string,
-                                reason: 'backfill',
-                            })
-                        );
-                        backfillCount++;
-                        continue;
-                    }
-
-                    // Type narrowing: classifyCategoryUpdate guarantees both fields for conflict.
-                    const narrowedTargetCategoryId = targetCategoryId as string;
-                    const narrowedCurrentCategoryId =
-                        currentCategoryId as string;
-
-                    conflictCount++;
-
-                    if (existingCategoryPolicy === 'new') {
-                        skippedConflictCount++;
-                        continue;
-                    }
-
-                    if (existingCategoryPolicy === 'always') {
-                        pendingUpdates.push(
-                            buildExistingCategoryUpdate({
-                                pair,
-                                targetCategoryId: narrowedTargetCategoryId,
-                                reason: 'conflict',
-                                fromCategoryId: narrowedCurrentCategoryId,
-                            })
-                        );
-                        continue;
-                    }
-
-                    if (promptMode === 'none') {
-                        skippedConflictCount++;
-                        continue;
-                    }
-
-                    if (promptMode === 'all') {
-                        pendingUpdates.push(
-                            buildExistingCategoryUpdate({
-                                pair,
-                                targetCategoryId: narrowedTargetCategoryId,
-                                reason: 'conflict',
-                                fromCategoryId: narrowedCurrentCategoryId,
-                            })
-                        );
-                        continue;
-                    }
-
-                    if (!promptInterface) {
-                        this.logger.info(
-                            `Interactive category decisions apply for the rest of this import run across all accounts (use A/N to set a global choice).`
-                        );
-                        promptInterface = createInterface({
-                            input: stdin,
-                            output: stdout,
-                        });
-                    }
-
-                    const shouldApply = await this.promptForConflictDecision(
-                        promptInterface,
-                        pair,
-                        narrowedCurrentCategoryId,
-                        narrowedTargetCategoryId
-                    );
-
-                    if (shouldApply === 'all') {
-                        promptMode = 'all';
-                        pendingUpdates.push(
-                            buildExistingCategoryUpdate({
-                                pair,
-                                targetCategoryId: narrowedTargetCategoryId,
-                                reason: 'conflict',
-                                fromCategoryId: narrowedCurrentCategoryId,
-                            })
-                        );
-                        continue;
-                    }
-
-                    if (shouldApply === 'none') {
-                        promptMode = 'none';
-                        skippedConflictCount++;
-                        continue;
-                    }
-
-                    if (shouldApply === true) {
-                        pendingUpdates.push(
-                            buildExistingCategoryUpdate({
-                                pair,
-                                targetCategoryId: narrowedTargetCategoryId,
-                                reason: 'conflict',
-                                fromCategoryId: narrowedCurrentCategoryId,
-                            })
-                        );
-                    } else {
-                        skippedConflictCount++;
-                    }
-                }
+                const {
+                    pendingUpdates,
+                    backfillCount,
+                    conflictCount,
+                    skippedConflictCount,
+                } = await this.planExistingCategoryUpdates({
+                    existingPairs,
+                    existingCategoryPolicy,
+                    promptState,
+                });
 
                 this.logger.info(
                     `Category sync summary for account '${actualAccount.name}'`,
                     [
-                        `Existing transactions considered: ${existingPairs?.length ?? 0}`,
+                        `Existing transactions considered: ${existingPairs.length}`,
                         `Backfills: ${backfillCount}`,
                         `Conflicts: ${conflictCount}`,
                         `Planned updates: ${pendingUpdates.length}`,
@@ -614,42 +485,268 @@ class Importer {
                     continue;
                 }
 
-                if (isDryRun) {
-                    const preview = pendingUpdates.slice(0, 5).map((update) => {
-                        const fromPath = update.fromCategoryId
-                            ? this.categoryMap.getActualCategoryPath(
-                                  update.fromCategoryId
-                              )
-                            : '(none)';
-                        const toPath = this.categoryMap.getActualCategoryPath(
-                            update.toCategoryId
-                        );
-                        return `${update.importedId}: ${fromPath} -> ${toPath}`;
-                    });
-
-                    this.logger.info(
-                        `Dry run: would apply ${pendingUpdates.length} category updates in '${actualAccount.name}'.`,
-                        preview
-                    );
-                    continue;
-                }
-
-                for (const update of pendingUpdates) {
-                    await this.actualApi.updateTransaction(
-                        update.transactionId,
-                        {
-                            category: update.toCategoryId,
-                        }
-                    );
-                }
-
-                this.logger.info(
-                    `Applied ${pendingUpdates.length} category updates for existing transactions in '${actualAccount.name}'.`
-                );
+                await this.applyOrPreviewCategoryUpdates({
+                    actualAccountName: actualAccount.name,
+                    pendingUpdates,
+                    isDryRun,
+                });
             }
         } finally {
-            promptInterface?.close();
+            promptState.promptInterface?.close();
         }
+    }
+
+    private buildAccountTransactionBuckets({
+        accountTransactions,
+        existingActualTransactions,
+        actualAccountName,
+        shouldSyncCategories,
+    }: {
+        accountTransactions: MonMonTransaction[];
+        existingActualTransactions: ReadTransaction[];
+        actualAccountName: string;
+        shouldSyncCategories: boolean;
+    }) {
+        const existingByImportedId = new Map<string, ReadTransaction>();
+        const duplicateImportedIds = new Set<string>();
+
+        // Deterministic winner policy for duplicate imported_id values: latest by (date, id) wins.
+        const sortedExistingTransactions = [...existingActualTransactions]
+            .filter((transaction) => !!transaction.imported_id)
+            .sort((a, b) => {
+                if (a.date === b.date) {
+                    return a.id.localeCompare(b.id);
+                }
+
+                return a.date.localeCompare(b.date);
+            });
+
+        for (const transaction of sortedExistingTransactions) {
+            if (!transaction.imported_id) {
+                continue;
+            }
+
+            if (existingByImportedId.has(transaction.imported_id)) {
+                duplicateImportedIds.add(transaction.imported_id);
+            }
+
+            existingByImportedId.set(transaction.imported_id, transaction);
+        }
+
+        if (duplicateImportedIds.size > 0) {
+            const duplicateSample = Array.from(duplicateImportedIds)
+                .slice(0, 5)
+                .join(', ');
+            this.logger.warn(
+                `Detected ${duplicateImportedIds.size} duplicate imported_id values in Actual account '${actualAccountName}'. Category sync uses the latest transaction by (date,id) for each duplicate imported_id. Sample IDs: ${duplicateSample}`
+            );
+        }
+
+        const newMonMonTransactions: MonMonTransaction[] = [];
+        const existingPairs: ExistingTransactionPair[] = [];
+
+        for (const transaction of accountTransactions) {
+            const importedId = this.getIdForMoneyMoneyTransaction(transaction);
+            const existingTransaction = existingByImportedId.get(importedId);
+
+            if (existingTransaction) {
+                if (shouldSyncCategories) {
+                    existingPairs.push({
+                        monMonTransaction: transaction,
+                        actualTransaction: existingTransaction,
+                    });
+                }
+                continue;
+            }
+
+            newMonMonTransactions.push(transaction);
+        }
+
+        return {
+            newMonMonTransactions,
+            existingPairs,
+        };
+    }
+
+    private async planExistingCategoryUpdates({
+        existingPairs,
+        existingCategoryPolicy,
+        promptState,
+    }: {
+        existingPairs: ExistingTransactionPair[];
+        existingCategoryPolicy: ExistingCategorySyncPolicy;
+        promptState: PromptState;
+    }): Promise<CategoryUpdatePlan> {
+        const pendingUpdates: ExistingCategoryUpdate[] = [];
+        let backfillCount = 0;
+        let conflictCount = 0;
+        let skippedConflictCount = 0;
+
+        for (const pair of existingPairs) {
+            const categoryResolution =
+                this.categoryMap.getMappedActualCategoryId(
+                    pair.monMonTransaction.categoryUuid
+                );
+
+            const classification = classifyCategoryUpdate({
+                currentCategoryId: pair.actualTransaction.category || undefined,
+                targetCategoryId: categoryResolution.actualCategoryId,
+                isUncategorized: categoryResolution.isUncategorized,
+            });
+
+            if (classification.type === 'noop') {
+                continue;
+            }
+
+            if (classification.type === 'backfill') {
+                pendingUpdates.push(
+                    buildExistingCategoryUpdate({
+                        pair,
+                        targetCategoryId: classification.targetCategoryId,
+                        reason: 'backfill',
+                    })
+                );
+                backfillCount++;
+                continue;
+            }
+
+            conflictCount++;
+
+            if (existingCategoryPolicy === 'new') {
+                skippedConflictCount++;
+                continue;
+            }
+
+            if (existingCategoryPolicy === 'always') {
+                pendingUpdates.push(
+                    buildExistingCategoryUpdate({
+                        pair,
+                        targetCategoryId: classification.targetCategoryId,
+                        reason: 'conflict',
+                        fromCategoryId: classification.currentCategoryId,
+                    })
+                );
+                continue;
+            }
+
+            if (promptState.mode === 'none') {
+                skippedConflictCount++;
+                continue;
+            }
+
+            if (promptState.mode === 'all') {
+                pendingUpdates.push(
+                    buildExistingCategoryUpdate({
+                        pair,
+                        targetCategoryId: classification.targetCategoryId,
+                        reason: 'conflict',
+                        fromCategoryId: classification.currentCategoryId,
+                    })
+                );
+                continue;
+            }
+
+            if (!promptState.promptInterface) {
+                this.logger.info(
+                    `Interactive category decisions apply for the rest of this import run across all accounts (use A/N to set a global choice, q to abort).`
+                );
+                promptState.promptInterface = createInterface({
+                    input: stdin,
+                    output: stdout,
+                });
+            }
+
+            const shouldApply = await this.promptForConflictDecision(
+                promptState.promptInterface,
+                pair,
+                classification.currentCategoryId,
+                classification.targetCategoryId
+            );
+
+            if (shouldApply === 'all') {
+                promptState.mode = 'all';
+                pendingUpdates.push(
+                    buildExistingCategoryUpdate({
+                        pair,
+                        targetCategoryId: classification.targetCategoryId,
+                        reason: 'conflict',
+                        fromCategoryId: classification.currentCategoryId,
+                    })
+                );
+                continue;
+            }
+
+            if (shouldApply === 'none') {
+                promptState.mode = 'none';
+                skippedConflictCount++;
+                continue;
+            }
+
+            if (shouldApply === 'quit') {
+                throw new Error('Category sync aborted by user.');
+            }
+
+            if (shouldApply === true) {
+                pendingUpdates.push(
+                    buildExistingCategoryUpdate({
+                        pair,
+                        targetCategoryId: classification.targetCategoryId,
+                        reason: 'conflict',
+                        fromCategoryId: classification.currentCategoryId,
+                    })
+                );
+                continue;
+            }
+
+            skippedConflictCount++;
+        }
+
+        return {
+            pendingUpdates,
+            backfillCount,
+            conflictCount,
+            skippedConflictCount,
+        };
+    }
+
+    private async applyOrPreviewCategoryUpdates({
+        actualAccountName,
+        pendingUpdates,
+        isDryRun,
+    }: {
+        actualAccountName: string;
+        pendingUpdates: ExistingCategoryUpdate[];
+        isDryRun: boolean;
+    }) {
+        if (isDryRun) {
+            const preview = pendingUpdates.slice(0, 5).map((update) => {
+                const fromPath = update.fromCategoryId
+                    ? this.categoryMap.getActualCategoryPath(
+                          update.fromCategoryId
+                      )
+                    : '(none)';
+                const toPath = this.categoryMap.getActualCategoryPath(
+                    update.toCategoryId
+                );
+                return `${update.importedId}: ${fromPath} -> ${toPath}`;
+            });
+
+            this.logger.info(
+                `Dry run: would apply ${pendingUpdates.length} category updates in '${actualAccountName}'.`,
+                preview
+            );
+            return;
+        }
+
+        for (const update of pendingUpdates) {
+            await this.actualApi.updateTransaction(update.transactionId, {
+                category: update.toCategoryId,
+            });
+        }
+
+        this.logger.info(
+            `Applied ${pendingUpdates.length} category updates for existing transactions in '${actualAccountName}'.`
+        );
     }
 
     private async promptForConflictDecision(
@@ -657,7 +754,7 @@ class Importer {
         pair: ExistingTransactionPair,
         currentCategoryId: string,
         targetCategoryId: string
-    ): Promise<boolean | 'all' | 'none'> {
+    ): Promise<PromptDecision> {
         const fromCategory =
             this.categoryMap.getActualCategoryPath(currentCategoryId);
         const toCategory =
@@ -666,7 +763,7 @@ class Importer {
             `Category conflict for transaction '${pair.monMonTransaction.name}' (${format(pair.monMonTransaction.valueDate, DATE_FORMAT)}, ${pair.monMonTransaction.amount}):`,
             `Current Actual category: ${fromCategory}`,
             `Mapped MoneyMoney category: ${toCategory}`,
-            `Apply update? [y]es/[n]o/[A]ll remaining/[N]one remaining: `,
+            `Apply update? [y]es/[n]o/[A]ll remaining/[N]one remaining/[q]uit: `,
         ].join('\n');
 
         while (true) {
@@ -676,7 +773,7 @@ class Importer {
                 return decision;
             }
 
-            this.logger.warn(`Invalid input '${answer}'. Use y/n/A/N.`);
+            this.logger.warn(`Invalid input '${answer}'. Use y/n/A/N/q.`);
         }
     }
 

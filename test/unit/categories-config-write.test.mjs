@@ -154,3 +154,23 @@ test('replaceCategoryMappingInConfig fails safely when patched TOML is invalid',
 
     assert.match(result.reason, /TOML parse failed after patch/);
 });
+
+test('replaceCategoryMappingInConfig replaces mapping section at EOF without trailing newline', () => {
+    const content =
+        '[[actualServers.budgets]]\n' +
+        'syncId = "budget-a"\n\n' +
+        '[actualServers.budgets.categoryMapping]\n' +
+        '"old-mm" = "old-actual"';
+
+    const result = replaceCategoryMappingInConfig(content, 'budget-a', {
+        'new-mm': 'new-actual',
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+        return;
+    }
+
+    assert.match(result.content, /"new-mm" = "new-actual"/);
+    assert.doesNotMatch(result.content, /"old-mm" = "old-actual"/);
+});

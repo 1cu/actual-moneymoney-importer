@@ -543,6 +543,7 @@ class CategoryMap {
     }
 
     private normalizeCategoryName(name: string) {
+        // Normalize cosmetic prefixes/suffixes (emoji, punctuation) while preserving meaningful words.
         return name
             .normalize('NFKC')
             .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')

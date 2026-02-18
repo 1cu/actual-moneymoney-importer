@@ -58,7 +58,7 @@ export const configSchema = z
         import: z.object({
             importUncheckedTransactions: z.boolean(),
             synchronizeClearedStatus: z.boolean().default(true),
-            synchronizeCategories: z.boolean().default(true),
+            synchronizeCategories: z.boolean().default(false),
             categorySyncOnExisting: z
                 .enum(['ask', 'new', 'always'])
                 .default('ask'),

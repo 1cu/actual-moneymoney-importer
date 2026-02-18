@@ -62,13 +62,19 @@ export const replaceCategoryMappingInConfig = (
         };
     }
 
-    const block = matchingBlocks[0] as { start: number; end: number };
+    const [block] = matchingBlocks;
+    if (!block) {
+        return {
+            ok: false,
+            reason: `Expected exactly one budget block for syncId '${syncId}', but none could be selected.`,
+        };
+    }
 
     const blockContent = content.slice(block.start, block.end);
     const mappingLines = renderCategoryMappingLines(mapping);
 
     const mappingSectionRegex =
-        /(^|\n)\[actualServers\.budgets\.categoryMapping\]\n([\s\S]*?)(?=\n\[|$)/;
+        /(^|\r?\n)\[actualServers\.budgets\.categoryMapping\]\r?\n([\s\S]*?)(?=\r?\n\[|$)/;
 
     let newBlockContent = blockContent;
 
