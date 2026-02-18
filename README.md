@@ -73,8 +73,9 @@ password = ""
 
 # Optional category mapping
 [actualServers.budgets.categoryMapping]
-# The key is the MoneyMoney category UUID
-# The value is the Actual category id
+# Tool-managed block: running `actual-monmon categories map --write-config`
+# rewrites this section with annotated comments for readability.
+# The key is the MoneyMoney category UUID and the value is the Actual category id.
 "<monMonCategoryUuid>" = "<actualCategoryId>"
 ```
 
@@ -114,6 +115,15 @@ Category mapping can be inspected and suggested with:
 ```bash
 actual-monmon categories map -s http://localhost:5006 -b <syncId>
 actual-monmon categories map -s http://localhost:5006 -b <syncId> --write-config
+```
+
+`--write-config` writes an annotated mapping block so humans can read it, for example:
+
+```toml
+[actualServers.budgets.categoryMapping]
+# MoneyMoney: Ausgaben > Lebenshaltung > Lebensmittel
+# Actual: Lebenshaltung > 💳🧀 Lebensmittel
+"7f5c..." = "8aa1..."
 ```
 
 ## Advanced Configuration

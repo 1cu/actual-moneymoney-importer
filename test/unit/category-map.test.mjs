@@ -221,6 +221,104 @@ test('getCanonicalMapping excludes suggestions when includeSuggestions is false'
     assert.deepEqual(withSuggestions, { 'mm-food': 'actual-food' });
 });
 
+test('getCanonicalMappingEntries exposes origin and optional reason', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {
+            'mm-configured': 'actual-configured',
+        },
+    };
+
+    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+
+    map.loadFromData(
+        [
+            makeMonMonCategory({ uuid: 'mm-configured', name: 'Configured' }),
+            makeMonMonCategory({ uuid: 'mm-suggested', name: 'Suggested' }),
+        ],
+        [
+            {
+                id: 'actual-configured',
+                name: 'Configured',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+            {
+                id: 'actual-suggested',
+                name: 'Suggested',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+        ],
+        [
+            {
+                id: 'group-expenses',
+                name: 'Expenses',
+                is_income: false,
+            },
+        ]
+    );
+
+    const entries = map.getCanonicalMappingEntries({ includeSuggestions: true });
+    assert.equal(entries.length, 2);
+    assert.equal(entries[0]?.origin, 'configured');
+    assert.equal(entries[1]?.origin, 'suggested');
+    assert.equal(entries[1]?.reason, 'exact-normalized');
+});
+
+test('getCanonicalMappingEntries sorts by sourcePath then sourceUuid', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {
+            'mm-b': 'actual-b',
+            'mm-a': 'actual-a',
+        },
+    };
+
+    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    map.loadFromData(
+        [
+            makeMonMonCategory({ uuid: 'mm-a', name: 'Same' }),
+            makeMonMonCategory({ uuid: 'mm-b', name: 'Same' }),
+        ],
+        [
+            {
+                id: 'actual-a',
+                name: 'Same A',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+            {
+                id: 'actual-b',
+                name: 'Same B',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+        ],
+        [
+            {
+                id: 'group-expenses',
+                name: 'Expenses',
+                is_income: false,
+            },
+        ]
+    );
+
+    const entries = map.getCanonicalMappingEntries({
+        includeSuggestions: false,
+    });
+    assert.deepEqual(
+        entries.map((entry) => entry.sourceUuid),
+        ['mm-a', 'mm-b']
+    );
+});
+
 test('report exposes planning fields and omits legacy report keys', () => {
     const budgetConfig = {
         syncId: 'sync-id',

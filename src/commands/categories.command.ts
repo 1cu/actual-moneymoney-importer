@@ -4,12 +4,12 @@ import { checkDatabaseUnlocked } from 'moneymoney';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
 import ActualApi from '../utils/ActualApi.js';
 import { includesRef, toRefList } from '../utils/cliArgs.js';
-import CategoryMap from '../utils/CategoryMap.js';
+import CategoryMap, { CanonicalMappingEntry } from '../utils/CategoryMap.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import { renderTextTable, TableColumnConfig } from '../utils/textTable.js';
 import {
     getBudgetBlocks,
-    renderCategoryMappingLines,
+    renderAnnotatedCategoryMappingLines,
     replaceCategoryMappingInConfig,
 } from '../utils/categoryMappingConfigPatch.js';
 import {
@@ -29,16 +29,17 @@ type CategoryMapItem = {
     serverUrl: string;
     syncId: string;
     report: ReturnType<CategoryMap['getReport']>;
+    canonicalMappingEntries: CanonicalMappingEntry[];
     canonicalMapping: Record<string, string>;
 };
 
 const printFallbackSnippet = (
     logger: Logger,
-    canonicalMapping: Record<string, string>
+    entries: CanonicalMappingEntry[]
 ) => {
     logger.info(
         'TOML snippet to paste manually:',
-        renderCategoryMappingLines(canonicalMapping)
+        renderAnnotatedCategoryMappingLines(entries)
     );
 };
 
@@ -78,6 +79,7 @@ const handleMapCommand = async (argv: ArgumentsCamelCase) => {
         serverUrl: string;
         syncId: string;
         report: ReturnType<CategoryMap['getReport']>;
+        canonicalMappingEntries: CanonicalMappingEntry[];
         canonicalMapping: Record<string, string>;
     }> = [];
 
@@ -107,6 +109,10 @@ const handleMapCommand = async (argv: ArgumentsCamelCase) => {
                     serverUrl: serverConfig.serverUrl,
                     syncId: budgetConfig.syncId,
                     report: categoryMap.getReport(),
+                    canonicalMappingEntries:
+                        categoryMap.getCanonicalMappingEntries({
+                            includeSuggestions: true,
+                        }),
                     canonicalMapping: categoryMap.getCanonicalMapping({
                         includeSuggestions: true,
                     }),
@@ -140,21 +146,25 @@ const handleMapCommand = async (argv: ArgumentsCamelCase) => {
         logger.error(
             `Could not safely write category mapping to config: no budget blocks found.`
         );
-        printFallbackSnippet(logger, report.canonicalMapping);
+        printFallbackSnippet(logger, report.canonicalMappingEntries);
         process.exit(0);
     }
+
+    logger.warn(
+        'The [actualServers.budgets.categoryMapping] block is tool-managed. Future --write-config runs overwrite manual edits in that block.'
+    );
 
     const writeResult = replaceCategoryMappingInConfig(
         configText,
         report.syncId,
-        report.canonicalMapping
+        report.canonicalMappingEntries
     );
 
     if (!writeResult.ok) {
         logger.error(
             `Could not safely write category mapping to config: ${writeResult.reason}`
         );
-        printFallbackSnippet(logger, report.canonicalMapping);
+        printFallbackSnippet(logger, report.canonicalMappingEntries);
         process.exit(0);
     }
 
@@ -188,7 +198,9 @@ const handleMapCommand = async (argv: ArgumentsCamelCase) => {
     }
 
     await fs.writeFile(configPath, writeResult.content, 'utf8');
-    logger.info(`Updated category mapping in ${configPath}`);
+    logger.info(
+        `Updated category mapping in ${configPath} (${report.canonicalMappingEntries.length} entries, annotated for readability).`
+    );
     process.exit(0);
 };
 
@@ -228,7 +240,7 @@ const printReports = (reports: CategoryMapItem[], format: MapFormat) => {
                 report.serverUrl,
                 report.syncId,
                 report.report,
-                report.canonicalMapping
+                report.canonicalMappingEntries
             )) {
                 console.log(line);
             }
@@ -412,6 +424,30 @@ export const formatPlanningWarningsSection = (
     });
 };
 
+export const formatNextActionsSection = (
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
+) => {
+    let action =
+        'Mapping is complete; ready for import with `actual-monmon import`.';
+
+    if (report.invalidMappings.length > 0) {
+        action =
+            'Fix invalid category refs in config first, then rerun `actual-monmon categories map`.';
+    } else if (report.unresolvedMoneyMoneyCategories.length > 0) {
+        action =
+            'Review unresolved categories, then run `actual-monmon categories map --write-config` to apply safe mappings.';
+    }
+
+    return formatSectionWithRows({
+        title: 'Next Actions:',
+        headers: ['Action'],
+        rows: [[action]],
+        columns: [{ width: 92, alignment: 'left', truncatePriority: 1 }],
+        maxWidth,
+    });
+};
+
 export const formatTableReport = (
     serverUrl: string,
     syncId: string,
@@ -433,6 +469,8 @@ export const formatTableReport = (
         ...formatUnusedActualSection(report, maxWidth),
         '',
         ...formatPlanningWarningsSection(report, maxWidth),
+        '',
+        ...formatNextActionsSection(report, maxWidth),
     ];
 };
 
@@ -440,7 +478,7 @@ export const formatTomlReport = (
     serverUrl: string,
     syncId: string,
     report: ReturnType<CategoryMap['getReport']>,
-    canonicalMapping: Record<string, string>
+    canonicalMappingEntries: CanonicalMappingEntry[]
 ) => {
     const lines = [
         `# ${serverUrl} / ${syncId}`,
@@ -452,7 +490,7 @@ export const formatTomlReport = (
         lines.push('# Planning is incomplete (this can be intentional).');
     }
 
-    lines.push(...renderCategoryMappingLines(canonicalMapping));
+    lines.push(...renderAnnotatedCategoryMappingLines(canonicalMappingEntries));
     return lines;
 };
 
@@ -474,7 +512,7 @@ const mapSubcommand: CommandModule = {
             .boolean('write-config')
             .describe(
                 'write-config',
-                'Write canonical mapping plus safe suggestions to config TOML'
+                'Write annotated category mapping (configured + safe suggestions) to config TOML'
             );
     },
     handler: (argv) => handleMapCommand(argv),

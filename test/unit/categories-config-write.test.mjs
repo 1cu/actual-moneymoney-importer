@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     getBudgetBlocks,
+    renderAnnotatedCategoryMappingLines,
     replaceCategoryMappingInConfig,
 } from '../../dist/utils/categoryMappingConfigPatch.js';
 
@@ -20,6 +21,15 @@ syncId = "budget-a"
 syncId = "budget-b"
 `;
 
+const makeEntry = (overrides = {}) => ({
+    sourceUuid: 'mm-1',
+    targetId: 'actual-1',
+    sourcePath: 'Ausgaben > Lebensmittel',
+    targetPath: 'Lebenshaltung > 💳🧀 Lebensmittel',
+    origin: 'configured',
+    ...overrides,
+});
+
 test('getBudgetBlocks supports trailing comments on budget header', () => {
     const content = `
 [[actualServers.budgets]]   # main budget
@@ -31,15 +41,23 @@ syncId = "budget-a"
 });
 
 test('replaceCategoryMappingInConfig inserts missing mapping block', () => {
-    const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'budget-b', {
-        'mm-1': 'actual-1',
-    });
+    const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'budget-b', [
+        {
+            sourceUuid: 'mm-1',
+            targetId: 'actual-1',
+            sourcePath: 'A > B',
+            targetPath: 'C > D',
+            origin: 'configured',
+        },
+    ]);
 
     assert.equal(result.ok, true);
     if (!result.ok) {
         return;
     }
 
+    assert.match(result.content, /# MoneyMoney: A > B/);
+    assert.match(result.content, /# Actual: C > D/);
     assert.match(result.content, /\[actualServers\.budgets\.categoryMapping\]/);
     assert.match(result.content, /"mm-1" = "actual-1"/);
 });
@@ -50,9 +68,14 @@ test('replaceCategoryMappingInConfig replaces existing mapping block', () => {
 "old-mm" = "old-actual"
 `;
 
-    const result = replaceCategoryMappingInConfig(withExisting, 'budget-b', {
-        'new-mm': 'new-actual',
-    });
+    const result = replaceCategoryMappingInConfig(withExisting, 'budget-b', [
+        makeEntry({
+            sourceUuid: 'new-mm',
+            targetId: 'new-actual',
+            sourcePath: 'X > Y',
+            targetPath: 'Z > Q',
+        }),
+    ]);
 
     assert.equal(result.ok, true);
     if (!result.ok) {
@@ -75,9 +98,14 @@ syncId = "budget-a"
 "A" = "B"
 `;
 
-    const result = replaceCategoryMappingInConfig(withFollowingSection, 'budget-a', {
-        'new-mm': 'new-actual',
-    });
+    const result = replaceCategoryMappingInConfig(withFollowingSection, 'budget-a', [
+        makeEntry({
+            sourceUuid: 'new-mm',
+            targetId: 'new-actual',
+            sourcePath: 'X > Y',
+            targetPath: 'Z > Q',
+        }),
+    ]);
 
     assert.equal(result.ok, true);
     if (!result.ok) {
@@ -86,14 +114,19 @@ syncId = "budget-a"
 
     assert.match(
         result.content,
-        /\[actualServers\.budgets\.categoryMapping\]\n"new-mm" = "new-actual"\n\n\[actualServers\.budgets\.accountMapping\]/
+        /\[actualServers\.budgets\.categoryMapping\]\n# MoneyMoney: X > Y[\s\S]*"new-mm" = "new-actual"\n\n\[actualServers\.budgets\.accountMapping\]/
     );
 });
 
 test('replaceCategoryMappingInConfig updates only target budget in multi-budget config', () => {
-    const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'budget-a', {
-        'mm-a': 'actual-a',
-    });
+    const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'budget-a', [
+        makeEntry({
+            sourceUuid: 'mm-a',
+            targetId: 'actual-a',
+            sourcePath: 'M > A',
+            targetPath: 'T > A',
+        }),
+    ]);
 
     assert.equal(result.ok, true);
     if (!result.ok) {
@@ -113,9 +146,14 @@ test('replaceCategoryMappingInConfig updates only target budget in multi-budget 
 });
 
 test('replaceCategoryMappingInConfig fails safely for missing syncId', () => {
-    const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'does-not-exist', {
-        'mm-a': 'actual-a',
-    });
+    const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'does-not-exist', [
+        makeEntry({
+            sourceUuid: 'mm-a',
+            targetId: 'actual-a',
+            sourcePath: 'M > A',
+            targetPath: 'T > A',
+        }),
+    ]);
 
     assert.equal(result.ok, false);
     if (result.ok) {
@@ -134,18 +172,28 @@ syncId = "dupe"
 syncId = "dupe"
 `;
 
-    const result = replaceCategoryMappingInConfig(ambiguous, 'dupe', {
-        'mm-a': 'actual-a',
-    });
+    const result = replaceCategoryMappingInConfig(ambiguous, 'dupe', [
+        makeEntry({
+            sourceUuid: 'mm-a',
+            targetId: 'actual-a',
+            sourcePath: 'M > A',
+            targetPath: 'T > A',
+        }),
+    ]);
 
     assert.equal(result.ok, false);
 });
 
 test('replaceCategoryMappingInConfig fails safely when patched TOML is invalid', () => {
     const malformed = `${BASE_CONFIG}\ninvalid = \"unterminated`;
-    const result = replaceCategoryMappingInConfig(malformed, 'budget-b', {
-        'mm-a': 'actual-a',
-    });
+    const result = replaceCategoryMappingInConfig(malformed, 'budget-b', [
+        makeEntry({
+            sourceUuid: 'mm-a',
+            targetId: 'actual-a',
+            sourcePath: 'M > A',
+            targetPath: 'T > A',
+        }),
+    ]);
 
     assert.equal(result.ok, false);
     if (result.ok) {
@@ -162,9 +210,14 @@ test('replaceCategoryMappingInConfig replaces mapping section at EOF without tra
         '[actualServers.budgets.categoryMapping]\n' +
         '"old-mm" = "old-actual"';
 
-    const result = replaceCategoryMappingInConfig(content, 'budget-a', {
-        'new-mm': 'new-actual',
-    });
+    const result = replaceCategoryMappingInConfig(content, 'budget-a', [
+        makeEntry({
+            sourceUuid: 'new-mm',
+            targetId: 'new-actual',
+            sourcePath: 'X > Y',
+            targetPath: 'Z > Q',
+        }),
+    ]);
 
     assert.equal(result.ok, true);
     if (!result.ok) {
@@ -173,4 +226,30 @@ test('replaceCategoryMappingInConfig replaces mapping section at EOF without tra
 
     assert.match(result.content, /"new-mm" = "new-actual"/);
     assert.doesNotMatch(result.content, /"old-mm" = "old-actual"/);
+});
+
+test('renderAnnotatedCategoryMappingLines includes unresolved fallback comments', () => {
+    const lines = renderAnnotatedCategoryMappingLines([
+        makeEntry({
+            sourcePath: '',
+            targetPath: '',
+            sourceUuid: 'mm-u',
+            targetId: 'actual-u',
+            origin: 'suggested',
+            reason: 'path-exact',
+        }),
+    ]);
+
+    assert.match(lines.join('\n'), /\[UNRESOLVED\] mm-u/);
+    assert.match(lines.join('\n'), /\[UNRESOLVED\] actual-u/);
+    assert.doesNotMatch(lines.join('\n'), /# Match:/);
+    assert.doesNotMatch(lines.join('\n'), /# Origin:/);
+});
+
+test('renderAnnotatedCategoryMappingLines shows explicit empty mapping section', () => {
+    const lines = renderAnnotatedCategoryMappingLines([]);
+    assert.deepEqual(lines, [
+        '[actualServers.budgets.categoryMapping]',
+        '# No mappings generated.',
+    ]);
 });

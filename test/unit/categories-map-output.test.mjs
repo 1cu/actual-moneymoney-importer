@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
     formatConfiguredMappingsSection,
     formatInvalidMappingsSection,
+    formatNextActionsSection,
     formatPlanningWarningsSection,
     formatSafeSuggestionsSection,
     formatTableReport,
@@ -60,6 +61,12 @@ test('section formatters show None for empty sections', () => {
         '',
         'None',
     ]);
+    const nextActions = formatNextActionsSection(report, 120).join('\n');
+    assert.match(nextActions, /Next Actions:/);
+    assert.match(
+        nextActions,
+        /Mapping is complete; ready for import with `actual-monmon import`\./
+    );
 });
 
 test('formatters include expected headers and rows', () => {
@@ -128,6 +135,7 @@ test('table report includes sections in expected order', () => {
     const unresolvedIdx = lines.indexOf('Unresolved MoneyMoney Categories:');
     const unusedIdx = lines.indexOf('Unused Actual Categories:');
     const warningsIdx = lines.indexOf('Planning Warnings:');
+    const actionsIdx = lines.indexOf('Next Actions:');
 
     assert.ok(configuredIdx > 0);
     assert.ok(invalidIdx > configuredIdx);
@@ -135,6 +143,40 @@ test('table report includes sections in expected order', () => {
     assert.ok(unresolvedIdx > suggestionsIdx);
     assert.ok(unusedIdx > unresolvedIdx);
     assert.ok(warningsIdx > unusedIdx);
+    assert.ok(actionsIdx > warningsIdx);
+});
+
+test('next actions prioritizes invalid mappings over unresolved categories', () => {
+    const report = makeReport({
+        invalidMappings: [{ sourceRef: 'a', targetRef: 'b', reason: 'invalid' }],
+        unresolvedMoneyMoneyCategories: [{ uuid: 'u', path: 'P > Q' }],
+    });
+
+    const lines = formatNextActionsSection(report, 120).join('\n');
+    assert.match(lines, /Fix invalid category refs in config first/);
+    assert.doesNotMatch(lines, /Review unresolved categories/);
+});
+
+test('next actions shows unresolved guidance when no invalid mappings exist', () => {
+    const report = makeReport({
+        unresolvedMoneyMoneyCategories: [{ uuid: 'u', path: 'P > Q' }],
+    });
+
+    const lines = formatNextActionsSection(report, 120).join('\n');
+    assert.match(lines, /Review unresolved categories/);
+    assert.doesNotMatch(lines, /Fix invalid category refs in config first/);
+});
+
+test('next actions shows complete guidance when no invalid or unresolved remain', () => {
+    const report = makeReport();
+
+    const lines = formatNextActionsSection(report, 120).join('\n');
+    assert.match(
+        lines,
+        /Mapping is complete; ready for import with `actual-monmon import`\./
+    );
+    assert.doesNotMatch(lines, /Fix invalid category refs in config first/);
+    assert.doesNotMatch(lines, /Review unresolved categories/);
 });
 
 test('toml formatter includes preamble counts and incompleteness note when needed', () => {
@@ -144,9 +186,15 @@ test('toml formatter includes preamble counts and incompleteness note when neede
         planningWarnings: ['Planning is incomplete (this can be intentional).'],
     });
 
-    const lines = formatTomlReport('server', 'budget', report, {
-        'mm-1': 'actual-1',
-    });
+    const lines = formatTomlReport('server', 'budget', report, [
+        {
+            sourceUuid: 'mm-1',
+            targetId: 'actual-1',
+            sourcePath: 'A > B',
+            targetPath: 'C > D',
+            origin: 'configured',
+        },
+    ]);
 
     assert.deepEqual(lines.slice(0, 4), [
         '# server / budget',
@@ -154,6 +202,9 @@ test('toml formatter includes preamble counts and incompleteness note when neede
         '# Unused Actual categories: 1',
         '# Planning is incomplete (this can be intentional).',
     ]);
+    assert.ok(lines.some((line) => line.includes('# MoneyMoney: A > B')));
+    assert.ok(lines.some((line) => line.includes('# Actual: C > D')));
+    assert.ok(lines.some((line) => line.includes('"mm-1" = "actual-1"')));
 });
 
 test('table output truncates only when max width is narrow', () => {

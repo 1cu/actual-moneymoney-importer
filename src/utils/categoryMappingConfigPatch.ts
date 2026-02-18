@@ -1,4 +1,5 @@
 import toml from 'toml';
+import type { CanonicalMappingEntry } from './CategoryMap.js';
 
 export const renderCategoryMappingLines = (
     mapping: Record<string, string>
@@ -12,6 +13,39 @@ export const renderCategoryMappingLines = (
                     `${JSON.stringify(source)} = ${JSON.stringify(target)}`
             ),
     ];
+};
+
+export const renderAnnotatedCategoryMappingLines = (
+    entries: CanonicalMappingEntry[]
+): string[] => {
+    const lines: string[] = ['[actualServers.budgets.categoryMapping]'];
+
+    if (entries.length === 0) {
+        lines.push('# No mappings generated.');
+        return lines;
+    }
+
+    for (const entry of entries) {
+        const sourcePath = entry.sourcePath?.trim()
+            ? entry.sourcePath
+            : `[UNRESOLVED] ${entry.sourceUuid}`;
+        const targetPath = entry.targetPath?.trim()
+            ? entry.targetPath
+            : `[UNRESOLVED] ${entry.targetId}`;
+
+        lines.push(`# MoneyMoney: ${sourcePath}`);
+        lines.push(`# Actual: ${targetPath}`);
+        lines.push(
+            `${JSON.stringify(entry.sourceUuid)} = ${JSON.stringify(entry.targetId)}`
+        );
+        lines.push('');
+    }
+
+    while (lines.at(-1) === '') {
+        lines.pop();
+    }
+
+    return lines;
 };
 
 export const getBudgetBlocks = (
@@ -46,7 +80,7 @@ export const getBudgetBlocks = (
 export const replaceCategoryMappingInConfig = (
     content: string,
     syncId: string,
-    mapping: Record<string, string>
+    entries: CanonicalMappingEntry[]
 ): { ok: true; content: string } | { ok: false; reason: string } => {
     const budgetBlocks = getBudgetBlocks(content);
     const matchingBlocks = budgetBlocks.filter((block) => {
@@ -71,7 +105,7 @@ export const replaceCategoryMappingInConfig = (
     }
 
     const blockContent = content.slice(block.start, block.end);
-    const mappingLines = renderCategoryMappingLines(mapping);
+    const mappingLines = renderAnnotatedCategoryMappingLines(entries);
 
     const mappingSectionRegex =
         /(^|\r?\n)\[actualServers\.budgets\.categoryMapping\]\r?\n([\s\S]*?)(?=\r?\n\[|$)/;

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
     classifyCategoryUpdate,
     parsePromptDecision,
+    shouldLogCategoryMappingGuidance,
 } from '../../dist/utils/Importer.js';
 
 test('classifyCategoryUpdate returns backfill for empty current category', () => {
@@ -90,4 +91,9 @@ test('parsePromptDecision handles yes/no/all/none words and invalid', () => {
     assert.equal(parsePromptDecision('q'), 'quit');
     assert.equal(parsePromptDecision('quit'), 'quit');
     assert.equal(parsePromptDecision('  ???  '), 'invalid');
+});
+
+test('shouldLogCategoryMappingGuidance logs only once per run state', () => {
+    assert.equal(shouldLogCategoryMappingGuidance(false), true);
+    assert.equal(shouldLogCategoryMappingGuidance(true), false);
 });

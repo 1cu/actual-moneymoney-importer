@@ -123,6 +123,10 @@ export const parsePromptDecision = (
     return 'invalid';
 };
 
+export const shouldLogCategoryMappingGuidance = (
+    alreadyLogged: boolean
+): boolean => !alreadyLogged;
+
 const buildExistingCategoryUpdate = ({
     pair,
     targetCategoryId,
@@ -299,6 +303,7 @@ class Importer {
         }
 
         const unmappedCategoryWarnings = new Set<string>();
+        let categoryMappingGuidanceLogged = false;
         const shouldSyncCategories = this.config.import.synchronizeCategories;
 
         const promptState: PromptState = { mode: 'prompt' };
@@ -345,6 +350,16 @@ class Importer {
                                 this.logger.warn(
                                     `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
                                 );
+                                if (
+                                    shouldLogCategoryMappingGuidance(
+                                        categoryMappingGuidanceLogged
+                                    )
+                                ) {
+                                    categoryMappingGuidanceLogged = true;
+                                    this.logger.info(
+                                        `Category mapping is incomplete. Run 'actual-monmon categories map' to review unresolved categories.`
+                                    );
+                                }
                             }
                         }
                     }

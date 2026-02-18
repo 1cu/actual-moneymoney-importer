@@ -52,7 +52,9 @@ password = ""
 "<monMonAcc>" = "<actualAcc>"
 
 # Category map for the budget (optional)
-# The key is a MoneyMoney category UUID, the value is an Actual category ID
+# Tool-managed block: running actual-monmon categories map --write-config
+# rewrites this section with annotated comments for readability.
+# The key is a MoneyMoney category UUID, the value is an Actual category ID.
 [actualServers.budgets.categoryMapping]
 "<monMonCategoryUuid>" = "<actualCategoryId>"
 `;

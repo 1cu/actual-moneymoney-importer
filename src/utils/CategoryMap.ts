@@ -49,6 +49,15 @@ type MappingSuggestion = {
     reason: 'exact-normalized' | 'path-exact';
 };
 
+type CanonicalMappingEntry = {
+    sourceUuid: string;
+    targetId: string;
+    sourcePath: string;
+    targetPath: string;
+    origin: 'configured' | 'suggested';
+    reason?: 'exact-normalized' | 'path-exact';
+};
+
 type CategoryMapReport = {
     configuredMappings: MappingValidation[];
     invalidMappings: MappingValidation[];
@@ -201,11 +210,36 @@ class CategoryMap {
     }: {
         includeSuggestions: boolean;
     }) {
+        return Object.fromEntries(
+            this.getCanonicalMappingEntries({ includeSuggestions }).map(
+                (entry) => [entry.sourceUuid, entry.targetId]
+            )
+        );
+    }
+
+    getCanonicalMappingEntries({
+        includeSuggestions,
+    }: {
+        includeSuggestions: boolean;
+    }): CanonicalMappingEntry[] {
         const canonicalMapping = new Map<string, string>();
+        const entries: CanonicalMappingEntry[] = [];
 
         for (const mapping of this.validMappings) {
-            if (mapping.sourceUuid && mapping.targetId) {
+            if (
+                mapping.sourceUuid &&
+                mapping.targetId &&
+                mapping.sourcePath &&
+                mapping.targetPath
+            ) {
                 canonicalMapping.set(mapping.sourceUuid, mapping.targetId);
+                entries.push({
+                    sourceUuid: mapping.sourceUuid,
+                    targetId: mapping.targetId,
+                    sourcePath: mapping.sourcePath,
+                    targetPath: mapping.targetPath,
+                    origin: 'configured',
+                });
             }
         }
 
@@ -216,14 +250,22 @@ class CategoryMap {
                         suggestion.sourceUuid,
                         suggestion.targetId
                     );
+                    entries.push({
+                        sourceUuid: suggestion.sourceUuid,
+                        targetId: suggestion.targetId,
+                        sourcePath: suggestion.sourcePath,
+                        targetPath: suggestion.targetPath,
+                        origin: 'suggested',
+                        reason: suggestion.reason,
+                    });
                 }
             }
         }
 
-        return Object.fromEntries(
-            Array.from(canonicalMapping.entries()).sort(([a], [b]) =>
-                a.localeCompare(b)
-            )
+        return entries.sort(
+            (a, b) =>
+                a.sourcePath.localeCompare(b.sourcePath) ||
+                a.sourceUuid.localeCompare(b.sourceUuid)
         );
     }
 
@@ -620,5 +662,10 @@ class CategoryMap {
     }
 }
 
-export type { CategoryMapReport, MappingSuggestion, MappingValidation };
+export type {
+    CanonicalMappingEntry,
+    CategoryMapReport,
+    MappingSuggestion,
+    MappingValidation,
+};
 export default CategoryMap;
