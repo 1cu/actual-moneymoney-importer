@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
     classifyCategoryUpdate,
     parsePromptDecision,
-    shouldLogCategoryMappingGuidance,
+    shouldEmitMappingConflictGuidance,
 } from '../../dist/utils/Importer.js';
 
 test('classifyCategoryUpdate returns backfill for empty current category', () => {
@@ -93,7 +93,26 @@ test('parsePromptDecision handles yes/no/all/none words and invalid', () => {
     assert.equal(parsePromptDecision('  ???  '), 'invalid');
 });
 
-test('shouldLogCategoryMappingGuidance logs only once per run state', () => {
-    assert.equal(shouldLogCategoryMappingGuidance(false), true);
-    assert.equal(shouldLogCategoryMappingGuidance(true), false);
+test('shouldEmitMappingConflictGuidance requires both unmapped warnings and conflicts', () => {
+    assert.equal(
+        shouldEmitMappingConflictGuidance({
+            totalUnmappedCategoryWarnings: 1,
+            accountsWithConflicts: 1,
+        }),
+        true
+    );
+    assert.equal(
+        shouldEmitMappingConflictGuidance({
+            totalUnmappedCategoryWarnings: 1,
+            accountsWithConflicts: 0,
+        }),
+        false
+    );
+    assert.equal(
+        shouldEmitMappingConflictGuidance({
+            totalUnmappedCategoryWarnings: 0,
+            accountsWithConflicts: 1,
+        }),
+        false
+    );
 });

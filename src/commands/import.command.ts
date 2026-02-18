@@ -8,6 +8,7 @@ import CategoryMap from '../utils/CategoryMap.js';
 import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import PayeeTransformer from '../utils/PayeeTransformer.js';
+import { withGlobalApiNoiseFilter } from '../utils/ActualApiLogControl.js';
 import { getConfig } from '../utils/config.js';
 import { DATE_FORMAT } from '../utils/shared.js';
 
@@ -101,96 +102,109 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
     }
     logger.debug(`MoneyMoney database is accessible.`);
 
-    for (const serverConfig of selectedServerConfigs) {
-        const selectedBudgetConfigs = serverConfig.budgets.filter(
-            (budgetConfig) => includesRef(budgetRefs, budgetConfig.syncId)
-        );
-
-        if (selectedBudgetConfigs.length === 0) {
-            logger.warn(
-                `No matching budgets found for server '${serverConfig.serverUrl}'. Skipping.`
+    await withGlobalApiNoiseFilter(logLevel < LogLevel.ACTUAL, async () => {
+        for (const serverConfig of selectedServerConfigs) {
+            const selectedBudgetConfigs = serverConfig.budgets.filter(
+                (budgetConfig) => includesRef(budgetRefs, budgetConfig.syncId)
             );
-            continue;
-        }
 
-        logger.debug(`Creating Actual API instance...`, [
-            `Server URL: ${serverConfig.serverUrl}`,
-            `Budgets: ${selectedBudgetConfigs
-                .map((budget) => budget.syncId)
-                .join(', ')}`,
-        ]);
-        const actualApi = new ActualApi(serverConfig, logger);
-
-        logger.debug(`Initializing Actual API...`);
-        await actualApi.init();
-
-        try {
-            for (const budgetConfig of selectedBudgetConfigs) {
-                logger.debug(
-                    `Loading budget...`,
-                    `Budget: ${budgetConfig.syncId}`
+            if (selectedBudgetConfigs.length === 0) {
+                logger.warn(
+                    `No matching budgets found for server '${serverConfig.serverUrl}'. Skipping.`
                 );
-                await actualApi.loadBudget(budgetConfig.syncId);
-
-                logger.debug(`Loading accounts...`);
-                const accountMap = new AccountMap(
-                    budgetConfig,
-                    logger,
-                    actualApi
-                );
-                await accountMap.loadFromConfig();
-
-                const categoryMap = new CategoryMap(
-                    budgetConfig,
-                    actualApi,
-                    logger
-                );
-                if (config.import.synchronizeCategories) {
-                    await categoryMap.load();
-                }
-
-                const importer = new Importer(
-                    config,
-                    budgetConfig,
-                    actualApi,
-                    logger,
-                    accountMap,
-                    categoryMap,
-                    payeeTransformer
-                );
-
-                logger.info(
-                    `Importing transactions...`,
-                    `Budget: ${budgetConfig.syncId}`
-                );
-
-                const importOptions: {
-                    accountRefs?: string[];
-                    from?: Date;
-                    to?: Date;
-                    isDryRun: boolean;
-                    categorySyncOnExisting?: 'ask' | 'new' | 'always';
-                } = {
-                    isDryRun,
-                    categorySyncOnExisting,
-                };
-
-                if (accountRefs) {
-                    importOptions.accountRefs = accountRefs;
-                }
-                if (fromDate) {
-                    importOptions.from = fromDate;
-                }
-                if (toDate) {
-                    importOptions.to = toDate;
-                }
-
-                await importer.importTransactions(importOptions);
+                continue;
             }
-        } finally {
-            await actualApi.shutdown();
+
+            logger.debug(`Creating Actual API instance...`, [
+                `Server URL: ${serverConfig.serverUrl}`,
+                `Budgets: ${selectedBudgetConfigs
+                    .map((budget) => budget.syncId)
+                    .join(', ')}`,
+            ]);
+            const actualApi = new ActualApi(serverConfig, logger);
+
+            logger.debug(`Initializing Actual API...`);
+            await actualApi.init();
+
+            const userFiles = await actualApi
+                .getUserFiles()
+                .catch(() => [] as Array<{ fileId: string; name: string }>);
+            const budgetNameBySyncId = new Map(
+                userFiles.map((file) => [file.fileId, file.name])
+            );
+
+            try {
+                for (const budgetConfig of selectedBudgetConfigs) {
+                    const budgetName = budgetNameBySyncId.get(
+                        budgetConfig.syncId
+                    );
+                    const budgetLabel = budgetName
+                        ? `${budgetName} (${budgetConfig.syncId})`
+                        : budgetConfig.syncId;
+
+                    logger.debug(`Loading budget...`, `Budget: ${budgetLabel}`);
+                    await actualApi.loadBudget(budgetConfig.syncId);
+
+                    logger.debug(`Loading accounts...`);
+                    const accountMap = new AccountMap(
+                        budgetConfig,
+                        logger,
+                        actualApi
+                    );
+                    await accountMap.loadFromConfig();
+
+                    const categoryMap = new CategoryMap(
+                        budgetConfig,
+                        actualApi,
+                        logger
+                    );
+                    if (config.import.synchronizeCategories) {
+                        await categoryMap.load();
+                    }
+
+                    const importer = new Importer(
+                        config,
+                        budgetConfig,
+                        actualApi,
+                        logger,
+                        accountMap,
+                        categoryMap,
+                        payeeTransformer
+                    );
+
+                    logger.debug(
+                        `Preparing transaction import...`,
+                        `Budget: ${budgetLabel}`
+                    );
+
+                    const importOptions: {
+                        accountRefs?: string[];
+                        from?: Date;
+                        to?: Date;
+                        isDryRun: boolean;
+                        categorySyncOnExisting?: 'ask' | 'new' | 'always';
+                    } = {
+                        isDryRun,
+                        categorySyncOnExisting,
+                    };
+
+                    if (accountRefs) {
+                        importOptions.accountRefs = accountRefs;
+                    }
+                    if (fromDate) {
+                        importOptions.from = fromDate;
+                    }
+                    if (toDate) {
+                        importOptions.to = toDate;
+                    }
+
+                    await importer.importTransactions(importOptions);
+                }
+            } finally {
+                await actualApi.shutdown();
+            }
         }
-    }
+    });
 
     process.exit(0);
 };

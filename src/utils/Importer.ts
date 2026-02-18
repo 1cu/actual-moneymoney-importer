@@ -49,6 +49,22 @@ type CategoryUpdatePlan = {
     backfillCount: number;
     conflictCount: number;
     skippedConflictCount: number;
+    transferLockedCount: number;
+};
+type ImportRunMetrics = {
+    accountsScanned: number;
+    accountsWithImportActivity: number;
+    accountsWithCategoryActivity: number;
+    accountsWithConflicts: number;
+    totalTransactionsAdded: number;
+    totalTransactionsUpdated: number;
+    totalCategoryUpdatesPlanned: number;
+    totalCategoryUpdatesApplied: number;
+    totalCategoryUpdatesDryRun: number;
+    totalBackfills: number;
+    totalConflicts: number;
+    totalSkippedConflicts: number;
+    totalUnmappedCategoryWarnings: number;
 };
 type DuplicateImportedIdGroup = {
     importedId: string;
@@ -123,9 +139,13 @@ export const parsePromptDecision = (
     return 'invalid';
 };
 
-export const shouldLogCategoryMappingGuidance = (
-    alreadyLogged: boolean
-): boolean => !alreadyLogged;
+export const shouldEmitMappingConflictGuidance = ({
+    totalUnmappedCategoryWarnings,
+    accountsWithConflicts,
+}: {
+    totalUnmappedCategoryWarnings: number;
+    accountsWithConflicts: number;
+}): boolean => totalUnmappedCategoryWarnings > 0 && accountsWithConflicts > 0;
 
 const buildExistingCategoryUpdate = ({
     pair,
@@ -303,13 +323,28 @@ class Importer {
         }
 
         const unmappedCategoryWarnings = new Set<string>();
-        let categoryMappingGuidanceLogged = false;
         const shouldSyncCategories = this.config.import.synchronizeCategories;
+        const runMetrics: ImportRunMetrics = {
+            accountsScanned: 0,
+            accountsWithImportActivity: 0,
+            accountsWithCategoryActivity: 0,
+            accountsWithConflicts: 0,
+            totalTransactionsAdded: 0,
+            totalTransactionsUpdated: 0,
+            totalCategoryUpdatesPlanned: 0,
+            totalCategoryUpdatesApplied: 0,
+            totalCategoryUpdatesDryRun: 0,
+            totalBackfills: 0,
+            totalConflicts: 0,
+            totalSkippedConflicts: 0,
+            totalUnmappedCategoryWarnings: 0,
+        };
 
         const promptState: PromptState = { mode: 'prompt' };
 
         try {
             for (const [monMonAccount, actualAccount] of accountMapping) {
+                runMetrics.accountsScanned++;
                 const accountTransactions =
                     monMonTransactionMap[monMonAccount.uuid] ?? [];
 
@@ -317,6 +352,7 @@ class Importer {
                     await this.actualApi.getTransactions(actualAccount.id);
                 const { newMonMonTransactions, existingPairs } =
                     this.buildAccountTransactionBuckets({
+                        monMonAccount,
                         accountTransactions,
                         existingActualTransactions,
                         actualAccountName: actualAccount.name,
@@ -347,19 +383,10 @@ class Importer {
 
                             if (!unmappedCategoryWarnings.has(warningKey)) {
                                 unmappedCategoryWarnings.add(warningKey);
+                                runMetrics.totalUnmappedCategoryWarnings++;
                                 this.logger.warn(
                                     `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
                                 );
-                                if (
-                                    shouldLogCategoryMappingGuidance(
-                                        categoryMappingGuidanceLogged
-                                    )
-                                ) {
-                                    categoryMappingGuidanceLogged = true;
-                                    this.logger.info(
-                                        `Category mapping is incomplete. Run 'actual-monmon categories map' to review unresolved categories.`
-                                    );
-                                }
                             }
                         }
                     }
@@ -451,6 +478,16 @@ class Importer {
                             actualAccount.id,
                             createTransactions
                         );
+                        runMetrics.totalTransactionsAdded +=
+                            result.added.length;
+                        runMetrics.totalTransactionsUpdated +=
+                            result.updated.length;
+                        if (
+                            result.added.length > 0 ||
+                            result.updated.length > 0
+                        ) {
+                            runMetrics.accountsWithImportActivity++;
+                        }
 
                         if (result.errors && result.errors.length > 0) {
                             this.logger.error(
@@ -471,6 +508,9 @@ class Importer {
                             ]
                         );
                     } else {
+                        runMetrics.totalTransactionsAdded +=
+                            createTransactions.length;
+                        runMetrics.accountsWithImportActivity++;
                         this.logger.info(
                             `Dry run: would import ${createTransactions.length} new transactions to '${actualAccount.name}'.`
                         );
@@ -486,22 +526,38 @@ class Importer {
                     backfillCount,
                     conflictCount,
                     skippedConflictCount,
+                    transferLockedCount,
                 } = await this.planExistingCategoryUpdates({
                     existingPairs,
                     existingCategoryPolicy,
                     promptState,
                 });
 
-                this.logger.info(
-                    `Category sync summary for account '${actualAccount.name}'`,
-                    [
-                        `Existing transactions considered: ${existingPairs.length}`,
-                        `Backfills: ${backfillCount}`,
-                        `Conflicts: ${conflictCount}`,
-                        `Planned updates: ${pendingUpdates.length}`,
-                        `Skipped conflicts: ${skippedConflictCount}`,
-                    ]
-                );
+                if (transferLockedCount > 0) {
+                    this.logger.debug(
+                        `Skipped ${transferLockedCount} transfer-linked existing transaction(s) for category sync in '${actualAccount.name}' (Actual manages transfer categories).`
+                    );
+                }
+
+                runMetrics.totalBackfills += backfillCount;
+                runMetrics.totalConflicts += conflictCount;
+                runMetrics.totalSkippedConflicts += skippedConflictCount;
+                runMetrics.totalCategoryUpdatesPlanned += pendingUpdates.length;
+                if (backfillCount > 0 || conflictCount > 0) {
+                    runMetrics.accountsWithCategoryActivity++;
+                }
+                if (conflictCount > 0) {
+                    runMetrics.accountsWithConflicts++;
+                }
+
+                this.logCategorySyncSummary({
+                    actualAccountName: actualAccount.name,
+                    existingPairsCount: existingPairs.length,
+                    backfillCount,
+                    conflictCount,
+                    pendingUpdatesCount: pendingUpdates.length,
+                    skippedConflictCount,
+                });
 
                 if (pendingUpdates.length === 0) {
                     continue;
@@ -512,18 +568,152 @@ class Importer {
                     pendingUpdates,
                     isDryRun,
                 });
+                if (isDryRun) {
+                    runMetrics.totalCategoryUpdatesDryRun +=
+                        pendingUpdates.length;
+                } else {
+                    runMetrics.totalCategoryUpdatesApplied +=
+                        pendingUpdates.length;
+                }
             }
+
+            if (shouldEmitMappingConflictGuidance(runMetrics)) {
+                this.logger.warn(
+                    `Category conflicts occurred while some categories are unmapped. Review with 'actual-monmon categories map' if needed.`
+                );
+            }
+            this.emitImportRunSummary(runMetrics, isDryRun);
         } finally {
             promptState.promptInterface?.close();
         }
     }
 
+    private logCategorySyncSummary({
+        actualAccountName,
+        existingPairsCount,
+        backfillCount,
+        conflictCount,
+        pendingUpdatesCount,
+        skippedConflictCount,
+    }: {
+        actualAccountName: string;
+        existingPairsCount: number;
+        backfillCount: number;
+        conflictCount: number;
+        pendingUpdatesCount: number;
+        skippedConflictCount: number;
+    }) {
+        const hasCategoryActivity = backfillCount > 0 || conflictCount > 0;
+        if (hasCategoryActivity) {
+            const hints = [
+                `Existing transactions considered: ${existingPairsCount}`,
+            ];
+
+            if (backfillCount > 0) {
+                hints.push(`Backfills: ${backfillCount}`);
+            }
+
+            if (conflictCount > 0) {
+                hints.push(`Conflicts: ${conflictCount}`);
+            }
+
+            if (pendingUpdatesCount > 0) {
+                hints.push(`Planned updates: ${pendingUpdatesCount}`);
+            }
+
+            if (skippedConflictCount > 0) {
+                hints.push(`Skipped conflicts: ${skippedConflictCount}`);
+            }
+
+            this.logger.info(
+                `Category sync summary for account '${actualAccountName}'`,
+                hints
+            );
+            return;
+        }
+
+        this.logger.debug(
+            `Category sync no-op for account '${actualAccountName}': existing=${existingPairsCount}, backfills=${backfillCount}, conflicts=${conflictCount}, planned=${pendingUpdatesCount}, skipped=${skippedConflictCount}`
+        );
+    }
+
+    private emitImportRunSummary(metrics: ImportRunMetrics, isDryRun: boolean) {
+        const hasImportActivity =
+            metrics.totalTransactionsAdded > 0 ||
+            metrics.totalTransactionsUpdated > 0;
+        const hasCategoryActivity = metrics.totalCategoryUpdatesPlanned > 0;
+        const hasNotableWarnings = metrics.totalUnmappedCategoryWarnings > 0;
+
+        if (!hasImportActivity && !hasCategoryActivity && !hasNotableWarnings) {
+            this.logger.info('Nothing to import.');
+            return;
+        }
+
+        const hints = [`Accounts scanned: ${metrics.accountsScanned}`];
+
+        if (hasImportActivity) {
+            hints.push(
+                `Transactions: added=${metrics.totalTransactionsAdded}, updated=${metrics.totalTransactionsUpdated}`
+            );
+        }
+
+        if (hasCategoryActivity) {
+            if (isDryRun) {
+                hints.push(
+                    `Category updates: planned=${metrics.totalCategoryUpdatesPlanned} (dry-run, no changes written)`
+                );
+            } else {
+                hints.push(
+                    `Category updates: planned=${metrics.totalCategoryUpdatesPlanned}, applied=${metrics.totalCategoryUpdatesApplied}`
+                );
+            }
+        }
+
+        if (
+            metrics.totalBackfills > 0 ||
+            metrics.totalConflicts > 0 ||
+            metrics.totalSkippedConflicts > 0
+        ) {
+            const categorySyncParts: string[] = [];
+            if (metrics.totalBackfills > 0) {
+                categorySyncParts.push(`backfills=${metrics.totalBackfills}`);
+            }
+            if (metrics.totalConflicts > 0) {
+                categorySyncParts.push(`conflicts=${metrics.totalConflicts}`);
+            }
+            if (metrics.totalSkippedConflicts > 0) {
+                categorySyncParts.push(
+                    `skipped=${metrics.totalSkippedConflicts}`
+                );
+            }
+            hints.push(
+                `Category sync activity: ${categorySyncParts.join(', ')}`
+            );
+        }
+
+        if (metrics.accountsWithConflicts > 0) {
+            hints.push(
+                `Accounts with conflicts: ${metrics.accountsWithConflicts}`
+            );
+        }
+
+        if (metrics.totalUnmappedCategoryWarnings > 0) {
+            hints.push(
+                `Unmapped category warnings: ${metrics.totalUnmappedCategoryWarnings}`
+            );
+        }
+
+        this.logger.info('Import run summary', hints);
+    }
+
     private buildAccountTransactionBuckets({
+        monMonAccount,
         accountTransactions,
         existingActualTransactions,
         actualAccountName,
         shouldSyncCategories,
     }: {
+        monMonAccount: MonMonAccount;
         accountTransactions: MonMonTransaction[];
         existingActualTransactions: ReadTransaction[];
         actualAccountName: string;
@@ -577,7 +767,12 @@ class Importer {
                 const amount = this.formatMinorUnitsAsMajor(
                     group.representativeTransaction.amount
                 );
-                return `Date=${group.representativeTransaction.date}, Payee=${group.normalizedPayee}, Amount=${amount}, TxCount=${group.transactions.length} (imported_id='${group.importedId}', MoneyMoneyAccount='${monMonAccountUuid}', MoneyMoneyTx='${monMonTransactionId}')`;
+                const monMonAccountDisplay =
+                    monMonAccountUuid === monMonAccount.uuid
+                        ? `${monMonAccount.name} (${monMonAccountUuid})`
+                        : monMonAccountUuid;
+
+                return `Date=${group.representativeTransaction.date}, Payee=${group.normalizedPayee}, Amount=${amount}, TxCount=${group.transactions.length} (imported_id='${group.importedId}', MoneyMoneyAccount='${monMonAccountDisplay}', MoneyMoneyTx='${monMonTransactionId}')`;
             });
 
             if (duplicateGroups.length > sampledGroups.length) {
@@ -586,9 +781,11 @@ class Importer {
                 );
             }
 
-            this.logger.info(
-                `Detected ${likelySplitGroups.length} likely split duplicate imported_id group(s) in Actual account '${actualAccountName}' (informational).`
-            );
+            if (likelySplitGroups.length > 0) {
+                this.logger.debug(
+                    `Detected ${likelySplitGroups.length} likely split duplicate imported_id group(s) in Actual account '${actualAccountName}'.`
+                );
+            }
 
             if (suspiciousGroups.length > 0) {
                 this.logger.warn(
@@ -602,7 +799,12 @@ class Importer {
                             const amount = this.formatMinorUnitsAsMajor(
                                 group.representativeTransaction.amount
                             );
-                            return `Date=${group.representativeTransaction.date}, Payee=${group.normalizedPayee}, Amount=${amount}, TxCount=${group.transactions.length} (imported_id='${group.importedId}', MoneyMoneyAccount='${monMonAccountUuid}', MoneyMoneyTx='${monMonTransactionId}')`;
+                            const monMonAccountDisplay =
+                                monMonAccountUuid === monMonAccount.uuid
+                                    ? `${monMonAccount.name} (${monMonAccountUuid})`
+                                    : monMonAccountUuid;
+
+                            return `Date=${group.representativeTransaction.date}, Payee=${group.normalizedPayee}, Amount=${amount}, TxCount=${group.transactions.length} (imported_id='${group.importedId}', MoneyMoneyAccount='${monMonAccountDisplay}', MoneyMoneyTx='${monMonTransactionId}')`;
                         })
                 );
             }
@@ -652,8 +854,14 @@ class Importer {
         let backfillCount = 0;
         let conflictCount = 0;
         let skippedConflictCount = 0;
+        let transferLockedCount = 0;
 
         for (const pair of existingPairs) {
+            if (pair.actualTransaction.transfer_id) {
+                transferLockedCount++;
+                continue;
+            }
+
             const categoryResolution =
                 this.categoryMap.getMappedActualCategoryId(
                     pair.monMonTransaction.categoryUuid
@@ -777,6 +985,7 @@ class Importer {
             backfillCount,
             conflictCount,
             skippedConflictCount,
+            transferLockedCount,
         };
     }
 

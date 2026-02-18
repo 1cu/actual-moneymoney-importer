@@ -109,6 +109,7 @@ test('planExistingCategoryUpdates backfills null category for new policy', async
     assert.equal(plan.pendingUpdates.length, 1);
     assert.equal(plan.pendingUpdates[0]?.toCategoryId, 'cat-target');
     assert.equal(plan.pendingUpdates[0]?.reason, 'backfill');
+    assert.equal(plan.transferLockedCount, 0);
 });
 
 test('planExistingCategoryUpdates skips conflict for new and applies for always', async () => {
@@ -128,6 +129,7 @@ test('planExistingCategoryUpdates skips conflict for new and applies for always'
     });
     assert.equal(planNew.pendingUpdates.length, 0);
     assert.equal(planNew.skippedConflictCount, 1);
+    assert.equal(planNew.transferLockedCount, 0);
 
     const { importer: importerAlways } = makeImporter({ mappingByUuid });
     const planAlways = await importerAlways.planExistingCategoryUpdates({
@@ -137,6 +139,34 @@ test('planExistingCategoryUpdates skips conflict for new and applies for always'
     });
     assert.equal(planAlways.pendingUpdates.length, 1);
     assert.equal(planAlways.pendingUpdates[0]?.reason, 'conflict');
+    assert.equal(planAlways.transferLockedCount, 0);
+});
+
+test('planExistingCategoryUpdates skips transfer-linked transactions from category sync', async () => {
+    const { importer } = makeImporter({
+        mappingByUuid: {
+            'mm-1': {
+                actualCategoryId: 'cat-target',
+                isUncategorized: false,
+                isMapped: true,
+            },
+        },
+        policy: 'new',
+    });
+
+    const pair = makePair({ currentCategoryId: undefined });
+    pair.actualTransaction.transfer_id = 'transfer-123';
+
+    const plan = await importer.planExistingCategoryUpdates({
+        existingPairs: [pair],
+        existingCategoryPolicy: 'new',
+        promptState: { mode: 'prompt' },
+    });
+
+    assert.equal(plan.backfillCount, 0);
+    assert.equal(plan.conflictCount, 0);
+    assert.equal(plan.pendingUpdates.length, 0);
+    assert.equal(plan.transferLockedCount, 1);
 });
 
 test('planExistingCategoryUpdates aborts on quit decision', async () => {
@@ -195,6 +225,10 @@ test('buildAccountTransactionBuckets logs duplicates and picks deterministic win
     const { importer, logger } = makeImporter();
 
     const result = importer.buildAccountTransactionBuckets({
+        monMonAccount: {
+            uuid: 'acc-1',
+            name: 'Gehaltskonto',
+        },
         accountTransactions: [
             {
                 id: '1',
@@ -232,15 +266,19 @@ test('buildAccountTransactionBuckets logs duplicates and picks deterministic win
     assert.equal(result.existingPairs.length, 1);
     assert.equal(result.existingPairs[0]?.actualTransaction.id, 'tx-b');
     assert.equal(logger.warnings.length, 0);
-    assert.equal(logger.infos.length, 1);
+    assert.equal(logger.infos.length, 0);
+    assert.equal(logger.debugs.length, 2);
     assert.match(
-        logger.infos[0]?.message ?? '',
+        logger.debugs[0]?.message ?? '',
         /Detected 1 likely split duplicate imported_id group\(s\)/
     );
-    assert.equal(logger.debugs.length, 1);
     assert.match(
-        logger.debugs[0]?.hints[0] ?? '',
+        logger.debugs[1]?.hints[0] ?? '',
         /Date=2026-02-18, Payee=Lidl sagt Danke, Amount=-12.34, TxCount=2/
+    );
+    assert.match(
+        logger.debugs[1]?.hints[0] ?? '',
+        /MoneyMoneyAccount='Gehaltskonto \(acc-1\)'/
     );
 });
 
@@ -248,6 +286,10 @@ test('buildAccountTransactionBuckets warns for suspicious duplicate groups', () 
     const { importer, logger } = makeImporter();
 
     importer.buildAccountTransactionBuckets({
+        monMonAccount: {
+            uuid: 'acc-1',
+            name: 'Gehaltskonto',
+        },
         accountTransactions: [],
         existingActualTransactions: [
             {
@@ -273,11 +315,7 @@ test('buildAccountTransactionBuckets warns for suspicious duplicate groups', () 
         shouldSyncCategories: true,
     });
 
-    assert.equal(logger.infos.length, 1);
-    assert.match(
-        logger.infos[0]?.message ?? '',
-        /Detected 0 likely split duplicate imported_id group\(s\)/
-    );
+    assert.equal(logger.infos.length, 0);
     assert.equal(logger.warnings.length, 1);
     assert.match(
         logger.warnings[0]?.message ?? '',
@@ -288,4 +326,157 @@ test('buildAccountTransactionBuckets warns for suspicious duplicate groups', () 
         logger.debugs[0]?.hints[0] ?? '',
         /Date=2026-02-18, Payee=Lidl sagt Danke, Amount=-12.34, TxCount=2/
     );
+});
+
+test('logCategorySyncSummary suppresses no-op info and emits debug marker', () => {
+    const { importer, logger } = makeImporter();
+
+    importer.logCategorySyncSummary({
+        actualAccountName: 'Noop Account',
+        existingPairsCount: 4,
+        backfillCount: 0,
+        conflictCount: 0,
+        pendingUpdatesCount: 0,
+        skippedConflictCount: 0,
+    });
+
+    assert.equal(logger.infos.length, 0);
+    assert.equal(logger.debugs.length, 1);
+    assert.match(
+        logger.debugs[0]?.message ?? '',
+        /Category sync no-op for account 'Noop Account': existing=4, backfills=0, conflicts=0, planned=0, skipped=0/
+    );
+});
+
+test('logCategorySyncSummary emits info for category activity', () => {
+    const { importer, logger } = makeImporter();
+
+    importer.logCategorySyncSummary({
+        actualAccountName: 'Active Account',
+        existingPairsCount: 10,
+        backfillCount: 1,
+        conflictCount: 2,
+        pendingUpdatesCount: 2,
+        skippedConflictCount: 1,
+    });
+
+    assert.equal(logger.infos.length, 1);
+    assert.match(
+        logger.infos[0]?.message ?? '',
+        /Category sync summary for account 'Active Account'/
+    );
+    assert.equal(logger.debugs.length, 0);
+});
+
+test('logCategorySyncSummary omits zero-value fields in info hints', () => {
+    const { importer, logger } = makeImporter();
+
+    importer.logCategorySyncSummary({
+        actualAccountName: 'Backfill Only',
+        existingPairsCount: 47,
+        backfillCount: 1,
+        conflictCount: 0,
+        pendingUpdatesCount: 1,
+        skippedConflictCount: 0,
+    });
+
+    const hints = logger.infos[0]?.hints ?? [];
+    assert.match(hints.join('\n'), /Existing transactions considered: 47/);
+    assert.match(hints.join('\n'), /Backfills: 1/);
+    assert.match(hints.join('\n'), /Planned updates: 1/);
+    assert.doesNotMatch(hints.join('\n'), /Conflicts:/);
+    assert.doesNotMatch(hints.join('\n'), /Skipped conflicts:/);
+});
+
+test('emitImportRunSummary prints nothing-to-import for fully empty runs', () => {
+    const { importer, logger } = makeImporter();
+
+    importer.emitImportRunSummary(
+        {
+            accountsScanned: 0,
+            accountsWithImportActivity: 0,
+            accountsWithCategoryActivity: 0,
+            accountsWithConflicts: 0,
+            totalTransactionsAdded: 0,
+            totalTransactionsUpdated: 0,
+            totalCategoryUpdatesPlanned: 0,
+            totalCategoryUpdatesApplied: 0,
+            totalCategoryUpdatesDryRun: 0,
+            totalBackfills: 0,
+            totalConflicts: 0,
+            totalSkippedConflicts: 0,
+            totalUnmappedCategoryWarnings: 0,
+        },
+        false
+    );
+
+    assert.equal(logger.infos.length, 1);
+    assert.equal(logger.infos[0]?.message, 'Nothing to import.');
+    assert.deepEqual(logger.infos[0]?.hints, []);
+});
+
+test('emitImportRunSummary includes dry-run wording and non-zero sections', () => {
+    const { importer, logger } = makeImporter();
+
+    importer.emitImportRunSummary(
+        {
+            accountsScanned: 8,
+            accountsWithImportActivity: 2,
+            accountsWithCategoryActivity: 1,
+            accountsWithConflicts: 1,
+            totalTransactionsAdded: 3,
+            totalTransactionsUpdated: 1,
+            totalCategoryUpdatesPlanned: 4,
+            totalCategoryUpdatesApplied: 0,
+            totalCategoryUpdatesDryRun: 4,
+            totalBackfills: 1,
+            totalConflicts: 3,
+            totalSkippedConflicts: 2,
+            totalUnmappedCategoryWarnings: 5,
+        },
+        true
+    );
+
+    const hints = logger.infos[0]?.hints ?? [];
+    assert.match(hints.join('\n'), /Accounts scanned: 8/);
+    assert.match(hints.join('\n'), /Transactions: added=3, updated=1/);
+    assert.match(
+        hints.join('\n'),
+        /Category updates: planned=4 \(dry-run, no changes written\)/
+    );
+    assert.match(
+        hints.join('\n'),
+        /Category sync activity: backfills=1, conflicts=3, skipped=2/
+    );
+    assert.match(hints.join('\n'), /Accounts with conflicts: 1/);
+    assert.match(hints.join('\n'), /Unmapped category warnings: 5/);
+});
+
+test('emitImportRunSummary omits zero counters inside category sync activity line', () => {
+    const { importer, logger } = makeImporter();
+
+    importer.emitImportRunSummary(
+        {
+            accountsScanned: 3,
+            accountsWithImportActivity: 0,
+            accountsWithCategoryActivity: 1,
+            accountsWithConflicts: 0,
+            totalTransactionsAdded: 0,
+            totalTransactionsUpdated: 0,
+            totalCategoryUpdatesPlanned: 1,
+            totalCategoryUpdatesApplied: 0,
+            totalCategoryUpdatesDryRun: 1,
+            totalBackfills: 1,
+            totalConflicts: 0,
+            totalSkippedConflicts: 0,
+            totalUnmappedCategoryWarnings: 0,
+        },
+        true
+    );
+
+    const categorySyncLine =
+        (logger.infos[0]?.hints ?? []).find((hint) =>
+            hint.startsWith('Category sync activity:')
+        ) ?? '';
+    assert.equal(categorySyncLine, 'Category sync activity: backfills=1');
 });
