@@ -545,12 +545,15 @@ class Importer {
                 sortedExistingTransactions,
                 duplicateImportedIds
             );
+            const likelySplitGroups = duplicateGroups.filter(
+                (group) => group.isLikelySplit
+            );
             const suspiciousGroups = duplicateGroups.filter(
                 (group) => !group.isLikelySplit
             );
             const sampledGroups = [
                 ...suspiciousGroups,
-                ...duplicateGroups.filter((group) => group.isLikelySplit),
+                ...likelySplitGroups,
             ].slice(0, 5);
 
             const duplicateDetails = sampledGroups.map((group) => {
@@ -568,17 +571,31 @@ class Importer {
                 );
             }
 
-            if (suspiciousGroups.length === 0) {
-                this.logger.info(
-                    `Detected ${duplicateGroups.length} duplicate imported_id group(s) in Actual account '${actualAccountName}'; appears to be split history (informational).`,
-                    duplicateDetails
-                );
-            } else {
+            this.logger.info(
+                `Detected ${likelySplitGroups.length} likely split duplicate imported_id group(s) in Actual account '${actualAccountName}' (informational).`
+            );
+
+            if (suspiciousGroups.length > 0) {
                 this.logger.warn(
                     `Detected ${duplicateGroups.length} duplicate imported_id group(s) in Actual account '${actualAccountName}'; ${suspiciousGroups.length} group(s) need review.`,
-                    duplicateDetails
+                    sampledGroups
+                        .filter((group) => !group.isLikelySplit)
+                        .slice(0, 5)
+                        .map((group) => {
+                            const { monMonAccountUuid, monMonTransactionId } =
+                                this.parseImportedId(group.importedId);
+                            const amount = this.formatMinorUnitsAsMajor(
+                                group.representativeTransaction.amount
+                            );
+                            return `Date=${group.representativeTransaction.date}, Payee=${group.normalizedPayee}, Amount=${amount}, TxCount=${group.transactions.length} (imported_id='${group.importedId}', MoneyMoneyAccount='${monMonAccountUuid}', MoneyMoneyTx='${monMonTransactionId}')`;
+                        })
                 );
             }
+
+            this.logger.debug(
+                `Duplicate imported_id diagnostics for account '${actualAccountName}' (total=${duplicateGroups.length}, suspicious=${suspiciousGroups.length}).`,
+                duplicateDetails
+            );
         }
 
         const newMonMonTransactions: MonMonTransaction[] = [];

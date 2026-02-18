@@ -5,6 +5,7 @@ import Importer from '../../dist/utils/Importer.js';
 const makeLogger = () => {
     const infos = [];
     const warnings = [];
+    const debugs = [];
     const toHintArray = (hint) => {
         if (!hint) {
             return [];
@@ -14,7 +15,9 @@ const makeLogger = () => {
     return {
         infos,
         warnings,
-        debug: () => {},
+        debugs,
+        debug: (message, hint) =>
+            debugs.push({ message, hints: toHintArray(hint) }),
         info: (message, hint) =>
             infos.push({ message, hints: toHintArray(hint) }),
         warn: (message, hint) =>
@@ -232,10 +235,11 @@ test('buildAccountTransactionBuckets logs duplicates and picks deterministic win
     assert.equal(logger.infos.length, 1);
     assert.match(
         logger.infos[0]?.message ?? '',
-        /appears to be split history \(informational\)/
+        /Detected 1 likely split duplicate imported_id group\(s\)/
     );
+    assert.equal(logger.debugs.length, 1);
     assert.match(
-        logger.infos[0]?.hints[0] ?? '',
+        logger.debugs[0]?.hints[0] ?? '',
         /Date=2026-02-18, Payee=Lidl sagt Danke, Amount=-12.34, TxCount=2/
     );
 });
@@ -269,14 +273,19 @@ test('buildAccountTransactionBuckets warns for suspicious duplicate groups', () 
         shouldSyncCategories: true,
     });
 
-    assert.equal(logger.infos.length, 0);
+    assert.equal(logger.infos.length, 1);
+    assert.match(
+        logger.infos[0]?.message ?? '',
+        /Detected 0 likely split duplicate imported_id group\(s\)/
+    );
     assert.equal(logger.warnings.length, 1);
     assert.match(
         logger.warnings[0]?.message ?? '',
         /1 group\(s\) need review/
     );
+    assert.equal(logger.debugs.length, 1);
     assert.match(
-        logger.warnings[0]?.hints[0] ?? '',
+        logger.debugs[0]?.hints[0] ?? '',
         /Date=2026-02-18, Payee=Lidl sagt Danke, Amount=-12.34, TxCount=2/
     );
 });
