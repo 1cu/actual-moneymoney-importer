@@ -6,6 +6,7 @@ import ActualApi from '../utils/ActualApi.js';
 import { includesRef, toRefList } from '../utils/cliArgs.js';
 import CategoryMap from '../utils/CategoryMap.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
+import { renderTextTable, TableColumnConfig } from '../utils/textTable.js';
 import {
     getBudgetBlocks,
     renderCategoryMappingLines,
@@ -238,10 +239,12 @@ const printReports = (reports: CategoryMapItem[], format: MapFormat) => {
 
     for (const item of reports) {
         const report = item.report;
+        const maxWidth = (process.stdout.columns ?? 142) - 2;
         for (const line of formatTableReport(
             item.serverUrl,
             item.syncId,
-            report
+            report,
+            maxWidth
         )) {
             console.log(line);
         }
@@ -249,116 +252,187 @@ const printReports = (reports: CategoryMapItem[], format: MapFormat) => {
     }
 };
 
-const formatSectionWithRows = (
-    title: string,
-    header: string,
-    rows: string[]
-) => {
-    const lines = [title];
+const formatSectionWithRows = ({
+    title,
+    headers,
+    rows,
+    columns,
+    maxWidth,
+}: {
+    title: string;
+    headers: string[];
+    rows: string[][];
+    columns: TableColumnConfig[];
+    maxWidth: number;
+}) => {
+    const lines = [title, ''];
     if (rows.length === 0) {
         lines.push('None');
         return lines;
     }
 
-    lines.push(header);
-    lines.push(...rows);
+    lines.push(
+        ...renderTextTable([headers, ...rows], {
+            columns,
+            maxWidth,
+        })
+    );
     return lines;
 };
 
 export const formatConfiguredMappingsSection = (
-    report: ReturnType<CategoryMap['getReport']>
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
 ) => {
     const rows = report.configuredMappings.map((mapping) => {
-        return `${mapping.sourcePath ?? mapping.sourceRef} | ${mapping.targetPath ?? mapping.targetRef} | ${mapping.sourceRef} | ${mapping.targetRef}`;
+        return [
+            mapping.sourcePath ?? mapping.sourceRef,
+            mapping.targetPath ?? mapping.targetRef,
+            mapping.sourceRef,
+            mapping.targetRef,
+        ];
     });
 
-    return formatSectionWithRows(
-        'Configured Mappings:',
-        'MoneyMoney Path | Actual Path | Source Ref | Target Ref',
-        rows
-    );
+    return formatSectionWithRows({
+        title: 'Configured Mappings:',
+        headers: ['MoneyMoney Path', 'Actual Path', 'Source Ref', 'Target Ref'],
+        rows,
+        columns: [
+            { width: 28, alignment: 'left', truncatePriority: 1 },
+            { width: 28, alignment: 'left', truncatePriority: 2 },
+            { width: 24, alignment: 'left', truncatePriority: 3 },
+            { width: 24, alignment: 'left', truncatePriority: 4 },
+        ],
+        maxWidth,
+    });
 };
 
 export const formatInvalidMappingsSection = (
-    report: ReturnType<CategoryMap['getReport']>
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
 ) => {
     const rows = report.invalidMappings.map((mapping) => {
-        return `${mapping.sourceRef} | ${mapping.targetRef} | ${mapping.reason ?? 'Invalid mapping'}`;
+        return [
+            mapping.sourceRef,
+            mapping.targetRef,
+            mapping.reason ?? 'Invalid mapping',
+        ];
     });
 
-    return formatSectionWithRows(
-        'Invalid Configured Mappings:',
-        'Source Ref | Target Ref | Reason',
-        rows
-    );
+    return formatSectionWithRows({
+        title: 'Invalid Configured Mappings:',
+        headers: ['Source Ref', 'Target Ref', 'Reason'],
+        rows,
+        columns: [
+            { width: 24, alignment: 'left', truncatePriority: 3 },
+            { width: 24, alignment: 'left', truncatePriority: 4 },
+            { width: 40, alignment: 'left', truncatePriority: 2 },
+        ],
+        maxWidth,
+    });
 };
 
 export const formatSafeSuggestionsSection = (
-    report: ReturnType<CategoryMap['getReport']>
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
 ) => {
     const rows = report.safeSuggestions.map((suggestion) => {
-        return `${suggestion.sourcePath} | ${suggestion.targetPath} | ${suggestion.reason}`;
+        return [
+            suggestion.sourcePath,
+            suggestion.targetPath,
+            suggestion.reason,
+        ];
     });
 
-    return formatSectionWithRows(
-        'Safe Suggestions:',
-        'MoneyMoney Path | Actual Path | Reason',
-        rows
-    );
+    return formatSectionWithRows({
+        title: 'Safe Suggestions:',
+        headers: ['MoneyMoney Path', 'Actual Path', 'Reason'],
+        rows,
+        columns: [
+            { width: 32, alignment: 'left', truncatePriority: 1 },
+            { width: 32, alignment: 'left', truncatePriority: 2 },
+            { width: 18, alignment: 'left', truncatePriority: 4 },
+        ],
+        maxWidth,
+    });
 };
 
 export const formatUnresolvedMoneyMoneySection = (
-    report: ReturnType<CategoryMap['getReport']>
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
 ) => {
     const rows = report.unresolvedMoneyMoneyCategories.map((category) => {
-        return `${category.uuid} | ${category.path}`;
+        return [category.uuid, category.path];
     });
 
-    return formatSectionWithRows(
-        'Unresolved MoneyMoney Categories:',
-        'UUID | Path',
-        rows
-    );
+    return formatSectionWithRows({
+        title: 'Unresolved MoneyMoney Categories:',
+        headers: ['UUID', 'Path'],
+        rows,
+        columns: [
+            { width: 36, alignment: 'left', truncatePriority: 4 },
+            { width: 48, alignment: 'left', truncatePriority: 1 },
+        ],
+        maxWidth,
+    });
 };
 
 export const formatUnusedActualSection = (
-    report: ReturnType<CategoryMap['getReport']>
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
 ) => {
     const rows = report.unusedActualCategories.map((category) => {
-        return `${category.id} | ${category.path}`;
+        return [category.id, category.path];
     });
 
-    return formatSectionWithRows(
-        'Unused Actual Categories:',
-        'ID | Path',
-        rows
-    );
+    return formatSectionWithRows({
+        title: 'Unused Actual Categories:',
+        headers: ['ID', 'Path'],
+        rows,
+        columns: [
+            { width: 36, alignment: 'left', truncatePriority: 4 },
+            { width: 48, alignment: 'left', truncatePriority: 1 },
+        ],
+        maxWidth,
+    });
 };
 
 export const formatPlanningWarningsSection = (
-    report: ReturnType<CategoryMap['getReport']>
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
 ) => {
-    return formatSectionWithRows(
-        'Planning Warnings:',
-        'Message',
-        report.planningWarnings
-    );
+    const rows = report.planningWarnings.map((warning) => [warning]);
+
+    return formatSectionWithRows({
+        title: 'Planning Warnings:',
+        headers: ['Message'],
+        rows,
+        columns: [{ width: 80, alignment: 'left', truncatePriority: 1 }],
+        maxWidth,
+    });
 };
 
 export const formatTableReport = (
     serverUrl: string,
     syncId: string,
-    report: ReturnType<CategoryMap['getReport']>
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
 ) => {
     return [
         `Server: ${serverUrl}`,
         `Budget: ${syncId}`,
-        ...formatConfiguredMappingsSection(report),
-        ...formatInvalidMappingsSection(report),
-        ...formatSafeSuggestionsSection(report),
-        ...formatUnresolvedMoneyMoneySection(report),
-        ...formatUnusedActualSection(report),
-        ...formatPlanningWarningsSection(report),
+        '',
+        ...formatConfiguredMappingsSection(report, maxWidth),
+        '',
+        ...formatInvalidMappingsSection(report, maxWidth),
+        '',
+        ...formatSafeSuggestionsSection(report, maxWidth),
+        '',
+        ...formatUnresolvedMoneyMoneySection(report, maxWidth),
+        '',
+        ...formatUnusedActualSection(report, maxWidth),
+        '',
+        ...formatPlanningWarningsSection(report, maxWidth),
     ];
 };
 

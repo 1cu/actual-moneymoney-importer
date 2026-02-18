@@ -30,28 +30,34 @@ const makeReport = ({
 test('section formatters show None for empty sections', () => {
     const report = makeReport();
 
-    assert.deepEqual(formatConfiguredMappingsSection(report), [
+    assert.deepEqual(formatConfiguredMappingsSection(report, 120), [
         'Configured Mappings:',
+        '',
         'None',
     ]);
-    assert.deepEqual(formatInvalidMappingsSection(report), [
+    assert.deepEqual(formatInvalidMappingsSection(report, 120), [
         'Invalid Configured Mappings:',
+        '',
         'None',
     ]);
-    assert.deepEqual(formatSafeSuggestionsSection(report), [
+    assert.deepEqual(formatSafeSuggestionsSection(report, 120), [
         'Safe Suggestions:',
+        '',
         'None',
     ]);
-    assert.deepEqual(formatUnresolvedMoneyMoneySection(report), [
+    assert.deepEqual(formatUnresolvedMoneyMoneySection(report, 120), [
         'Unresolved MoneyMoney Categories:',
+        '',
         'None',
     ]);
-    assert.deepEqual(formatUnusedActualSection(report), [
+    assert.deepEqual(formatUnusedActualSection(report, 120), [
         'Unused Actual Categories:',
+        '',
         'None',
     ]);
-    assert.deepEqual(formatPlanningWarningsSection(report), [
+    assert.deepEqual(formatPlanningWarningsSection(report, 120), [
         'Planning Warnings:',
+        '',
         'None',
     ]);
 });
@@ -95,25 +101,26 @@ test('formatters include expected headers and rows', () => {
         planningWarnings: ['Planning is incomplete (this can be intentional).'],
     });
 
+    const configuredLines = formatConfiguredMappingsSection(report, 120);
+    const invalidLines = formatInvalidMappingsSection(report, 120);
+    const suggestionsLines = formatSafeSuggestionsSection(report, 120);
+    const unresolvedLines = formatUnresolvedMoneyMoneySection(report, 120);
+    const unusedLines = formatUnusedActualSection(report, 120);
+
+    assert.equal(configuredLines.some((line) => line.includes('╔')), true);
     assert.equal(
-        formatConfiguredMappingsSection(report)[1],
-        'MoneyMoney Path | Actual Path | Source Ref | Target Ref'
+        configuredLines.some((line) => line.includes('MoneyMoney Path')),
+        true
     );
-    assert.equal(
-        formatInvalidMappingsSection(report)[1],
-        'Source Ref | Target Ref | Reason'
-    );
-    assert.equal(
-        formatSafeSuggestionsSection(report)[1],
-        'MoneyMoney Path | Actual Path | Reason'
-    );
-    assert.equal(formatUnresolvedMoneyMoneySection(report)[1], 'UUID | Path');
-    assert.equal(formatUnusedActualSection(report)[1], 'ID | Path');
+    assert.equal(invalidLines.some((line) => line.includes('Reason')), true);
+    assert.equal(suggestionsLines.some((line) => line.includes('Actual Path')), true);
+    assert.equal(unresolvedLines.some((line) => line.includes('UUID')), true);
+    assert.equal(unusedLines.some((line) => line.includes('ID')), true);
 });
 
 test('table report includes sections in expected order', () => {
     const report = makeReport();
-    const lines = formatTableReport('server', 'budget', report);
+    const lines = formatTableReport('server', 'budget', report, 120);
 
     const configuredIdx = lines.indexOf('Configured Mappings:');
     const invalidIdx = lines.indexOf('Invalid Configured Mappings:');
@@ -147,4 +154,23 @@ test('toml formatter includes preamble counts and incompleteness note when neede
         '# Unused Actual categories: 1',
         '# Planning is incomplete (this can be intentional).',
     ]);
+});
+
+test('table output truncates only when max width is narrow', () => {
+    const longPath = '😀😀😀😀😀😀😀😀😀😀 Very long category path '.repeat(3);
+    const report = makeReport({
+        safeSuggestions: [
+            {
+                sourcePath: longPath,
+                targetPath: longPath,
+                reason: 'exact-normalized',
+            },
+        ],
+    });
+
+    const narrow = formatSafeSuggestionsSection(report, 80).join('\n');
+    const wide = formatSafeSuggestionsSection(report, 500).join('\n');
+
+    assert.equal(narrow.includes('…'), true);
+    assert.equal(wide.includes('…'), false);
 });
