@@ -50,6 +50,13 @@ type CategoryUpdatePlan = {
     conflictCount: number;
     skippedConflictCount: number;
 };
+type DuplicateImportedIdGroup = {
+    importedId: string;
+    transactions: ReadTransaction[];
+    representativeTransaction: ReadTransaction;
+    normalizedPayee: string;
+    isLikelySplit: boolean;
+};
 
 export const classifyCategoryUpdate = ({
     currentCategoryId,
@@ -534,12 +541,44 @@ class Importer {
         }
 
         if (duplicateImportedIds.size > 0) {
-            const duplicateSample = Array.from(duplicateImportedIds)
-                .slice(0, 5)
-                .join(', ');
-            this.logger.warn(
-                `Detected ${duplicateImportedIds.size} duplicate imported_id values in Actual account '${actualAccountName}'. Category sync uses the latest transaction by (date,id) for each duplicate imported_id. Sample IDs: ${duplicateSample}`
+            const duplicateGroups = this.buildDuplicateImportedIdGroups(
+                sortedExistingTransactions,
+                duplicateImportedIds
             );
+            const suspiciousGroups = duplicateGroups.filter(
+                (group) => !group.isLikelySplit
+            );
+            const sampledGroups = [
+                ...suspiciousGroups,
+                ...duplicateGroups.filter((group) => group.isLikelySplit),
+            ].slice(0, 5);
+
+            const duplicateDetails = sampledGroups.map((group) => {
+                const { monMonAccountUuid, monMonTransactionId } =
+                    this.parseImportedId(group.importedId);
+                const amount = this.formatMinorUnitsAsMajor(
+                    group.representativeTransaction.amount
+                );
+                return `Date=${group.representativeTransaction.date}, Payee=${group.normalizedPayee}, Amount=${amount}, TxCount=${group.transactions.length} (imported_id='${group.importedId}', MoneyMoneyAccount='${monMonAccountUuid}', MoneyMoneyTx='${monMonTransactionId}')`;
+            });
+
+            if (duplicateGroups.length > sampledGroups.length) {
+                duplicateDetails.push(
+                    `...and ${duplicateGroups.length - sampledGroups.length} more duplicate imported_id group(s).`
+                );
+            }
+
+            if (suspiciousGroups.length === 0) {
+                this.logger.info(
+                    `Detected ${duplicateGroups.length} duplicate imported_id group(s) in Actual account '${actualAccountName}'; appears to be split history (informational).`,
+                    duplicateDetails
+                );
+            } else {
+                this.logger.warn(
+                    `Detected ${duplicateGroups.length} duplicate imported_id group(s) in Actual account '${actualAccountName}'; ${suspiciousGroups.length} group(s) need review.`,
+                    duplicateDetails
+                );
+            }
         }
 
         const newMonMonTransactions: MonMonTransaction[] = [];
@@ -809,6 +848,78 @@ class Importer {
 
     private getIdForMoneyMoneyTransaction(transaction: MonMonTransaction) {
         return `${transaction.accountUuid}-${transaction.id}`;
+    }
+
+    private parseImportedId(importedId: string) {
+        const separatorIndex = importedId.lastIndexOf('-');
+        if (separatorIndex === -1) {
+            return {
+                monMonAccountUuid: importedId,
+                monMonTransactionId: 'unknown',
+            };
+        }
+
+        return {
+            monMonAccountUuid: importedId.slice(0, separatorIndex),
+            monMonTransactionId: importedId.slice(separatorIndex + 1),
+        };
+    }
+
+    private buildDuplicateImportedIdGroups(
+        sortedExistingTransactions: ReadTransaction[],
+        duplicateImportedIds: Set<string>
+    ): DuplicateImportedIdGroup[] {
+        const groups: DuplicateImportedIdGroup[] = [];
+
+        for (const importedId of duplicateImportedIds) {
+            const transactions = sortedExistingTransactions.filter(
+                (transaction) => transaction.imported_id === importedId
+            );
+            const representativeTransaction = transactions.at(-1);
+            const firstTransaction = transactions[0];
+
+            if (
+                transactions.length < 2 ||
+                !representativeTransaction ||
+                !firstTransaction
+            ) {
+                continue;
+            }
+
+            const firstDate = firstTransaction.date;
+            const firstNormalizedPayee =
+                this.getNormalizedImportedPayee(firstTransaction);
+            const isLikelySplit = transactions.every(
+                (transaction) =>
+                    transaction.date === firstDate &&
+                    this.getNormalizedImportedPayee(transaction) ===
+                        firstNormalizedPayee
+            );
+
+            groups.push({
+                importedId,
+                transactions,
+                representativeTransaction,
+                normalizedPayee: this.getNormalizedImportedPayee(
+                    representativeTransaction
+                ),
+                isLikelySplit,
+            });
+        }
+
+        return groups.sort((a, b) => a.importedId.localeCompare(b.importedId));
+    }
+
+    private getNormalizedImportedPayee(transaction: ReadTransaction): string {
+        return (
+            transaction.imported_payee?.trim() ||
+            transaction.notes?.trim() ||
+            '(no payee)'
+        );
+    }
+
+    private formatMinorUnitsAsMajor(amount: number): string {
+        return (amount / 100).toFixed(2);
     }
 
     private getStartingBalanceForAccount(

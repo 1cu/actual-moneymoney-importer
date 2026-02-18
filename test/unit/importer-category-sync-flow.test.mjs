@@ -3,12 +3,22 @@ import test from 'node:test';
 import Importer from '../../dist/utils/Importer.js';
 
 const makeLogger = () => {
+    const infos = [];
     const warnings = [];
+    const toHintArray = (hint) => {
+        if (!hint) {
+            return [];
+        }
+        return Array.isArray(hint) ? hint : [hint];
+    };
     return {
+        infos,
         warnings,
         debug: () => {},
-        info: () => {},
-        warn: (msg) => warnings.push(msg),
+        info: (message, hint) =>
+            infos.push({ message, hints: toHintArray(hint) }),
+        warn: (message, hint) =>
+            warnings.push({ message, hints: toHintArray(hint) }),
         error: () => {},
     };
 };
@@ -197,12 +207,18 @@ test('buildAccountTransactionBuckets logs duplicates and picks deterministic win
                 id: 'tx-b',
                 imported_id: 'acc-1-1',
                 date: '2026-02-18',
+                amount: -1234,
+                imported_payee: 'Lidl sagt Danke',
+                notes: 'Split groceries',
                 category: 'cat-b',
             },
             {
                 id: 'tx-a',
                 imported_id: 'acc-1-1',
-                date: '2026-01-01',
+                date: '2026-02-18',
+                amount: -1234,
+                imported_payee: 'Lidl sagt Danke',
+                notes: 'Split groceries',
                 category: 'cat-a',
             },
         ],
@@ -212,6 +228,55 @@ test('buildAccountTransactionBuckets logs duplicates and picks deterministic win
 
     assert.equal(result.existingPairs.length, 1);
     assert.equal(result.existingPairs[0]?.actualTransaction.id, 'tx-b');
+    assert.equal(logger.warnings.length, 0);
+    assert.equal(logger.infos.length, 1);
+    assert.match(
+        logger.infos[0]?.message ?? '',
+        /appears to be split history \(informational\)/
+    );
+    assert.match(
+        logger.infos[0]?.hints[0] ?? '',
+        /Date=2026-02-18, Payee=Lidl sagt Danke, Amount=-12.34, TxCount=2/
+    );
+});
+
+test('buildAccountTransactionBuckets warns for suspicious duplicate groups', () => {
+    const { importer, logger } = makeImporter();
+
+    importer.buildAccountTransactionBuckets({
+        accountTransactions: [],
+        existingActualTransactions: [
+            {
+                id: 'tx-b',
+                imported_id: 'acc-1-1',
+                date: '2026-02-18',
+                amount: -1234,
+                imported_payee: 'Lidl sagt Danke',
+                notes: 'Split groceries',
+                category: 'cat-b',
+            },
+            {
+                id: 'tx-a',
+                imported_id: 'acc-1-1',
+                date: '2026-02-17',
+                amount: -1234,
+                imported_payee: 'Lidl sagt Danke',
+                notes: 'Split groceries',
+                category: 'cat-a',
+            },
+        ],
+        actualAccountName: 'Account',
+        shouldSyncCategories: true,
+    });
+
+    assert.equal(logger.infos.length, 0);
     assert.equal(logger.warnings.length, 1);
-    assert.match(logger.warnings[0] ?? '', /duplicate imported_id/);
+    assert.match(
+        logger.warnings[0]?.message ?? '',
+        /1 group\(s\) need review/
+    );
+    assert.match(
+        logger.warnings[0]?.hints[0] ?? '',
+        /Date=2026-02-18, Payee=Lidl sagt Danke, Amount=-12.34, TxCount=2/
+    );
 });
