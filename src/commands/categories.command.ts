@@ -8,6 +8,7 @@ import CategoryMap from '../utils/CategoryMap.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import {
     getBudgetBlocks,
+    renderCategoryMappingLines,
     replaceCategoryMappingInConfig,
 } from '../utils/categoryMappingConfigPatch.js';
 import {
@@ -28,13 +29,10 @@ const printFallbackSnippet = (
     logger: Logger,
     canonicalMapping: Record<string, string>
 ) => {
-    logger.info('TOML snippet to paste manually:', [
-        '[actualServers.budgets.categoryMapping]',
-        ...Object.entries(canonicalMapping).map(
-            ([source, target]) =>
-                `${JSON.stringify(source)} = ${JSON.stringify(target)}`
-        ),
-    ]);
+    logger.info(
+        'TOML snippet to paste manually:',
+        renderCategoryMappingLines(canonicalMapping)
+    );
 };
 
 const handleMapCommand = async (argv: ArgumentsCamelCase) => {
@@ -228,13 +226,10 @@ const printReports = (
     if (format === 'toml') {
         for (const report of reports) {
             console.log(`# ${report.serverUrl} / ${report.syncId}`);
-            console.log('[actualServers.budgets.categoryMapping]');
-            for (const [source, target] of Object.entries(
+            for (const line of renderCategoryMappingLines(
                 report.canonicalMapping
             )) {
-                console.log(
-                    `${JSON.stringify(source)} = ${JSON.stringify(target)}`
-                );
+                console.log(line);
             }
             console.log('');
         }

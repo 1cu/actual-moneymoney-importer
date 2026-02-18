@@ -1,5 +1,19 @@
 import toml from 'toml';
 
+export const renderCategoryMappingLines = (
+    mapping: Record<string, string>
+): string[] => {
+    return [
+        '[actualServers.budgets.categoryMapping]',
+        ...Object.entries(mapping)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(
+                ([source, target]) =>
+                    `${JSON.stringify(source)} = ${JSON.stringify(target)}`
+            ),
+    ];
+};
+
 export const getBudgetBlocks = (
     content: string
 ): Array<{ start: number; end: number }> => {
@@ -48,24 +62,10 @@ export const replaceCategoryMappingInConfig = (
         };
     }
 
-    const block = matchingBlocks[0];
-    if (!block) {
-        return {
-            ok: false,
-            reason: `Budget block for syncId '${syncId}' could not be resolved.`,
-        };
-    }
+    const block = matchingBlocks[0] as { start: number; end: number };
 
     const blockContent = content.slice(block.start, block.end);
-    const mappingLines = [
-        '[actualServers.budgets.categoryMapping]',
-        ...Object.entries(mapping)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(
-                ([source, target]) =>
-                    `${JSON.stringify(source)} = ${JSON.stringify(target)}`
-            ),
-    ];
+    const mappingLines = renderCategoryMappingLines(mapping);
 
     const mappingSectionRegex =
         /(^|\n)\[actualServers\.budgets\.categoryMapping\]\n([\s\S]*?)(?=\n\[|$)/;

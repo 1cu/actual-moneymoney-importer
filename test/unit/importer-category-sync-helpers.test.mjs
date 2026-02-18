@@ -55,6 +55,16 @@ test('classifyCategoryUpdate returns noop for unmapped target', () => {
     assert.equal(result, 'noop');
 });
 
+test('classifyCategoryUpdate returns noop when both categories are undefined', () => {
+    const result = classifyCategoryUpdate({
+        currentCategoryId: undefined,
+        targetCategoryId: undefined,
+        isUncategorized: false,
+    });
+
+    assert.equal(result, 'noop');
+});
+
 test('parsePromptDecision preserves A/N shortcuts before n/no', () => {
     assert.equal(parsePromptDecision('A'), 'all');
     assert.equal(parsePromptDecision('N'), 'none');

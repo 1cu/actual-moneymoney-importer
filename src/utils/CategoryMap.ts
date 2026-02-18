@@ -92,7 +92,6 @@ class CategoryMap {
         const actualGroups = await this.actualApi.getCategoryGroups();
 
         this.loadFromData(monMonCategories, actualCategories, actualGroups);
-        this.isLoaded = true;
     }
 
     loadFromData(
@@ -101,6 +100,7 @@ class CategoryMap {
         actualGroups: ActualCategoryGroup[]
     ) {
         this.resetState();
+        this.isLoaded = true;
         this.monMonCategories = monMonCategories;
         this.buildMoneyMoneyCategoryInfos();
         this.buildActualCategoryInfos(actualCategories, actualGroups);
@@ -545,7 +545,7 @@ class CategoryMap {
     private normalizeCategoryName(name: string) {
         return name
             .normalize('NFKC')
-            .replace(/^[^\p{L}\p{N}]+/u, '')
+            .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
             .replace(/\s+/g, ' ')
             .trim()
             .toLowerCase();

@@ -192,7 +192,7 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
         }
     }
 
-    process.exit();
+    process.exit(0);
 };
 
 export default {

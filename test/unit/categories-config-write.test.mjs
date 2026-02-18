@@ -63,6 +63,33 @@ test('replaceCategoryMappingInConfig replaces existing mapping block', () => {
     assert.match(result.content, /"new-mm" = "new-actual"/);
 });
 
+test('replaceCategoryMappingInConfig replaces section cleanly before next header', () => {
+    const withFollowingSection = `
+[[actualServers.budgets]]
+syncId = "budget-a"
+
+[actualServers.budgets.categoryMapping]
+"old-mm" = "old-actual"
+
+[actualServers.budgets.accountMapping]
+"A" = "B"
+`;
+
+    const result = replaceCategoryMappingInConfig(withFollowingSection, 'budget-a', {
+        'new-mm': 'new-actual',
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+        return;
+    }
+
+    assert.match(
+        result.content,
+        /\[actualServers\.budgets\.categoryMapping\]\n"new-mm" = "new-actual"\n\n\[actualServers\.budgets\.accountMapping\]/
+    );
+});
+
 test('replaceCategoryMappingInConfig updates only target budget in multi-budget config', () => {
     const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'budget-a', {
         'mm-a': 'actual-a',

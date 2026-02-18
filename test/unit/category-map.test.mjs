@@ -179,3 +179,44 @@ test('ambiguous name matches do not produce suggestions', () => {
     const report = map.getReport();
     assert.equal(report.suggestions.length, 0);
 });
+
+test('getCanonicalMapping excludes suggestions when includeSuggestions is false', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+    };
+
+    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+
+    map.loadFromData(
+        [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
+        [
+            {
+                id: 'actual-food',
+                name: 'Food',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+        ],
+        [
+            {
+                id: 'group-expenses',
+                name: 'Expenses',
+                is_income: false,
+            },
+        ]
+    );
+
+    const withoutSuggestions = map.getCanonicalMapping({
+        includeSuggestions: false,
+    });
+    const withSuggestions = map.getCanonicalMapping({
+        includeSuggestions: true,
+    });
+
+    assert.deepEqual(withoutSuggestions, {});
+    assert.deepEqual(withSuggestions, { 'mm-food': 'actual-food' });
+});
