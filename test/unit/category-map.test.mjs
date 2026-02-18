@@ -94,7 +94,7 @@ test('uncategorized default category is excluded from unmapped requirements', ()
     );
 
     const report = map.getReport();
-    assert.deepEqual(report.unmappedCategories, [
+    assert.deepEqual(report.unresolvedMoneyMoneyCategories, [
         { uuid: 'mm-food', path: 'Food' },
     ]);
 });
@@ -130,9 +130,9 @@ test('emoji-prefixed Actual category name is normalized for suggestions', () => 
     );
 
     const report = map.getReport();
-    assert.equal(report.suggestions.length, 1);
-    assert.equal(report.suggestions[0]?.sourceUuid, 'mm-tank');
-    assert.equal(report.suggestions[0]?.targetId, 'actual-tank');
+    assert.equal(report.safeSuggestions.length, 1);
+    assert.equal(report.safeSuggestions[0]?.sourceUuid, 'mm-tank');
+    assert.equal(report.safeSuggestions[0]?.targetId, 'actual-tank');
 });
 
 test('ambiguous name matches do not produce suggestions', () => {
@@ -177,7 +177,7 @@ test('ambiguous name matches do not produce suggestions', () => {
     );
 
     const report = map.getReport();
-    assert.equal(report.suggestions.length, 0);
+    assert.equal(report.safeSuggestions.length, 0);
 });
 
 test('getCanonicalMapping excludes suggestions when includeSuggestions is false', () => {
@@ -219,4 +219,134 @@ test('getCanonicalMapping excludes suggestions when includeSuggestions is false'
 
     assert.deepEqual(withoutSuggestions, {});
     assert.deepEqual(withSuggestions, { 'mm-food': 'actual-food' });
+});
+
+test('report exposes planning fields and omits legacy report keys', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+    };
+
+    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    map.loadFromData(
+        [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
+        [
+            {
+                id: 'actual-food',
+                name: 'Food',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+        ],
+        [
+            {
+                id: 'group-expenses',
+                name: 'Expenses',
+                is_income: false,
+            },
+        ]
+    );
+
+    const report = map.getReport();
+    assert.ok(Array.isArray(report.configuredMappings));
+    assert.ok(Array.isArray(report.invalidMappings));
+    assert.ok(Array.isArray(report.safeSuggestions));
+    assert.ok(Array.isArray(report.unresolvedMoneyMoneyCategories));
+    assert.ok(Array.isArray(report.unusedActualCategories));
+    assert.ok(Array.isArray(report.planningWarnings));
+    assert.equal('validMappings' in report, false);
+    assert.equal('suggestions' in report, false);
+    assert.equal('unmappedCategories' in report, false);
+});
+
+test('unusedActualCategories excludes configured and suggested target categories', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {
+            'mm-food': 'actual-food',
+        },
+    };
+
+    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    map.loadFromData(
+        [
+            makeMonMonCategory({ uuid: 'mm-food', name: 'Food' }),
+            makeMonMonCategory({ uuid: 'mm-tank', name: 'Tanken' }),
+        ],
+        [
+            {
+                id: 'actual-food',
+                name: 'Food',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+            {
+                id: 'actual-tank',
+                name: '💳⛽️ Tanken',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+            {
+                id: 'actual-unused',
+                name: 'Unused',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+        ],
+        [
+            {
+                id: 'group-expenses',
+                name: 'Expenses',
+                is_income: false,
+            },
+        ]
+    );
+
+    const report = map.getReport();
+    assert.deepEqual(report.unusedActualCategories, [
+        { id: 'actual-unused', path: 'Expenses > Unused' },
+    ]);
+});
+
+test('planningWarnings include exact messages when unresolved or unused categories exist', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+    };
+
+    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    map.loadFromData(
+        [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
+        [
+            {
+                id: 'actual-extra',
+                name: 'Extra',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+        ],
+        [
+            {
+                id: 'group-expenses',
+                name: 'Expenses',
+                is_income: false,
+            },
+        ]
+    );
+
+    const report = map.getReport();
+    assert.deepEqual(report.planningWarnings, [
+        'Unresolved MoneyMoney categories: 1',
+        'Unused Actual categories: 1',
+        'Planning is incomplete (this can be intentional).',
+    ]);
 });

@@ -24,6 +24,12 @@ type MappingTarget = {
 };
 
 type MapFormat = 'table' | 'json' | 'toml';
+type CategoryMapItem = {
+    serverUrl: string;
+    syncId: string;
+    report: ReturnType<CategoryMap['getReport']>;
+    canonicalMapping: Record<string, string>;
+};
 
 const printFallbackSnippet = (
     logger: Logger,
@@ -209,15 +215,7 @@ const selectTargets = (
     return targets;
 };
 
-const printReports = (
-    reports: Array<{
-        serverUrl: string;
-        syncId: string;
-        report: ReturnType<CategoryMap['getReport']>;
-        canonicalMapping: Record<string, string>;
-    }>,
-    format: MapFormat
-) => {
+const printReports = (reports: CategoryMapItem[], format: MapFormat) => {
     if (format === 'json') {
         console.log(JSON.stringify(reports, null, 4));
         return;
@@ -225,8 +223,10 @@ const printReports = (
 
     if (format === 'toml') {
         for (const report of reports) {
-            console.log(`# ${report.serverUrl} / ${report.syncId}`);
-            for (const line of renderCategoryMappingLines(
+            for (const line of formatTomlReport(
+                report.serverUrl,
+                report.syncId,
+                report.report,
                 report.canonicalMapping
             )) {
                 console.log(line);
@@ -238,33 +238,148 @@ const printReports = (
 
     for (const item of reports) {
         const report = item.report;
-        console.log(`Server: ${item.serverUrl}`);
-        console.log(`Budget: ${item.syncId}`);
-        console.log(`Valid mappings: ${report.validMappings.length}`);
-        console.log(`Invalid mappings: ${report.invalidMappings.length}`);
-        console.log(`Unmapped categories: ${report.unmappedCategories.length}`);
-        console.log(`Safe suggestions: ${report.suggestions.length}`);
-
-        if (report.invalidMappings.length > 0) {
-            console.log('Invalid mappings:');
-            for (const invalid of report.invalidMappings) {
-                console.log(
-                    `- ${invalid.sourceRef} -> ${invalid.targetRef}: ${invalid.reason ?? 'Invalid mapping'}`
-                );
-            }
+        for (const line of formatTableReport(
+            item.serverUrl,
+            item.syncId,
+            report
+        )) {
+            console.log(line);
         }
-
-        if (report.suggestions.length > 0) {
-            console.log('Suggestions:');
-            for (const suggestion of report.suggestions) {
-                console.log(
-                    `- ${suggestion.sourcePath} -> ${suggestion.targetPath} (${suggestion.reason})`
-                );
-            }
-        }
-
-        console.log('');
+        console.log();
     }
+};
+
+const formatSectionWithRows = (
+    title: string,
+    header: string,
+    rows: string[]
+) => {
+    const lines = [title];
+    if (rows.length === 0) {
+        lines.push('None');
+        return lines;
+    }
+
+    lines.push(header);
+    lines.push(...rows);
+    return lines;
+};
+
+export const formatConfiguredMappingsSection = (
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    const rows = report.configuredMappings.map((mapping) => {
+        return `${mapping.sourcePath ?? mapping.sourceRef} | ${mapping.targetPath ?? mapping.targetRef} | ${mapping.sourceRef} | ${mapping.targetRef}`;
+    });
+
+    return formatSectionWithRows(
+        'Configured Mappings:',
+        'MoneyMoney Path | Actual Path | Source Ref | Target Ref',
+        rows
+    );
+};
+
+export const formatInvalidMappingsSection = (
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    const rows = report.invalidMappings.map((mapping) => {
+        return `${mapping.sourceRef} | ${mapping.targetRef} | ${mapping.reason ?? 'Invalid mapping'}`;
+    });
+
+    return formatSectionWithRows(
+        'Invalid Configured Mappings:',
+        'Source Ref | Target Ref | Reason',
+        rows
+    );
+};
+
+export const formatSafeSuggestionsSection = (
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    const rows = report.safeSuggestions.map((suggestion) => {
+        return `${suggestion.sourcePath} | ${suggestion.targetPath} | ${suggestion.reason}`;
+    });
+
+    return formatSectionWithRows(
+        'Safe Suggestions:',
+        'MoneyMoney Path | Actual Path | Reason',
+        rows
+    );
+};
+
+export const formatUnresolvedMoneyMoneySection = (
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    const rows = report.unresolvedMoneyMoneyCategories.map((category) => {
+        return `${category.uuid} | ${category.path}`;
+    });
+
+    return formatSectionWithRows(
+        'Unresolved MoneyMoney Categories:',
+        'UUID | Path',
+        rows
+    );
+};
+
+export const formatUnusedActualSection = (
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    const rows = report.unusedActualCategories.map((category) => {
+        return `${category.id} | ${category.path}`;
+    });
+
+    return formatSectionWithRows(
+        'Unused Actual Categories:',
+        'ID | Path',
+        rows
+    );
+};
+
+export const formatPlanningWarningsSection = (
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    return formatSectionWithRows(
+        'Planning Warnings:',
+        'Message',
+        report.planningWarnings
+    );
+};
+
+export const formatTableReport = (
+    serverUrl: string,
+    syncId: string,
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    return [
+        `Server: ${serverUrl}`,
+        `Budget: ${syncId}`,
+        ...formatConfiguredMappingsSection(report),
+        ...formatInvalidMappingsSection(report),
+        ...formatSafeSuggestionsSection(report),
+        ...formatUnresolvedMoneyMoneySection(report),
+        ...formatUnusedActualSection(report),
+        ...formatPlanningWarningsSection(report),
+    ];
+};
+
+export const formatTomlReport = (
+    serverUrl: string,
+    syncId: string,
+    report: ReturnType<CategoryMap['getReport']>,
+    canonicalMapping: Record<string, string>
+) => {
+    const lines = [
+        `# ${serverUrl} / ${syncId}`,
+        `# Unresolved MoneyMoney categories: ${report.unresolvedMoneyMoneyCategories.length}`,
+        `# Unused Actual categories: ${report.unusedActualCategories.length}`,
+    ];
+
+    if (report.planningWarnings.length > 0) {
+        lines.push('# Planning is incomplete (this can be intentional).');
+    }
+
+    lines.push(...renderCategoryMappingLines(canonicalMapping));
+    return lines;
 };
 
 const mapSubcommand: CommandModule = {

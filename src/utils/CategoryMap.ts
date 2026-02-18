@@ -50,10 +50,12 @@ type MappingSuggestion = {
 };
 
 type CategoryMapReport = {
-    validMappings: MappingValidation[];
+    configuredMappings: MappingValidation[];
     invalidMappings: MappingValidation[];
-    unmappedCategories: Array<{ uuid: string; path: string }>;
-    suggestions: MappingSuggestion[];
+    safeSuggestions: MappingSuggestion[];
+    unresolvedMoneyMoneyCategories: Array<{ uuid: string; path: string }>;
+    unusedActualCategories: Array<{ id: string; path: string }>;
+    planningWarnings: string[];
 };
 
 const DEFAULT_CATEGORY_PATH_SEPARATOR = ' > ';
@@ -177,11 +179,20 @@ class CategoryMap {
     }
 
     getReport(): CategoryMapReport {
+        const unresolvedMoneyMoneyCategories = this.getUnmappedCategories();
+        const unusedActualCategories = this.computeUnusedActualCategories();
+        const planningWarnings = this.computePlanningWarnings(
+            unresolvedMoneyMoneyCategories.length,
+            unusedActualCategories.length
+        );
+
         return {
-            validMappings: this.validMappings,
+            configuredMappings: this.validMappings,
             invalidMappings: this.invalidMappings,
-            unmappedCategories: this.getUnmappedCategories(),
-            suggestions: this.suggestions,
+            safeSuggestions: this.suggestions,
+            unresolvedMoneyMoneyCategories,
+            unusedActualCategories,
+            planningWarnings,
         };
     }
 
@@ -432,6 +443,51 @@ class CategoryMap {
                 uuid: category.uuid,
                 path: category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR),
             }));
+    }
+
+    private computeUnusedActualCategories() {
+        const usedActualIds = new Set<string>();
+
+        for (const mapping of this.validMappings) {
+            if (mapping.targetId) {
+                usedActualIds.add(mapping.targetId);
+            }
+        }
+
+        for (const suggestion of this.suggestions) {
+            usedActualIds.add(suggestion.targetId);
+        }
+
+        return Array.from(this.actualCategoryInfos.entries())
+            .filter(([id]) => !usedActualIds.has(id))
+            .map(([id, info]) => ({
+                id,
+                path: info.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR),
+            }))
+            .sort((a, b) => a.path.localeCompare(b.path));
+    }
+
+    private computePlanningWarnings(
+        unresolvedCount: number,
+        unusedCount: number
+    ) {
+        const warnings: string[] = [];
+
+        if (unresolvedCount > 0) {
+            warnings.push(
+                `Unresolved MoneyMoney categories: ${unresolvedCount}`
+            );
+        }
+
+        if (unusedCount > 0) {
+            warnings.push(`Unused Actual categories: ${unusedCount}`);
+        }
+
+        if (warnings.length > 0) {
+            warnings.push('Planning is incomplete (this can be intentional).');
+        }
+
+        return warnings;
     }
 
     private resolveMoneyMoneyCategoryRef(ref: string): {
