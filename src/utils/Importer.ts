@@ -1,4 +1,6 @@
 import { format, subMonths } from 'date-fns';
+import { stdin, stdout } from 'node:process';
+import { createInterface } from 'node:readline/promises';
 import {
     Account as MonMonAccount,
     Transaction as MonMonTransaction,
@@ -6,10 +8,108 @@ import {
 } from 'moneymoney';
 import { AccountMap } from './AccountMap.js';
 import ActualApi from './ActualApi.js';
+import CategoryMap from './CategoryMap.js';
 import { ActualBudgetConfig, Config } from './config.js';
 import Logger from './Logger.js';
 import PayeeTransformer from './PayeeTransformer.js';
 import { DATE_FORMAT } from './shared.js';
+
+type ExistingCategorySyncPolicy = Config['import']['categorySyncOnExisting'];
+type CategoryUpdateClassification = 'backfill' | 'conflict' | 'noop';
+
+type ExistingTransactionPair = {
+    monMonTransaction: MonMonTransaction;
+    actualTransaction: ReadTransaction;
+};
+
+type ExistingCategoryUpdate = {
+    transactionId: string;
+    importedId: string;
+    fromCategoryId?: string;
+    toCategoryId: string;
+    reason: 'backfill' | 'conflict';
+    monMonTransaction: MonMonTransaction;
+};
+
+type PromptMode = 'prompt' | 'all' | 'none';
+
+export const classifyCategoryUpdate = ({
+    currentCategoryId,
+    targetCategoryId,
+    isUncategorized,
+}: {
+    currentCategoryId: string | undefined;
+    targetCategoryId: string | undefined;
+    isUncategorized: boolean;
+}): CategoryUpdateClassification => {
+    if (isUncategorized || !targetCategoryId) {
+        return 'noop';
+    }
+
+    if (!currentCategoryId) {
+        return 'backfill';
+    }
+
+    if (currentCategoryId === targetCategoryId) {
+        return 'noop';
+    }
+
+    return 'conflict';
+};
+
+export const parsePromptDecision = (
+    answer: string
+): boolean | 'all' | 'none' | 'invalid' => {
+    const trimmed = answer.trim();
+    const normalized = trimmed.toLowerCase();
+
+    if (trimmed === 'A') {
+        return 'all';
+    }
+
+    if (trimmed === 'N') {
+        return 'none';
+    }
+
+    if (normalized === 'y' || normalized === 'yes') {
+        return true;
+    }
+
+    if (normalized === 'n' || normalized === 'no') {
+        return false;
+    }
+
+    if (normalized === 'all') {
+        return 'all';
+    }
+
+    if (normalized === 'none') {
+        return 'none';
+    }
+
+    return 'invalid';
+};
+
+const buildExistingCategoryUpdate = ({
+    pair,
+    targetCategoryId,
+    reason,
+    fromCategoryId,
+}: {
+    pair: ExistingTransactionPair;
+    targetCategoryId: string;
+    reason: 'backfill' | 'conflict';
+    fromCategoryId?: string;
+}): ExistingCategoryUpdate => {
+    return {
+        transactionId: pair.actualTransaction.id,
+        importedId: pair.actualTransaction.imported_id,
+        ...(fromCategoryId ? { fromCategoryId } : {}),
+        toCategoryId: targetCategoryId,
+        reason,
+        monMonTransaction: pair.monMonTransaction,
+    };
+};
 
 class Importer {
     constructor(
@@ -18,6 +118,7 @@ class Importer {
         private actualApi: ActualApi,
         private logger: Logger,
         private accountMap: AccountMap,
+        private categoryMap: CategoryMap,
         private payeeTransformer?: PayeeTransformer
     ) {}
 
@@ -26,12 +127,17 @@ class Importer {
         from,
         to: toDate,
         isDryRun = false,
+        categorySyncOnExisting,
     }: {
         accountRefs?: Array<string>;
         from?: Date;
         to?: Date;
         isDryRun?: boolean;
+        categorySyncOnExisting?: ExistingCategorySyncPolicy;
     }) {
+        const existingCategoryPolicy =
+            categorySyncOnExisting ?? this.config.import.categorySyncOnExisting;
+
         const fromDate = from ?? subMonths(new Date(), 1);
         const earliestImportDate = this.budgetConfig.earliestImportDate
             ? new Date(this.budgetConfig.earliestImportDate)
@@ -55,6 +161,14 @@ class Importer {
             `Cleared status synchronization is ${
                 this.config.import.synchronizeClearedStatus
                     ? 'enabled'
+                    : 'disabled'
+            }`
+        );
+
+        this.logger.debug(
+            `Category synchronization is ${
+                this.config.import.synchronizeCategories
+                    ? `enabled (existing policy: ${existingCategoryPolicy})`
                     : 'disabled'
             }`
         );
@@ -134,17 +248,8 @@ class Importer {
             {} as Record<string, MonMonTransaction[]>
         );
 
-        for (const [monMonAccountUuid, monMonTransactions] of Object.entries(
-            monMonTransactionMap
-        )) {
-            this.logger.debug(
-                `Found ${monMonTransactions.length} transactions for account ${monMonAccountUuid}`
-            );
-        }
-
         const accountMapping = this.accountMap.getMap(accountRefs);
 
-        // Fetch existing payees once for all accounts (optimization)
         let existingPayeeNames: string[] = [];
         if (this.payeeTransformer && !isDryRun) {
             const existingPayees = await this.actualApi.getPayees();
@@ -160,38 +265,94 @@ class Importer {
             );
         }
 
-        // Iterate over account mapping
-        for (const [monMonAccount, actualAccount] of accountMapping) {
-            const monMonTransactions =
-                monMonTransactionMap[monMonAccount.uuid] ?? [];
+        const unmappedCategoryWarnings = new Set<string>();
 
-            let createTransactions: CreateTransaction[] = [];
-            for (const monMonTransaction of monMonTransactions) {
-                createTransactions.push(
-                    await this.convertToActualTransaction(monMonTransaction)
-                );
-            }
+        let promptMode: PromptMode = 'prompt';
+        let promptInterface: ReturnType<typeof createInterface> | undefined =
+            undefined;
+
+        for (const [monMonAccount, actualAccount] of accountMapping) {
+            const accountTransactions =
+                monMonTransactionMap[monMonAccount.uuid] ?? [];
 
             const existingActualTransactions =
                 await this.actualApi.getTransactions(actualAccount.id);
 
-            this.logger.debug(
-                `Found ${existingActualTransactions.length} existing transactions for Actual account '${actualAccount.name}'`
+            const existingByImportedId = new Map(
+                existingActualTransactions
+                    .filter((transaction) => !!transaction.imported_id)
+                    .map(
+                        (transaction) =>
+                            [transaction.imported_id, transaction] as const
+                    )
             );
 
-            // Push start transaction if no transactions exist
+            const newMonMonTransactions: MonMonTransaction[] = [];
+            const existingPairs: ExistingTransactionPair[] = [];
+
+            for (const transaction of accountTransactions) {
+                const importedId =
+                    this.getIdForMoneyMoneyTransaction(transaction);
+                const existingTransaction =
+                    existingByImportedId.get(importedId);
+
+                if (existingTransaction) {
+                    existingPairs.push({
+                        monMonTransaction: transaction,
+                        actualTransaction: existingTransaction,
+                    });
+                    continue;
+                }
+
+                newMonMonTransactions.push(transaction);
+            }
+
+            const createTransactions: CreateTransaction[] = [];
+            for (const transaction of newMonMonTransactions) {
+                const createTransaction =
+                    await this.convertToActualTransaction(transaction);
+
+                if (this.config.import.synchronizeCategories) {
+                    const categoryResolution =
+                        this.categoryMap.getMappedActualCategoryId(
+                            transaction.categoryUuid
+                        );
+
+                    if (categoryResolution.actualCategoryId) {
+                        createTransaction.category =
+                            categoryResolution.actualCategoryId;
+                    } else if (
+                        !categoryResolution.isUncategorized &&
+                        !categoryResolution.isMapped
+                    ) {
+                        const warningKey =
+                            categoryResolution.categoryPath ??
+                            transaction.categoryUuid;
+
+                        if (!unmappedCategoryWarnings.has(warningKey)) {
+                            unmappedCategoryWarnings.add(warningKey);
+                            this.logger.warn(
+                                `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
+                            );
+                        }
+                    }
+                }
+
+                createTransactions.push(createTransaction);
+            }
+
             if (existingActualTransactions.length === 0) {
                 const startTransaction: CreateTransaction = {
                     date: format(
-                        monMonTransactions.length > 0
-                            ? (monMonTransactions.at(-1)?.valueDate ??
+                        accountTransactions.length > 0
+                            ? (accountTransactions.at(-1)?.valueDate ??
                                   new Date())
                             : new Date(),
                         DATE_FORMAT
                     ),
                     amount: this.getStartingBalanceForAccount(
                         monMonAccount,
-                        monMonTransactions
+                        accountTransactions
                     ),
                     imported_id: `${monMonAccount.uuid}-start`,
                     cleared: true,
@@ -199,116 +360,299 @@ class Importer {
                     imported_payee: 'Starting balance',
                 };
 
-                this.logger.debug(
-                    `No existing transactions found for Actual account '${actualAccount.name}'. Adding start transaction with amount ${startTransaction.amount}...`
-                );
-
                 createTransactions.push(startTransaction);
             }
 
-            // Filter out transactions that already exist in Actual
-            createTransactions = createTransactions.filter((transaction) => {
-                const transactionExists = existingActualTransactions.some(
-                    (existingTransaction) =>
-                        existingTransaction.imported_id ===
-                        transaction.imported_id
-                );
-                return !transactionExists;
-            });
-
-            if (createTransactions.length === 0) {
+            if (createTransactions.length > 0) {
                 this.logger.debug(
-                    `No new transactions found for Actual account '${actualAccount.name}'. Skipping...`
-                );
-                continue;
-            }
-
-            this.logger.debug(
-                `Considering ${createTransactions.length} transactions for Actual account '${actualAccount.name}'...`
-            );
-
-            if (this.payeeTransformer && !isDryRun) {
-                // Deduplicate payee names to reduce API calls and token usage
-                const transactionPayees = createTransactions.map(
-                    (t) => t.imported_payee as string
-                );
-                const uniquePayees = [...new Set(transactionPayees)].filter(
-                    (p) => p && p.trim()
+                    `Considering ${createTransactions.length} new transactions for Actual account '${actualAccount.name}'...`
                 );
 
-                this.logger.debug(
-                    `Cleaning up ${uniquePayees.length} unique payee names (from ${createTransactions.length} transactions) using OpenAI...`
-                );
-
-                const transformedPayees =
-                    await this.payeeTransformer.transformPayees(
-                        uniquePayees,
-                        existingPayeeNames
+                if (this.payeeTransformer && !isDryRun) {
+                    const transactionPayees = createTransactions.map(
+                        (t) => t.imported_payee as string
+                    );
+                    const uniquePayees = [...new Set(transactionPayees)].filter(
+                        (p) => p && p.trim()
                     );
 
-                if (transformedPayees !== null) {
-                    createTransactions.forEach((t) => {
-                        t.payee_name =
-                            transformedPayees[t.imported_payee as string] ??
-                            t.imported_payee ??
-                            '';
-                    });
-                } else {
-                    const onError =
-                        this.config.payeeTransformation.onTransformError;
+                    this.logger.debug(
+                        `Cleaning up ${uniquePayees.length} unique payee names (from ${createTransactions.length} transactions) using OpenAI...`
+                    );
 
-                    if (onError === 'fail') {
-                        throw new Error(
-                            'Payee transformation failed. Check the error messages above for details.'
+                    const transformedPayees =
+                        await this.payeeTransformer.transformPayees(
+                            uniquePayees,
+                            existingPayeeNames
                         );
+
+                    if (transformedPayees !== null) {
+                        createTransactions.forEach((t) => {
+                            t.payee_name =
+                                transformedPayees[t.imported_payee as string] ??
+                                t.imported_payee ??
+                                '';
+                        });
+                    } else {
+                        const onError =
+                            this.config.payeeTransformation.onTransformError;
+
+                        if (onError === 'fail') {
+                            throw new Error(
+                                'Payee transformation failed. Check the error messages above for details.'
+                            );
+                        }
+
+                        this.logger.warn(
+                            'Payee transformation failed. Using default payee names...'
+                        );
+
+                        createTransactions.forEach((t) => {
+                            t.payee_name = t.imported_payee ?? '';
+                        });
                     }
-
-                    this.logger.warn(
-                        'Payee transformation failed. Using default payee names...'
-                    );
-
+                } else {
                     createTransactions.forEach((t) => {
                         t.payee_name = t.imported_payee ?? '';
                     });
                 }
-            } else {
-                this.logger.debug(
-                    isDryRun
-                        ? `Skipping payee transformation in dry run mode, using default payee names...`
-                        : `Payee transformation is disabled. Using default payee names...`
+
+                if (!isDryRun) {
+                    const result = await this.actualApi.importTransactions(
+                        actualAccount.id,
+                        createTransactions
+                    );
+
+                    if (result.errors && result.errors.length > 0) {
+                        this.logger.error(
+                            'Some errors occurred during import:'
+                        );
+                        for (let i = 0; i < result.errors.length; i++) {
+                            this.logger.error(
+                                `Error ${i + 1}: ${result.errors[i]?.message ?? 'Unknown error'}`
+                            );
+                        }
+                    }
+
+                    this.logger.info(
+                        `Transaction import to account '${actualAccount.name}' successful`,
+                        [
+                            `Added ${result.added.length} new transaction.`,
+                            `Updated ${result.updated.length} existing transaction.`,
+                        ]
+                    );
+                } else {
+                    this.logger.info(
+                        `Dry run: would import ${createTransactions.length} new transactions to '${actualAccount.name}'.`
+                    );
+                }
+            }
+
+            if (!this.config.import.synchronizeCategories) {
+                continue;
+            }
+
+            const pendingUpdates: ExistingCategoryUpdate[] = [];
+            let backfillCount = 0;
+            let conflictCount = 0;
+            let skippedConflictCount = 0;
+
+            for (const pair of existingPairs) {
+                const categoryResolution =
+                    this.categoryMap.getMappedActualCategoryId(
+                        pair.monMonTransaction.categoryUuid
+                    );
+
+                const targetCategoryId = categoryResolution.actualCategoryId;
+                const currentCategoryId =
+                    pair.actualTransaction.category || undefined;
+                const classification = classifyCategoryUpdate({
+                    currentCategoryId,
+                    targetCategoryId,
+                    isUncategorized: categoryResolution.isUncategorized,
+                });
+
+                if (classification === 'noop') {
+                    continue;
+                }
+
+                if (classification === 'backfill') {
+                    // Type narrowing: classifyCategoryUpdate guarantees targetCategoryId for backfill.
+                    pendingUpdates.push(
+                        buildExistingCategoryUpdate({
+                            pair,
+                            targetCategoryId: targetCategoryId as string,
+                            reason: 'backfill',
+                        })
+                    );
+                    backfillCount++;
+                    continue;
+                }
+
+                // Type narrowing: classifyCategoryUpdate guarantees both fields for conflict.
+                const narrowedTargetCategoryId = targetCategoryId as string;
+                const narrowedCurrentCategoryId = currentCategoryId as string;
+
+                conflictCount++;
+
+                if (existingCategoryPolicy === 'new') {
+                    skippedConflictCount++;
+                    continue;
+                }
+
+                if (existingCategoryPolicy === 'always') {
+                    pendingUpdates.push(
+                        buildExistingCategoryUpdate({
+                            pair,
+                            targetCategoryId: narrowedTargetCategoryId,
+                            reason: 'conflict',
+                            fromCategoryId: narrowedCurrentCategoryId,
+                        })
+                    );
+                    continue;
+                }
+
+                if (promptMode === 'none') {
+                    skippedConflictCount++;
+                    continue;
+                }
+
+                if (promptMode === 'all') {
+                    pendingUpdates.push(
+                        buildExistingCategoryUpdate({
+                            pair,
+                            targetCategoryId: narrowedTargetCategoryId,
+                            reason: 'conflict',
+                            fromCategoryId: narrowedCurrentCategoryId,
+                        })
+                    );
+                    continue;
+                }
+
+                if (!promptInterface) {
+                    this.logger.info(
+                        `Interactive category decisions apply for the rest of this import run across all accounts (use A/N to set a global choice).`
+                    );
+                    promptInterface = createInterface({
+                        input: stdin,
+                        output: stdout,
+                    });
+                }
+
+                const shouldApply = await this.promptForConflictDecision(
+                    promptInterface,
+                    pair,
+                    narrowedCurrentCategoryId,
+                    narrowedTargetCategoryId
                 );
 
-                createTransactions.forEach((t) => {
-                    t.payee_name = t.imported_payee ?? '';
+                if (shouldApply === 'all') {
+                    promptMode = 'all';
+                    pendingUpdates.push(
+                        buildExistingCategoryUpdate({
+                            pair,
+                            targetCategoryId: narrowedTargetCategoryId,
+                            reason: 'conflict',
+                            fromCategoryId: narrowedCurrentCategoryId,
+                        })
+                    );
+                    continue;
+                }
+
+                if (shouldApply === 'none') {
+                    promptMode = 'none';
+                    skippedConflictCount++;
+                    continue;
+                }
+
+                if (shouldApply === true) {
+                    pendingUpdates.push(
+                        buildExistingCategoryUpdate({
+                            pair,
+                            targetCategoryId: narrowedTargetCategoryId,
+                            reason: 'conflict',
+                            fromCategoryId: narrowedCurrentCategoryId,
+                        })
+                    );
+                } else {
+                    skippedConflictCount++;
+                }
+            }
+
+            this.logger.info(
+                `Category sync summary for account '${actualAccount.name}'`,
+                [
+                    `Existing transactions considered: ${existingPairs.length}`,
+                    `Backfills: ${backfillCount}`,
+                    `Conflicts: ${conflictCount}`,
+                    `Planned updates: ${pendingUpdates.length}`,
+                    `Skipped conflicts: ${skippedConflictCount}`,
+                ]
+            );
+
+            if (pendingUpdates.length === 0) {
+                continue;
+            }
+
+            if (isDryRun) {
+                const preview = pendingUpdates.slice(0, 5).map((update) => {
+                    const fromPath = update.fromCategoryId
+                        ? this.categoryMap.getActualCategoryPath(
+                              update.fromCategoryId
+                          )
+                        : '(none)';
+                    const toPath = this.categoryMap.getActualCategoryPath(
+                        update.toCategoryId
+                    );
+                    return `${update.importedId}: ${fromPath} -> ${toPath}`;
+                });
+
+                this.logger.info(
+                    `Dry run: would apply ${pendingUpdates.length} category updates in '${actualAccount.name}'.`,
+                    preview
+                );
+                continue;
+            }
+
+            for (const update of pendingUpdates) {
+                await this.actualApi.updateTransaction(update.transactionId, {
+                    category: update.toCategoryId,
                 });
             }
 
-            if (!isDryRun) {
-                const result = await this.actualApi.importTransactions(
-                    actualAccount.id,
-                    createTransactions
-                );
+            this.logger.info(
+                `Applied ${pendingUpdates.length} category updates for existing transactions in '${actualAccount.name}'.`
+            );
+        }
 
-                if (result.errors && result.errors.length > 0) {
-                    this.logger.error('Some errors occurred during import:');
-                    for (let i = 0; i < result.errors.length; i++) {
-                        this.logger.error(
-                            `Error ${i + 1}: ${result.errors[i]?.message ?? 'Unknown error'}`
-                        );
-                    }
-                }
+        promptInterface?.close();
+    }
 
-                const addedCount = result.added.length;
-                const updatedCount = result.updated.length;
+    private async promptForConflictDecision(
+        promptInterface: ReturnType<typeof createInterface>,
+        pair: ExistingTransactionPair,
+        currentCategoryId: string,
+        targetCategoryId: string
+    ): Promise<boolean | 'all' | 'none'> {
+        const fromCategory =
+            this.categoryMap.getActualCategoryPath(currentCategoryId);
+        const toCategory =
+            this.categoryMap.getActualCategoryPath(targetCategoryId);
+        const question = [
+            `Category conflict for transaction '${pair.monMonTransaction.name}' (${format(pair.monMonTransaction.valueDate, DATE_FORMAT)}, ${pair.monMonTransaction.amount}):`,
+            `Current Actual category: ${fromCategory}`,
+            `Mapped MoneyMoney category: ${toCategory}`,
+            `Apply update? [y]es/[n]o/[A]ll remaining/[N]one remaining: `,
+        ].join('\n');
 
-                this.logger.info(
-                    `Transaction import to account '${actualAccount.name}' successful`,
-                    [
-                        `Added ${addedCount} new transaction.`,
-                        `Updated ${updatedCount} existing transaction.`,
-                    ]
-                );
+        while (true) {
+            const answer = (await promptInterface.question(question)).trim();
+            const decision = parsePromptDecision(answer);
+            if (decision !== 'invalid') {
+                return decision;
             }
+
+            this.logger.warn(`Invalid input '${answer}'. Use y/n/A/N.`);
         }
     }
 

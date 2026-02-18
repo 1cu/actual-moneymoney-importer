@@ -3,6 +3,8 @@ import { checkDatabaseUnlocked } from 'moneymoney';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
 import { AccountMap } from '../utils/AccountMap.js';
 import ActualApi from '../utils/ActualApi.js';
+import { includesRef, toRefList } from '../utils/cliArgs.js';
+import CategoryMap from '../utils/CategoryMap.js';
 import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import PayeeTransformer from '../utils/PayeeTransformer.js';
@@ -34,11 +36,30 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
     const toDate = argv.to
         ? parse(argv.to as string, DATE_FORMAT, new Date())
         : undefined;
-    const account = argv.account as string | Array<string> | undefined;
 
-    let accountRefs: Array<string> | undefined;
-    if (account) {
-        accountRefs = Array.isArray(account) ? account : [account];
+    const accountRefs = toRefList(
+        argv.account as string | string[] | undefined
+    );
+    const serverRefs = toRefList(argv.server as string | string[] | undefined);
+    const budgetRefs = toRefList(argv.budget as string | string[] | undefined);
+
+    const categorySyncOnExistingArg = argv.categorySyncOnExisting as
+        | 'ask'
+        | 'new'
+        | 'always'
+        | undefined;
+
+    const categorySyncOnExisting =
+        categorySyncOnExistingArg ?? config.import.categorySyncOnExisting;
+
+    if (
+        config.import.synchronizeCategories &&
+        categorySyncOnExisting === 'ask' &&
+        !process.stdin.isTTY
+    ) {
+        throw new Error(
+            `Category sync policy 'ask' requires an interactive terminal. Use --category-sync-on-existing=new|always for non-interactive runs.`
+        );
     }
 
     if (fromDate && isNaN(fromDate.getTime())) {
@@ -59,68 +80,114 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
         );
     }
 
-    for (const serverConfig of config.actualServers) {
-        logger.debug(`Checking MoneyMoney database access...`);
-        const isUnlocked = await checkDatabaseUnlocked();
-        if (!isUnlocked) {
-            throw new Error(
-                `MoneyMoney database is locked. Please unlock it and try again.`
-            );
+    const selectedServerConfigs = config.actualServers.filter(
+        (serverConfig) => {
+            return includesRef(serverRefs, serverConfig.serverUrl);
         }
-        logger.debug(`MoneyMoney database is accessible.`);
+    );
 
-        for (const budgetConfig of serverConfig.budgets) {
-            logger.debug(`Creating Actual API instance...`, [
-                `Server URL: ${serverConfig.serverUrl}`,
-                `Budget: ${budgetConfig.syncId}`,
-            ]);
-            const actualApi = new ActualApi(serverConfig, logger);
+    if (selectedServerConfigs.length === 0) {
+        throw new Error(
+            'No matching Actual servers found for --server filter.'
+        );
+    }
 
-            logger.debug(`Initializing Actual API...`);
-            await actualApi.init();
+    logger.debug(`Checking MoneyMoney database access...`);
+    const isUnlocked = await checkDatabaseUnlocked();
+    if (!isUnlocked) {
+        throw new Error(
+            `MoneyMoney database is locked. Please unlock it and try again.`
+        );
+    }
+    logger.debug(`MoneyMoney database is accessible.`);
 
-            logger.debug(`Loading budget...`, `Budget: ${budgetConfig.syncId}`);
-            await actualApi.loadBudget(budgetConfig.syncId);
+    for (const serverConfig of selectedServerConfigs) {
+        const selectedBudgetConfigs = serverConfig.budgets.filter(
+            (budgetConfig) => includesRef(budgetRefs, budgetConfig.syncId)
+        );
 
-            logger.debug(`Loading accounts...`);
-            const accountMap = new AccountMap(budgetConfig, logger, actualApi);
-            await accountMap.loadFromConfig();
-
-            const importer = new Importer(
-                config,
-                budgetConfig,
-                actualApi,
-                logger,
-                accountMap,
-                payeeTransformer
+        if (selectedBudgetConfigs.length === 0) {
+            logger.warn(
+                `No matching budgets found for server '${serverConfig.serverUrl}'. Skipping.`
             );
+            continue;
+        }
 
-            logger.info(
-                `Importing transactions...`,
-                `Budget: ${budgetConfig.syncId}`
-            );
+        logger.debug(`Creating Actual API instance...`, [
+            `Server URL: ${serverConfig.serverUrl}`,
+            `Budgets: ${selectedBudgetConfigs
+                .map((budget) => budget.syncId)
+                .join(', ')}`,
+        ]);
+        const actualApi = new ActualApi(serverConfig, logger);
 
-            const importOptions: {
-                accountRefs?: string[];
-                from?: Date;
-                to?: Date;
-                isDryRun: boolean;
-            } = {
-                isDryRun,
-            };
+        logger.debug(`Initializing Actual API...`);
+        await actualApi.init();
 
-            if (accountRefs) {
-                importOptions.accountRefs = accountRefs;
+        try {
+            for (const budgetConfig of selectedBudgetConfigs) {
+                logger.debug(
+                    `Loading budget...`,
+                    `Budget: ${budgetConfig.syncId}`
+                );
+                await actualApi.loadBudget(budgetConfig.syncId);
+
+                logger.debug(`Loading accounts...`);
+                const accountMap = new AccountMap(
+                    budgetConfig,
+                    logger,
+                    actualApi
+                );
+                await accountMap.loadFromConfig();
+
+                const categoryMap = new CategoryMap(
+                    budgetConfig,
+                    actualApi,
+                    logger
+                );
+                if (config.import.synchronizeCategories) {
+                    await categoryMap.load();
+                }
+
+                const importer = new Importer(
+                    config,
+                    budgetConfig,
+                    actualApi,
+                    logger,
+                    accountMap,
+                    categoryMap,
+                    payeeTransformer
+                );
+
+                logger.info(
+                    `Importing transactions...`,
+                    `Budget: ${budgetConfig.syncId}`
+                );
+
+                const importOptions: {
+                    accountRefs?: string[];
+                    from?: Date;
+                    to?: Date;
+                    isDryRun: boolean;
+                    categorySyncOnExisting?: 'ask' | 'new' | 'always';
+                } = {
+                    isDryRun,
+                    categorySyncOnExisting,
+                };
+
+                if (accountRefs) {
+                    importOptions.accountRefs = accountRefs;
+                }
+                if (fromDate) {
+                    importOptions.from = fromDate;
+                }
+                if (toDate) {
+                    importOptions.to = toDate;
+                }
+
+                await importer.importTransactions(importOptions);
             }
-            if (fromDate) {
-                importOptions.from = fromDate;
-            }
-            if (toDate) {
-                importOptions.to = toDate;
-            }
-
-            await importer.importTransactions(importOptions);
-
+        } finally {
             await actualApi.shutdown();
         }
     }
@@ -141,11 +208,24 @@ export default {
                 'account',
                 'Import only transactions from the specified MoneyMoney account identifier'
             )
+            .string('server')
+            .alias('server', 's')
+            .describe(
+                'server',
+                'Import only to the specified Actual server URL'
+            )
             .string('budget')
             .alias('budget', 'b')
             .describe(
                 'budget',
-                'Import only to the specified Actual budget identifier'
+                'Import only to the specified Actual budget identifier (syncId)'
+            )
+            .string('category-sync-on-existing')
+            .alias('category-sync-on-existing', 'C')
+            .choices('category-sync-on-existing', ['ask', 'new', 'always'])
+            .describe(
+                'category-sync-on-existing',
+                'How category sync handles existing imported transactions: ask|new|always'
             )
             .string('from')
             .alias('from', 'f')

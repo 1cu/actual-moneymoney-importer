@@ -71,6 +71,7 @@ test('prints root help and exits successfully with --help', () => {
     assert.equal(result.status, 0);
     assert.match(result.output, /Commands:/);
     assert.match(result.output, /import/);
+    assert.match(result.output, /categories/);
     assert.match(result.output, /validate/);
 });
 
@@ -81,7 +82,41 @@ test('shows short aliases for root and import options in help', () => {
     assert.match(result.output, /-c,\s*--config/i);
     assert.match(result.output, /-l,\s*--logLevel/i);
     assert.match(result.output, /-a,\s*--account/i);
+    assert.match(result.output, /-s,\s*--server/i);
     assert.match(result.output, /-b,\s*--budget/i);
+    assert.match(
+        result.output,
+        /-C,\s*--category-sync-on-existing/i
+    );
     assert.match(result.output, /-f,\s*--from/i);
     assert.match(result.output, /-t,\s*--to/i);
+});
+
+test('fails for invalid category sync policy value', () => {
+    const result = runCli([
+        'import',
+        '--category-sync-on-existing',
+        'invalid',
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.match(result.output, /Invalid values/i);
+    assert.match(result.output, /category-sync-on-existing/i);
+});
+
+test('shows categories map command help', () => {
+    const result = runCli(['categories', 'map', '--help']);
+
+    assert.equal(result.status, 0);
+    assert.match(result.output, /--format/i);
+    assert.match(result.output, /--write-config/i);
+    assert.match(result.output, /-s,\s*--server/i);
+    assert.match(result.output, /-b,\s*--budget/i);
+});
+
+test('shows categories base command guidance', () => {
+    const result = runCli(['categories']);
+
+    assert.equal(result.status, 0);
+    assert.match(result.output, /categories map --help/i);
 });

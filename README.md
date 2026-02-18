@@ -46,6 +46,8 @@ prompt = "<custom prompt>"  # Optional: Override the default payee transformatio
 [import]
 importUncheckedTransactions = true
 synchronizeClearedStatus = true
+synchronizeCategories = true
+categorySyncOnExisting = "ask" # ask|new|always
 importComments = false # Optional: Import MoneyMoney comments into Actual 
 commentPrefix = "MoneyMoney Comment: " # Optional: Set a prefix for MoneyMoney comments inside the notes
 
@@ -68,6 +70,12 @@ password = ""
 # The key is either the account name, or the account number of a MoneyMoney account
 # The value is the account name or the account id (from the url) of the Actual account
 "<monMonAcc>" = "<actualAcc>"
+
+# Optional category mapping
+[actualServers.budgets.categoryMapping]
+# The key is the MoneyMoney category UUID
+# The value is the Actual category id
+"<monMonCategoryUuid>" = "<actualCategoryId>"
 ```
 
 A short summary:
@@ -98,6 +106,13 @@ actual-monmon import -s myServerA -b HomeBudget
 
 # Combine filters
 actual-monmon import -s myServerA -b HomeBudget -a "Groceries,Utilities"
+```
+
+Category mapping can be inspected and suggested with:
+
+```bash
+actual-monmon categories map -s http://localhost:5006 -b <syncId>
+actual-monmon categories map -s http://localhost:5006 -b <syncId> --write-config
 ```
 
 ## Advanced Configuration

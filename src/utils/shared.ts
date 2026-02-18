@@ -24,6 +24,11 @@ openAiApiKey = "<openAiKey>"
 # Import settings
 [import]
 importUncheckedTransactions = true
+synchronizeClearedStatus = true
+synchronizeCategories = true
+categorySyncOnExisting = "ask" # ask|new|always
+importComments = false
+commentPrefix = "MoneyMoney Comment: "
 
 # Actual servers, you can add multiple servers
 [[actualServers]]
@@ -45,4 +50,9 @@ password = ""
 # The key is either the account name, or the account number of a MoneyMoney account
 # The value is the account name or the account id (from the url) of the Actual account
 "<monMonAcc>" = "<actualAcc>"
+
+# Category map for the budget (optional)
+# The key is a MoneyMoney category UUID, the value is an Actual category ID
+[actualServers.budgets.categoryMapping]
+"<monMonCategoryUuid>" = "<actualCategoryId>"
 `;

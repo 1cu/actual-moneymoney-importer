@@ -132,6 +132,41 @@ class ActualApi {
         return this.withLogControl(() => (actual as any).getPayees());
     }
 
+    async getCategories(): Promise<Category[]> {
+        await this.ensureInitialization();
+        const categoryItems = await this.withLogControl(() =>
+            actual.getCategories()
+        );
+
+        const categories = categoryItems.filter((item): item is Category => {
+            return 'group_id' in item;
+        });
+
+        const filteredOutCount = categoryItems.length - categories.length;
+        if (filteredOutCount > 0) {
+            this.logger.debug(
+                `Filtered out ${filteredOutCount} non-category entries from Actual getCategories() response.`
+            );
+        }
+
+        return categories;
+    }
+
+    async getCategoryGroups(): Promise<CategoryGroupPayload[]> {
+        await this.ensureInitialization();
+        return await this.withLogControl(() => actual.getCategoryGroups());
+    }
+
+    async updateTransaction(
+        transactionId: string,
+        fields: Partial<UpdateTransaction>
+    ) {
+        await this.ensureInitialization();
+        return await this.withLogControl(() =>
+            actual.updateTransaction(transactionId, fields)
+        );
+    }
+
     async shutdown() {
         await this.ensureInitialization();
         await this.withLogControl(() => actual.shutdown());

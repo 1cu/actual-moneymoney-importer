@@ -211,7 +211,7 @@ declare module '@actual-app/api' {
     const reopenAccount: (accountId: ID) => Promise<void>;
 
     // Categories
-    const getCategories: () => Promise<Category[]>;
+    const getCategories: () => Promise<Array<Category | CategoryGroupPayload>>;
     const createCategory: (category: Category) => Promise<ID>;
     const updateCategory: (
         categoryId: ID,
@@ -262,20 +262,6 @@ type BaseTransaction = {
 type ReadTransaction = Omit<BaseTransaction, 'payee_name'> & {
     subtransactions: ReadSubTransaction[];
 };
-
-type CreateTransaction = Modify<
-    BaseTransaction,
-    | 'amount'
-    | 'payee'
-    | 'payee_name'
-    | 'imported_payee'
-    | 'category'
-    | 'notes'
-    | 'imported_id'
-    | 'transfer_id'
-    | 'cleared',
-    'id' | 'account'
->;
 
 type AccountType =
     | 'checking'
@@ -336,9 +322,9 @@ deleteAccount(idid) → Promise<null>
 Delete an account.
 */
 
-type CreateTransaction = Pick<BaseTransaction, 'account' | 'date'> &
+type CreateTransaction = Pick<BaseTransaction, 'date'> &
     Partial<Omit<BaseTransaction, 'id' | 'account' | 'date'>> & {
-        subtransactions: CreateSubTransaction[];
+        subtransactions?: CreateSubTransaction[];
     };
 
 type UpdateTransaction = Omit<BaseTransaction, 'id' | 'subtransactions'>;
@@ -348,6 +334,7 @@ type Category = {
     name: string;
     group_id: ID;
     is_income: boolean;
+    hidden?: boolean;
 };
 
 type CategoryGroupPayload = Omit<CategoryGroup, 'categories'>;
@@ -356,6 +343,7 @@ type CategoryGroup = {
     id: ID;
     name: string;
     is_income: boolean;
+    hidden?: boolean;
     categories: Category[];
 };
 

@@ -14,6 +14,7 @@ const budgetSchema = z
             password: z.string().optional(),
         }),
         accountMapping: z.record(z.string(), z.string()),
+        categoryMapping: z.record(z.string(), z.string()).optional(),
     })
     .superRefine((val, ctx) => {
         if (val.e2eEncryption.enabled && !val.e2eEncryption.password) {
@@ -57,6 +58,10 @@ export const configSchema = z
         import: z.object({
             importUncheckedTransactions: z.boolean(),
             synchronizeClearedStatus: z.boolean().default(true),
+            synchronizeCategories: z.boolean().default(true),
+            categorySyncOnExisting: z
+                .enum(['ask', 'new', 'always'])
+                .default('ask'),
             importComments: z.boolean().default(false),
             commentPrefix: z.string().default('MoneyMoney Comment: '),
             ignorePatterns: z
