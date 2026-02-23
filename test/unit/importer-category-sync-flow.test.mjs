@@ -22,14 +22,14 @@ const makeLogger = () => {
             infos.push({ message, hints: toHintArray(hint) }),
         warn: (message, hint) =>
             warnings.push({ message, hints: toHintArray(hint) }),
-        error: () => {},
+        error: () => { },
     };
 };
 
 const makeImporter = ({
     mappingByUuid = {},
     policy = 'ask',
-    updateTransaction = async () => {},
+    updateTransaction = async () => { },
 } = {}) => {
     const logger = makeLogger();
     const actualApi = {
@@ -479,4 +479,88 @@ test('emitImportRunSummary omits zero counters inside category sync activity lin
             hint.startsWith('Category sync activity:')
         ) ?? '';
     assert.equal(categorySyncLine, 'Category sync activity: backfills=1');
+});
+
+test('detectAndWarnAutoRuleOverrides warns when stored category differs from intended', async () => {
+    const { importer, logger } = makeImporter({
+        mappingByUuid: {},
+    });
+
+    importer.actualApi.getTransactionsByIds = async (_accountId, _ids) => [
+        {
+            id: 'actual-imp-1',
+            imported_id: 'imp-1',
+            imported_payee: 'Amazon',
+            category: 'cat-auto-rule',
+            date: '2026-02-23',
+            amount: -500,
+        },
+    ];
+
+    const overrideCount = await importer.detectAndWarnAutoRuleOverrides({
+        actualAccountId: 'acc-1',
+        actualAccountName: 'Checking',
+        addedIds: ['actual-imp-1'],
+        intendedCategoryByImportedId: new Map([['imp-1', 'cat-intended']]),
+    });
+
+    assert.equal(overrideCount, 1);
+    assert.equal(logger.warnings.length, 1);
+    assert.match(
+        logger.warnings[0]?.message ?? '',
+        /Auto-rule changed category for transaction 'Amazon' in account 'Checking'/
+    );
+    assert.match(logger.warnings[0]?.message ?? '', /cat-intended/);
+    assert.match(logger.warnings[0]?.message ?? '', /cat-auto-rule/);
+});
+
+test('detectAndWarnAutoRuleOverrides is silent when stored category matches intended', async () => {
+    const { importer, logger } = makeImporter();
+
+    importer.actualApi.getTransactionsByIds = async (_accountId, _ids) => [
+        {
+            id: 'actual-imp-1',
+            imported_id: 'imp-1',
+            imported_payee: 'Rewe',
+            category: 'cat-intended',
+            date: '2026-02-23',
+            amount: -200,
+        },
+    ];
+
+    const overrideCount = await importer.detectAndWarnAutoRuleOverrides({
+        actualAccountId: 'acc-1',
+        actualAccountName: 'Checking',
+        addedIds: ['actual-imp-1'],
+        intendedCategoryByImportedId: new Map([['imp-1', 'cat-intended']]),
+    });
+
+    assert.equal(overrideCount, 0);
+    assert.equal(logger.warnings.length, 0);
+});
+
+test('detectAndWarnAutoRuleOverrides ignores transactions not in the intended-category map', async () => {
+    const { importer, logger } = makeImporter();
+
+    importer.actualApi.getTransactionsByIds = async (_accountId, _ids) => [
+        {
+            id: 'actual-imp-2',
+            imported_id: 'imp-2',
+            imported_payee: 'Dm',
+            category: 'cat-whatever',
+            date: '2026-02-23',
+            amount: -100,
+        },
+    ];
+
+    // intendedCategoryByImportedId only has 'imp-1', not 'imp-2'
+    const overrideCount = await importer.detectAndWarnAutoRuleOverrides({
+        actualAccountId: 'acc-1',
+        actualAccountName: 'Checking',
+        addedIds: ['actual-imp-2'],
+        intendedCategoryByImportedId: new Map([['imp-1', 'cat-intended']]),
+    });
+
+    assert.equal(overrideCount, 0);
+    assert.equal(logger.warnings.length, 0);
 });

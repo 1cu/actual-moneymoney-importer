@@ -124,6 +124,18 @@ class ActualApi {
         );
     }
 
+    async getTransactionsByIds(
+        accountId: string,
+        ids: string[]
+    ): Promise<ReadTransaction[]> {
+        if (ids.length === 0) {
+            return [];
+        }
+        const idSet = new Set(ids);
+        const all = await this.getTransactions(accountId);
+        return all.filter((t) => idSet.has(t.id));
+    }
+
     async getPayees(): Promise<
         Array<{ id: string; name: string; transfer_acct?: string }>
     > {

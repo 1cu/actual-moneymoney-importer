@@ -65,6 +65,7 @@ type ImportRunMetrics = {
     totalConflicts: number;
     totalSkippedConflicts: number;
     totalUnmappedCategoryWarnings: number;
+    totalAutoRuleOverrides: number;
 };
 type DuplicateImportedIdGroup = {
     importedId: string;
@@ -338,6 +339,7 @@ class Importer {
             totalConflicts: 0,
             totalSkippedConflicts: 0,
             totalUnmappedCategoryWarnings: 0,
+            totalAutoRuleOverrides: 0,
         };
 
         const promptState: PromptState = { mode: 'prompt' };
@@ -360,6 +362,8 @@ class Importer {
                     });
 
                 const createTransactions: CreateTransaction[] = [];
+                // Maps imported_id → intended category ID (for auto-rule override detection).
+                const intendedCategoryByImportedId = new Map<string, string>();
                 for (const transaction of newMonMonTransactions) {
                     const createTransaction =
                         await this.convertToActualTransaction(transaction);
@@ -373,6 +377,12 @@ class Importer {
                         if (categoryResolution.actualCategoryId) {
                             createTransaction.category =
                                 categoryResolution.actualCategoryId;
+                            if (createTransaction.imported_id) {
+                                intendedCategoryByImportedId.set(
+                                    createTransaction.imported_id,
+                                    categoryResolution.actualCategoryId
+                                );
+                            }
                         } else if (
                             !categoryResolution.isUncategorized &&
                             !categoryResolution.isMapped
@@ -507,6 +517,20 @@ class Importer {
                                 `Updated ${result.updated.length} existing transaction.`,
                             ]
                         );
+
+                        if (
+                            intendedCategoryByImportedId.size > 0 &&
+                            result.added.length > 0
+                        ) {
+                            const overrideCount =
+                                await this.detectAndWarnAutoRuleOverrides({
+                                    actualAccountId: actualAccount.id,
+                                    actualAccountName: actualAccount.name,
+                                    addedIds: result.added,
+                                    intendedCategoryByImportedId,
+                                });
+                            runMetrics.totalAutoRuleOverrides += overrideCount;
+                        }
                     } else {
                         runMetrics.totalTransactionsAdded +=
                             createTransactions.length;
@@ -637,6 +661,49 @@ class Importer {
         );
     }
 
+    async detectAndWarnAutoRuleOverrides({
+        actualAccountId,
+        actualAccountName,
+        addedIds,
+        intendedCategoryByImportedId,
+    }: {
+        actualAccountId: string;
+        actualAccountName: string;
+        addedIds: string[];
+        intendedCategoryByImportedId: Map<string, string>;
+    }): Promise<number> {
+        const freshTransactions = await this.actualApi.getTransactionsByIds(
+            actualAccountId,
+            addedIds
+        );
+
+        let overrideCount = 0;
+        for (const tx of freshTransactions) {
+            if (!tx.imported_id) {
+                continue;
+            }
+            const intendedCategoryId = intendedCategoryByImportedId.get(
+                tx.imported_id
+            );
+            if (!intendedCategoryId) {
+                continue;
+            }
+            if (tx.category !== intendedCategoryId) {
+                overrideCount++;
+                const intendedPath =
+                    this.categoryMap.getActualCategoryPath(intendedCategoryId);
+                const actualPath = tx.category
+                    ? this.categoryMap.getActualCategoryPath(tx.category)
+                    : '(none)';
+                this.logger.warn(
+                    `Auto-rule changed category for transaction '${tx.imported_payee ?? tx.imported_id}' in account '${actualAccountName}': intended '${intendedPath}' → actual '${actualPath}'`
+                );
+            }
+        }
+
+        return overrideCount;
+    }
+
     private emitImportRunSummary(metrics: ImportRunMetrics, isDryRun: boolean) {
         const hasImportActivity =
             metrics.totalTransactionsAdded > 0 ||
@@ -700,6 +767,12 @@ class Importer {
         if (metrics.totalUnmappedCategoryWarnings > 0) {
             hints.push(
                 `Unmapped category warnings: ${metrics.totalUnmappedCategoryWarnings}`
+            );
+        }
+
+        if (metrics.totalAutoRuleOverrides > 0) {
+            hints.push(
+                `Auto-rule category overrides detected: ${metrics.totalAutoRuleOverrides}`
             );
         }
 
