@@ -86,7 +86,8 @@ class PayeeTransformer {
                 ) {
                     throw new Error(
                         `Incompatible configuration: Model '${this.config.openAiModel}' does not support temperature=${this.config.temperature}. ` +
-                            `Please update the 'temperature' setting in your configuration file. Error: ${error.message}`
+                            `Please update the 'temperature' setting in your configuration file. Error: ${error.message}`,
+                        { cause: error }
                     );
                 }
 

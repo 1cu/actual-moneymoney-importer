@@ -110,17 +110,12 @@ export const replaceCategoryMappingInConfig = (
     const mappingSectionRegex =
         /(^|\r?\n)\[actualServers\.budgets\.categoryMapping\]\r?\n([\s\S]*?)(?=\r?\n\[|$)/;
 
-    let newBlockContent = blockContent;
-
-    if (mappingSectionRegex.test(blockContent)) {
-        newBlockContent = blockContent.replace(
-            mappingSectionRegex,
-            `\n${mappingLines.join('\n')}\n`
-        );
-    } else {
-        const trimmedBlock = blockContent.trimEnd();
-        newBlockContent = `${trimmedBlock}\n\n${mappingLines.join('\n')}\n`;
-    }
+    const newBlockContent = mappingSectionRegex.test(blockContent)
+        ? blockContent.replace(
+              mappingSectionRegex,
+              `\n${mappingLines.join('\n')}\n`
+          )
+        : `${blockContent.trimEnd()}\n\n${mappingLines.join('\n')}\n`;
 
     const updatedContent =
         content.slice(0, block.start) +

@@ -129,12 +129,16 @@ export const getConfig = async (argv: ArgumentsCamelCase) => {
             const column = 'column' in e ? e.column : -1;
 
             throw new Error(
-                `Failed to parse configuration file: ${e.message} (line ${line}, column ${column})`
+                `Failed to parse configuration file: ${e.message} (line ${line}, column ${column})`,
+                { cause: e }
             );
         }
 
         throw new Error(
-            `Invalid configuration file format. Run 'validate' to see errors.`
+            `Invalid configuration file format. Run 'validate' to see errors.`,
+            {
+                cause: e,
+            }
         );
     }
 };
