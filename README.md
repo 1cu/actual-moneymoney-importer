@@ -244,3 +244,9 @@ Note that the date is a string, not a TOML date.
 ## Bugs
 
 If you notice any bugs or issues, please file an issue.
+
+## Maintenance Notes
+
+### Fork prereleases
+
+This fork keeps the existing `semantic-release` flow for prereleases on the `develop` branch. The release workflow is intentionally unchanged because the fork only needs automated prereleases and does not publish to npm.
