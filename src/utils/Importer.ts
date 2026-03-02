@@ -1,4 +1,5 @@
 import { format, subMonths } from 'date-fns';
+import chalk from 'chalk';
 import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import {
@@ -138,6 +139,35 @@ export const parsePromptDecision = (
     }
 
     return 'invalid';
+};
+
+export const buildConflictPromptText = ({
+    transactionName,
+    valueDate,
+    amount,
+    currentCategory,
+    targetCategory,
+}: {
+    transactionName: string;
+    valueDate: Date;
+    amount: number;
+    currentCategory: string;
+    targetCategory: string;
+}): string => {
+    const amountText = amount > 0 ? `+${amount.toFixed(2)}` : amount.toFixed(2);
+
+    return [
+        chalk.yellow.bold('Category conflict'),
+        `${chalk.gray('Transaction:')} ${chalk.white(transactionName)}`,
+        `${chalk.gray('Date:')}        ${format(valueDate, DATE_FORMAT)}`,
+        `${chalk.gray('Amount:')}      ${amountText}`,
+        '',
+        `${chalk.gray('Keep current:')} ${chalk.red(currentCategory)}`,
+        `${chalk.gray('Change to:')}    ${chalk.green(targetCategory)}`,
+        '',
+        `${chalk.gray('Choose:')} ${chalk.green('[y] update')}  ${chalk.red('[n] keep')}  ${chalk.blue('[A] update all')}  ${chalk.blue('[N] keep all')}  ${chalk.yellow('[q] quit')}`,
+        chalk.bold('Your choice: '),
+    ].join('\n');
 };
 
 export const shouldEmitMappingConflictGuidance = ({
@@ -1000,7 +1030,8 @@ class Importer {
 
             if (!promptState.promptInterface) {
                 this.logger.info(
-                    `Interactive category decisions apply for the rest of this import run across all accounts (use A/N to set a global choice, q to abort).`
+                    `Interactive category decisions stay active for the rest of this import across all accounts.`,
+                    `Use A/N to apply a choice to all remaining conflicts, or q to abort.`
                 );
                 promptState.promptInterface = createInterface({
                     input: stdin,
@@ -1112,12 +1143,13 @@ class Importer {
             this.categoryMap.getActualCategoryPath(currentCategoryId);
         const toCategory =
             this.categoryMap.getActualCategoryPath(targetCategoryId);
-        const question = [
-            `Category conflict for transaction '${pair.monMonTransaction.name}' (${format(pair.monMonTransaction.valueDate, DATE_FORMAT)}, ${pair.monMonTransaction.amount}):`,
-            `Current Actual category: ${fromCategory}`,
-            `Mapped MoneyMoney category: ${toCategory}`,
-            `Apply update? [y]es/[n]o/[A]ll remaining/[N]one remaining/[q]uit: `,
-        ].join('\n');
+        const question = buildConflictPromptText({
+            transactionName: pair.monMonTransaction.name,
+            valueDate: pair.monMonTransaction.valueDate,
+            amount: pair.monMonTransaction.amount,
+            currentCategory: fromCategory,
+            targetCategory: toCategory,
+        });
 
         while (true) {
             const answer = (await promptInterface.question(question)).trim();
