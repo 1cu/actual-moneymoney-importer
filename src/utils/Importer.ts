@@ -165,7 +165,7 @@ export const buildConflictPromptText = ({
         `${chalk.gray('Keep current:')} ${chalk.red(currentCategory)}`,
         `${chalk.gray('Change to:')}    ${chalk.green(targetCategory)}`,
         '',
-        `${chalk.gray('Choose:')} ${chalk.green('[y] update')}  ${chalk.red('[n] keep')}  ${chalk.blue('[A] update all')}  ${chalk.blue('[N] keep all')}  ${chalk.yellow('[q] quit')}`,
+        `${chalk.gray('Choose:')} ${chalk.green('[y] update')}  ${chalk.red('[n] keep')}  ${chalk.green('[A] update all')}  ${chalk.red('[N] keep all')}  ${chalk.yellow('[q] quit')}`,
         chalk.bold('Your choice: '),
     ].join('\n');
 };
