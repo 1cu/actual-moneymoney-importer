@@ -1,4 +1,4 @@
-import actual from '@actual-app/api';
+import * as actual from '@actual-app/api';
 import { format } from 'date-fns';
 import fs from 'fs/promises';
 import fetch from 'node-fetch';
