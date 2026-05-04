@@ -23,7 +23,7 @@
         "importer"
     ],
     "bin": {
-        "actual-mmi": "./dist/index.js"
+        "actual-mmi": "dist/index.js"
     },
     "files": [
         "dist"
