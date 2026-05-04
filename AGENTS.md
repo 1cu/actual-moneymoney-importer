@@ -30,6 +30,13 @@ npm run build
 npm run test:cli
 ```
 
+## Release & Publishing
+
+- Stable releases are automated from `main` via GitHub Actions and `semantic-release`.
+- Releases publish to both GitHub Releases and npm.
+- Do not manually bump `package.json` version or publish locally for routine releases.
+- Keep `package.json`, `README.md`, and release workflow/config files in sync when changing the package name, CLI name, install instructions, or release flow.
+
 ## Coding Style & Naming Conventions
 
 Use strict TypeScript with ES modules. Formatting is enforced by Prettier (`.prettierrc.json`): 4 spaces, single quotes, semicolons, trailing commas (`es5`), `printWidth: 80`.
@@ -88,6 +95,8 @@ Do not mark work as complete without reporting what was verified.
 
 ## Commit & Pull Request Guidelines
 
+Conventional Commits are required because `semantic-release` uses them to determine version bumps and release notes.
+
 Commits must follow Conventional Commits (validated by commitlint), e.g.:
 
 - `feat: add budget filter for imports`
@@ -98,7 +107,8 @@ PRs should include:
 
 - Clear description of intent and scope
 - Bullet list of changes
+- Notes on release impact, including any breaking changes
 - Testing evidence (commands run, manual scenarios)
 - Notes on breaking changes or config impacts
 
-If contributing upstream, follow `.github/PULL_REQUEST_TEMPLATE.md`.
+If contributing to this repository, follow `.github/PULL_REQUEST_TEMPLATE.md`.
