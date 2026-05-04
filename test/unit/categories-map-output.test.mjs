@@ -65,7 +65,7 @@ test('section formatters show None for empty sections', () => {
     assert.match(nextActions, /Next Actions:/);
     assert.match(
         nextActions,
-        /Mapping is complete; ready for import with `actual-monmon import`\./
+        /Mapping is complete; ready for import with `actual-mmi import`\./
     );
 });
 
@@ -173,7 +173,7 @@ test('next actions shows complete guidance when no invalid or unresolved remain'
     const lines = formatNextActionsSection(report, 120).join('\n');
     assert.match(
         lines,
-        /Mapping is complete; ready for import with `actual-monmon import`\./
+        /Mapping is complete; ready for import with `actual-mmi import`\./
     );
     assert.doesNotMatch(lines, /Fix invalid category refs in config first/);
     assert.doesNotMatch(lines, /Review unresolved categories/);

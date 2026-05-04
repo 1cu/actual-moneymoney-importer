@@ -1,14 +1,16 @@
 <p align="center">
     <img src="./assets/actual-moneymoney.png" height="150">
 </p>
-<h1 align="center">Actual-MoneyMoney (Fork)</h1>
+<h1 align="center">Actual-MoneyMoney Importer</h1>
 <p align="center">
-A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney</a> transactions into <a href="https://actualbudget.org">Actual Budget</a>, written in TypeScript
+An independently maintained fork of <a href="https://github.com/NikxDa/actual-moneymoney">actual-moneymoney</a> for importing <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney</a> transactions into <a href="https://actualbudget.org">Actual Budget</a>, written in TypeScript
 <p>
 
-> **This is a fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney) with additional features and improvements.**
+> **This repository is an independently maintained fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney).**
 >
-> **Upstream repository**: [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney)
+> It preserves the upstream history, continues development separately, and publishes its own releases and npm package.
+
+**Upstream project**: [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney)
 
 ## Fork features at a glance
 
@@ -25,7 +27,7 @@ A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney<
 - 💬 **Comment import** – carry MoneyMoney transaction comments into Actual notes (with configurable prefix)
 
 <p align="center">
-<img src="https://badgers.space/github/checks/NikxDa/actual-moneymoney/main">
+<img src="https://badgers.space/github/checks/1cu/actual-moneymoney-importer/main">
 </p>
 
 ## Installation
@@ -33,16 +35,16 @@ A CLI to import <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney<
 Install with NPM:
 
 ```bash
-npm i -g actual-moneymoney
+npm i -g actual-moneymoney-importer
 ```
 
-The application will be accessible as a CLI tool with the name `actual-monmon`.
+The application will be accessible as a CLI tool with the name `actual-mmi`.
 
 ## Configuration
 
-Details on parameters are available by running `actual-monmon --help`.
+Details on parameters are available by running `actual-mmi --help`.
 
-The application needs to be configured with a TOML document in order to function. You can validate the configuration details by running `actual-monmon validate`. Running this for the first time will create an example configuration and print the path. You can pass a custom configuration with the `--config` parameter.
+The application needs to be configured with a TOML document in order to function. You can validate the configuration details by running `actual-mmi validate`. Running this for the first time will create an example configuration and print the path. You can pass a custom configuration with the `--config` parameter.
 
 A configuration document looks like this:
 
@@ -87,7 +89,7 @@ password = ""
 
 # Optional category mapping
 [actualServers.budgets.categoryMapping]
-# Tool-managed block: running `actual-monmon categories map --write-config`
+# Tool-managed block: running `actual-mmi categories map --write-config`
 # rewrites this section with annotated comments for readability.
 # The key is the MoneyMoney category UUID and the value is the Actual category id.
 "<monMonCategoryUuid>" = "<actualCategoryId>"
@@ -139,11 +141,11 @@ You can override this at runtime with `--category-sync-on-existing` or `-C`.
 - **Budget configurations** describe the budget files per server. The sync ID is in Actual → Settings → Advanced. If the budget is E2E encrypted, provide the password.
 - **Account mapping** maps MoneyMoney accounts to Actual accounts. MoneyMoney accounts can be identified by UUID (AppleScript API only), account number (IBAN, etc.), or name (in that order). Actual accounts by UUID (from URL) or name. If names duplicate, the first match is used.
 
-Once configured, run `actual-monmon validate` to verify the format.
+Once configured, run `actual-mmi validate` to verify the format.
 
 ## Usage
 
-Once configured, importing is as simple as running `actual-monmon import`. Make sure that the Actual servers are running and that MoneyMoney is unlocked. By default, the importer will import 1 month worth of transactions. You can override this by passing the `--from` property, like so: `actual-monmon import --from=2024-01-01`. Similarly, a `--to` property is available in case you want to import a specific date range.
+Once configured, importing is as simple as running `actual-mmi import`. Make sure that the Actual servers are running and that MoneyMoney is unlocked. By default, the importer will import 1 month worth of transactions. You can override this by passing the `--from` property, like so: `actual-mmi import --from=2024-01-01`. Similarly, a `--to` property is available in case you want to import a specific date range.
 
 The importer will not track previous imports, so if you wait more than one month between imports, you might need to manually specify the last import date. Running the importer twice in the same month is no problem, as duplicate transactions will automatically be detected and skipped.
 
@@ -151,14 +153,14 @@ Imports can be scoped with `--server`, `--budget`, and `--account` options. Each
 
 ```bash
 # Import specific accounts
-actual-monmon import -a "DKB Giro" -a "DKB Visa"
-actual-monmon import -a "DKB Giro,DKB Visa"
+actual-mmi import -a "DKB Giro" -a "DKB Visa"
+actual-mmi import -a "DKB Giro,DKB Visa"
 
 # Restrict to server and budget
-actual-monmon import -s myServerA -b HomeBudget
+actual-mmi import -s myServerA -b HomeBudget
 
 # Combine filters
-actual-monmon import -s myServerA -b HomeBudget -a "Groceries,Utilities"
+actual-mmi import -s myServerA -b HomeBudget -a "Groceries,Utilities"
 ```
 
 ### Dry run
@@ -166,7 +168,7 @@ actual-monmon import -s myServerA -b HomeBudget -a "Groceries,Utilities"
 Use `--dry-run` to preview what would be imported without making any changes:
 
 ```bash
-actual-monmon import --dry-run
+actual-mmi import --dry-run
 ```
 
 ### Category Sync
@@ -184,15 +186,15 @@ Category sync maps MoneyMoney categories to Actual categories during import. Ena
 
 ```bash
 # Override policy for this run
-actual-monmon import -C=new      # Only new transactions
-actual-monmon import -C=always   # Overwrite existing categories
+actual-mmi import -C=new      # Only new transactions
+actual-mmi import -C=always   # Overwrite existing categories
 ```
 
 Category mapping can be inspected and suggested with:
 
 ```bash
-actual-monmon categories map -s http://localhost:5006 -b <syncId>
-actual-monmon categories map -s http://localhost:5006 -b <syncId> --write-config
+actual-mmi categories map -s http://localhost:5006 -b <syncId>
+actual-mmi categories map -s http://localhost:5006 -b <syncId> --write-config
 ```
 
 The audit report includes these sections:
@@ -247,6 +249,6 @@ If you notice any bugs or issues, please file an issue.
 
 ## Maintenance Notes
 
-### Fork prereleases
+### Releases
 
-This fork keeps the existing `semantic-release` flow for prereleases on the `develop` branch. The release workflow is intentionally unchanged because the fork only needs automated prereleases and does not publish to npm.
+Stable releases are cut from `main` and published here on GitHub and npm under the `actual-moneymoney-importer` package name.

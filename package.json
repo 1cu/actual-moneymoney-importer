@@ -1,8 +1,7 @@
 {
-    "name": "actual-moneymoney",
+    "name": "actual-moneymoney-importer",
     "version": "2.20.0-fork.1",
     "description": "An importer for syncing MoneyMoney accounts and transactions to Actual.",
-    "exports": "./index.js",
     "scripts": {
         "build": "npx tsc",
         "start": "node dist/index.js",
@@ -24,13 +23,21 @@
         "importer"
     ],
     "bin": {
-        "actual-monmon": "./dist/index.js"
+        "actual-mmi": "./dist/index.js"
     },
     "files": [
         "dist"
     ],
-    "author": "NikxDa",
+    "author": "1cu",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/1cu/actual-moneymoney-importer.git"
+    },
+    "homepage": "https://github.com/1cu/actual-moneymoney-importer#readme",
+    "bugs": {
+        "url": "https://github.com/1cu/actual-moneymoney-importer/issues"
+    },
     "dependencies": {
         "@actual-app/api": "^26.5.0",
         "chalk": "^5.6.2",

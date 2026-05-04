@@ -23,7 +23,7 @@ test('shows help and exits successfully when no command is provided', () => {
     const result = runCli();
 
     assert.equal(result.status, 0);
-    assert.match(result.output, /actual-monmon <command>/i);
+    assert.match(result.output, /actual-mmi <command>/i);
     assert.match(result.output, /Commands:/);
 });
 
@@ -32,7 +32,7 @@ test('fails with help for unknown command', () => {
 
     assert.equal(result.status, 1);
     assert.match(result.output, /Unknown command/i);
-    assert.match(result.output, /actual-monmon <command>/i);
+    assert.match(result.output, /actual-mmi <command>/i);
 });
 
 test('fails with help for unknown option on command', () => {

@@ -429,14 +429,14 @@ export const formatNextActionsSection = (
     maxWidth: number
 ) => {
     let action =
-        'Mapping is complete; ready for import with `actual-monmon import`.';
+        'Mapping is complete; ready for import with `actual-mmi import`.';
 
     if (report.invalidMappings.length > 0) {
         action =
-            'Fix invalid category refs in config first, then rerun `actual-monmon categories map`.';
+            'Fix invalid category refs in config first, then rerun `actual-mmi categories map`.';
     } else if (report.unresolvedMoneyMoneyCategories.length > 0) {
         action =
-            'Review unresolved categories, then run `actual-monmon categories map --write-config` to apply safe mappings.';
+            'Review unresolved categories, then run `actual-mmi categories map --write-config` to apply safe mappings.';
     }
 
     return formatSectionWithRows({
@@ -525,7 +525,7 @@ export default {
         return yargs.command(mapSubcommand).strictCommands();
     },
     handler: () => {
-        console.log('Use `actual-monmon categories map --help` for options.');
+        console.log('Use `actual-mmi categories map --help` for options.');
         process.exit(0);
     },
 } as CommandModule;

@@ -633,7 +633,7 @@ class Importer {
 
             if (shouldEmitMappingConflictGuidance(runMetrics)) {
                 this.logger.warn(
-                    `Category conflicts occurred while some categories are unmapped. Review with 'actual-monmon categories map' if needed.`
+                    `Category conflicts occurred while some categories are unmapped. Review with 'actual-mmi categories map' if needed.`
                 );
             }
             this.emitImportRunSummary(runMetrics, isDryRun);

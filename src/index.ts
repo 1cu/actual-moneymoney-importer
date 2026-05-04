@@ -16,7 +16,7 @@ try {
 }
 
 yargs(hideBin(process.argv))
-    .scriptName('actual-monmon')
+    .scriptName('actual-mmi')
     .usage('$0 <command> [options]')
     .option('config', {
         alias: 'c',

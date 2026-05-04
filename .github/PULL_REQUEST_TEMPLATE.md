@@ -1,6 +1,6 @@
-# Upstream Pull Request
+# Pull Request
 
-> **Note**: This template is for contributing back to the upstream repository [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney).
+> **Note**: This template is for changes to this independently maintained fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney).
 
 ## Description
 
@@ -23,8 +23,8 @@ Brief description of the changes and why they're needed.
 - [ ] Code follows project conventions
 - [ ] Documentation updated if needed
 - [ ] No breaking changes (or clearly documented)
-- [ ] Ready for upstream review
+- [ ] Ready for review
 
 ## Additional Notes
 
-Any additional context or considerations for the upstream maintainer.
+Any additional context or considerations for the reviewer or maintainer.
