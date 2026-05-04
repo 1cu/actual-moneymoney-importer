@@ -8,7 +8,7 @@
       "@semantic-release/github",
       {
         "assets": [],
-        "successComment": false
+        "successCommentCondition": false
       }
     ]
   ]
