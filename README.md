@@ -3,34 +3,36 @@
 </p>
 <h1 align="center">Actual-MoneyMoney Importer</h1>
 <p align="center">
-An independently maintained fork of <a href="https://github.com/NikxDa/actual-moneymoney">actual-moneymoney</a> for importing <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney</a> transactions into <a href="https://actualbudget.org">Actual Budget</a>, written in TypeScript
-<p>
+    A TypeScript CLI for importing <a href="https://moneymoney-app.com" target="_blanK">MoneyMoney</a> transactions into <a href="https://actualbudget.org">Actual Budget</a>.
+</p>
 
-> **This repository is an independently maintained fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney).**
->
-> It preserves the upstream history, continues development separately, and publishes its own releases and npm package.
+<p align="center">
+    <a href="https://github.com/1cu/actual-moneymoney-importer/actions/workflows/ci.yml">
+        <img alt="CI" src="https://github.com/1cu/actual-moneymoney-importer/actions/workflows/ci.yml/badge.svg?branch=main">
+    </a>
+    <a href="https://www.npmjs.com/package/actual-moneymoney-importer">
+        <img alt="npm version" src="https://img.shields.io/npm/v/actual-moneymoney-importer">
+    </a>
+</p>
 
-**Upstream project**: [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney)
+> Originally based on [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney), `actual-moneymoney-importer` is maintained independently with added category sync, payee transformation, and richer import controls.
 
-## Fork features at a glance
-
-**New in this fork:**
+## Highlights
 
 - 🏷️ **Category sync** – map MoneyMoney categories to Actual automatically, with backfill and conflict resolution
 - 🗺️ **`categories map` CLI** – audit, plan, and write your category mapping from the terminal
 - 🔬 **Scoped imports** – filter by server, budget, or account with repeatable `-s`/`-b`/`-a` flags
 - ⚠️ **Auto-rule override detection** – get warned when Actual's rules silently change a synced category
-
-**Enhanced from upstream:**
-
 - 🤖 **AI payee transformation** – configurable prompt, latest OpenAI models (`gpt-5-nano` default), temperature, and error-handling policy
 - 💬 **Comment import** – carry MoneyMoney transaction comments into Actual notes (with configurable prefix)
 
-<p align="center">
-<img src="https://badgers.space/github/checks/1cu/actual-moneymoney-importer/main">
-</p>
-
 ## Installation
+
+### Requirements
+
+- macOS with [MoneyMoney](https://moneymoney-app.com) installed
+- An [Actual Budget](https://actualbudget.org) server and budget
+- Node.js 25+
 
 Install with NPM:
 
@@ -38,13 +40,22 @@ Install with NPM:
 npm i -g actual-moneymoney-importer
 ```
 
-The application will be accessible as a CLI tool with the name `actual-mmi`.
+The installed CLI command is `actual-mmi`.
+
+### Quick Start
+
+1. Install the CLI.
+2. Run `actual-mmi validate` to create an example config and print its path.
+3. Fill in your Actual server, budget sync ID, and account mapping.
+4. Run `actual-mmi import --dry-run` to preview the import before making changes.
 
 ## Configuration
 
 Details on parameters are available by running `actual-mmi --help`.
 
-The application needs to be configured with a TOML document in order to function. You can validate the configuration details by running `actual-mmi validate`. Running this for the first time will create an example configuration and print the path. You can pass a custom configuration with the `--config` parameter.
+The application uses a TOML configuration file.
+Run `actual-mmi validate` to validate the configuration and, on first run, generate an example file and print its path.
+You can pass a custom configuration file with `--config`.
 
 A configuration document looks like this:
 
@@ -145,7 +156,7 @@ Once configured, run `actual-mmi validate` to verify the format.
 
 ## Usage
 
-Once configured, importing is as simple as running `actual-mmi import`. Make sure that the Actual servers are running and that MoneyMoney is unlocked. By default, the importer will import 1 month worth of transactions. You can override this by passing the `--from` property, like so: `actual-mmi import --from=2024-01-01`. Similarly, a `--to` property is available in case you want to import a specific date range.
+Once configured, importing is as simple as running `actual-mmi import`. Make sure the Actual servers are running and MoneyMoney is unlocked. By default, the importer processes the last month of transactions. Use `--from=YYYY-MM-DD` and optionally `--to=YYYY-MM-DD` to import a specific date range.
 
 The importer will not track previous imports, so if you wait more than one month between imports, you might need to manually specify the last import date. Running the importer twice in the same month is no problem, as duplicate transactions will automatically be detected and skipped.
 
@@ -217,11 +228,11 @@ With `--write-config`, the tool rewrites your `[actualServers.budgets.categoryMa
 
 ## Advanced Configuration
 
-The following configuration options can optionally be added
+The following configuration options are optional.
 
 ### Ignore patterns
 
-Ignore patterns allow you to specify payee names, comments, or purposes which should be ignored. _Note:_ Currently, the strings are treated as is, meaning they are case-sensitive, and will be checked for inclusion, not exact matches.
+Ignore patterns let you specify payee names, comments, or purposes that should be ignored. Patterns are case-sensitive substring matches, not exact matches.
 
 ```toml
 [import.ignorePatterns]
@@ -230,7 +241,7 @@ payeePatterns = []
 purposePatterns = []
 ```
 
-The above configuration would ignore all transactions that have a comment containing the string `[actual-ignore]`.
+The above configuration ignores any transaction whose comment contains `[actual-ignore]`.
 
 ### Earliest import date
 
