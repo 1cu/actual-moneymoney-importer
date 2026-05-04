@@ -1,6 +1,6 @@
 {
     "name": "actual-moneymoney-importer",
-    "version": "2.20.0-fork.1",
+    "version": "2.20.0",
     "description": "An importer for syncing MoneyMoney accounts and transactions to Actual.",
     "scripts": {
         "build": "npx tsc",

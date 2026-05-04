@@ -15,14 +15,14 @@
     </a>
 </p>
 
-> Originally based on [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney), `actual-moneymoney-importer` is maintained independently with added category sync, payee transformation, and richer import controls.
+> `actual-moneymoney-importer` started as a fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney) and is now actively maintained and published with added category sync, payee transformation, and richer import controls.
 
 ## Highlights
 
 - 🏷️ **Category sync** – map MoneyMoney categories to Actual automatically, with backfill and conflict resolution
 - 🗺️ **`categories map` CLI** – audit, plan, and write your category mapping from the terminal
-- 🔬 **Scoped imports** – filter by server, budget, or account with repeatable `-s`/`-b`/`-a` flags
 - ⚠️ **Auto-rule override detection** – get warned when Actual's rules silently change a synced category
+- 🔬 **Scoped imports** – filter by server, budget, or account with repeatable `-s`/`-b`/`-a` flags
 - 🤖 **AI payee transformation** – configurable prompt, latest OpenAI models (`gpt-5-nano` default), temperature, and error-handling policy
 - 💬 **Comment import** – carry MoneyMoney transaction comments into Actual notes (with configurable prefix)
 

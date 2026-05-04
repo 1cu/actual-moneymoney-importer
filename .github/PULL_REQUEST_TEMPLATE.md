@@ -1,6 +1,6 @@
 # Pull Request
 
-> **Note**: This template is for changes to this independently maintained fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney).
+> **Note**: This template is for changes to `actual-moneymoney-importer`.
 
 ## Description
 
@@ -22,6 +22,7 @@ Brief description of the changes and why they're needed.
 
 - [ ] Code follows project conventions
 - [ ] Documentation updated if needed
+- [ ] Release impact / breaking changes documented
 - [ ] No breaking changes (or clearly documented)
 - [ ] Ready for review
 
