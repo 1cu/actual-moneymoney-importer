@@ -2,6 +2,7 @@ import toml from 'toml';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
 import { configSchema, getConfigFile } from '../utils/config.js';
 import fs from 'fs/promises';
+import path from 'path';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import { z } from 'zod';
 import { EXAMPLE_CONFIG } from '../utils/shared.js';
@@ -23,7 +24,8 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
 
     if (!configFileExists) {
         // Create path to file and file itself if it doesn't exist
-        await fs.writeFile(configPath, EXAMPLE_CONFIG);
+        await fs.mkdir(path.dirname(configPath), { recursive: true });
+        await fs.writeFile(configPath, EXAMPLE_CONFIG, 'utf8');
 
         logger.warn('Configuration file not found.');
         logger.info(
