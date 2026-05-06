@@ -32,11 +32,8 @@ jobs:
             - name: Lint with Prettier
               run: npm run lint:prettier
 
-            - name: Build
-              run: npm run build
-
-            - name: Test CLI
-              run: npm run test:cli
+            - name: Build & Test
+              run: npm test
 
             - name: Semantic Release
               run: npx semantic-release
