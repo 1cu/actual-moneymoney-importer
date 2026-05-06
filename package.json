@@ -9,8 +9,8 @@
         "test:cli": "npm run build && node --test \"test/cli/**/*.test.mjs\"",
         "test:unit": "npm run build && node --test \"test/unit/**/*.test.mjs\"",
         "lint:eslint": "eslint src",
-        "lint:prettier": "prettier --check 'src/**/*.ts'",
-        "lint:fix": "eslint src --fix && prettier --write 'src/**/*.ts'",
+        "lint:prettier": "prettier --check 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' 'package.json'",
+        "lint:fix": "eslint src --fix && prettier --write 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' 'package.json'",
         "prepare": "husky"
     },
     "type": "module",
@@ -72,6 +72,18 @@
     "lint-staged": {
         "src/**/*.ts": [
             "eslint --fix",
+            "prettier --write"
+        ],
+        "test/**/*.mjs": [
+            "prettier --write"
+        ],
+        "*.md": [
+            "prettier --write"
+        ],
+        ".github/**/*.md": [
+            "prettier --write"
+        ],
+        "package.json": [
             "prettier --write"
         ]
     }

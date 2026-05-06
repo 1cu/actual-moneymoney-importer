@@ -98,14 +98,18 @@ syncId = "budget-a"
 "A" = "B"
 `;
 
-    const result = replaceCategoryMappingInConfig(withFollowingSection, 'budget-a', [
-        makeEntry({
-            sourceUuid: 'new-mm',
-            targetId: 'new-actual',
-            sourcePath: 'X > Y',
-            targetPath: 'Z > Q',
-        }),
-    ]);
+    const result = replaceCategoryMappingInConfig(
+        withFollowingSection,
+        'budget-a',
+        [
+            makeEntry({
+                sourceUuid: 'new-mm',
+                targetId: 'new-actual',
+                sourcePath: 'X > Y',
+                targetPath: 'Z > Q',
+            }),
+        ]
+    );
 
     assert.equal(result.ok, true);
     if (!result.ok) {
@@ -146,14 +150,18 @@ test('replaceCategoryMappingInConfig updates only target budget in multi-budget 
 });
 
 test('replaceCategoryMappingInConfig fails safely for missing syncId', () => {
-    const result = replaceCategoryMappingInConfig(BASE_CONFIG, 'does-not-exist', [
-        makeEntry({
-            sourceUuid: 'mm-a',
-            targetId: 'actual-a',
-            sourcePath: 'M > A',
-            targetPath: 'T > A',
-        }),
-    ]);
+    const result = replaceCategoryMappingInConfig(
+        BASE_CONFIG,
+        'does-not-exist',
+        [
+            makeEntry({
+                sourceUuid: 'mm-a',
+                targetId: 'actual-a',
+                sourcePath: 'M > A',
+                targetPath: 'T > A',
+            }),
+        ]
+    );
 
     assert.equal(result.ok, false);
     if (result.ok) {

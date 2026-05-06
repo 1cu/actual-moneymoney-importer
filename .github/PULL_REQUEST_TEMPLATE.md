@@ -10,14 +10,22 @@ Brief description of the changes and why they're needed.
 
 ## Testing
 
-- [ ] Tested with existing functionality
-- [ ] Added new tests if applicable
-- [ ] Verified no regressions
+- [ ] Commands run (one or more of the following, as applicable):
+    - `npm test`
+    - `npm run test:cli`
+    - `npm run test:unit`
+    - `npm run lint:eslint`
+    - `npm run lint:prettier`
+- [ ] Manual verification (if applicable)
+
+## Release / Config Impact
+
+- [ ] None
+- [ ] Describe any release, config, or user-visible impact
 
 ## Checklist
 
 - [ ] Code follows project conventions
 - [ ] Documentation updated if needed
-- [ ] Release impact / breaking changes documented
 - [ ] No breaking changes (or clearly documented)
 - [ ] Ready for review

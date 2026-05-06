@@ -43,7 +43,11 @@ test('loadFromData resolves canonical mapping by UUID', () => {
         },
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
 
     map.loadFromData(
         [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
@@ -78,7 +82,11 @@ test('uncategorized default category is excluded from unmapped requirements', ()
         categoryMapping: {},
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
 
     map.loadFromData(
         [
@@ -108,7 +116,11 @@ test('emoji-prefixed Actual category name is normalized for suggestions', () => 
         categoryMapping: {},
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
 
     map.loadFromData(
         [makeMonMonCategory({ uuid: 'mm-tank', name: 'Tanken' })],
@@ -144,7 +156,11 @@ test('ambiguous name matches do not produce suggestions', () => {
         categoryMapping: {},
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
 
     map.loadFromData(
         [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
@@ -189,7 +205,11 @@ test('getCanonicalMapping excludes suggestions when includeSuggestions is false'
         categoryMapping: {},
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
 
     map.loadFromData(
         [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
@@ -232,7 +252,11 @@ test('getCanonicalMappingEntries exposes origin and optional reason', () => {
         },
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
 
     map.loadFromData(
         [
@@ -262,7 +286,9 @@ test('getCanonicalMappingEntries exposes origin and optional reason', () => {
         ]
     );
 
-    const entries = map.getCanonicalMappingEntries({ includeSuggestions: true });
+    const entries = map.getCanonicalMappingEntries({
+        includeSuggestions: true,
+    });
     assert.equal(entries.length, 2);
     assert.equal(entries[0]?.origin, 'configured');
     assert.equal(entries[1]?.origin, 'suggested');
@@ -281,7 +307,11 @@ test('getCanonicalMappingEntries sorts by sourcePath then sourceUuid', () => {
         },
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
     map.loadFromData(
         [
             makeMonMonCategory({ uuid: 'mm-a', name: 'Same' }),
@@ -328,7 +358,11 @@ test('report exposes planning fields and omits legacy report keys', () => {
         categoryMapping: {},
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
     map.loadFromData(
         [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
         [
@@ -371,7 +405,11 @@ test('unusedActualCategories excludes configured and suggested target categories
         },
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
     map.loadFromData(
         [
             makeMonMonCategory({ uuid: 'mm-food', name: 'Food' }),
@@ -421,7 +459,11 @@ test('planningWarnings include exact messages when unresolved or unused categori
         categoryMapping: {},
     };
 
-    const map = new CategoryMap(budgetConfig, makeActualApiStub(), makeLogger());
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
     map.loadFromData(
         [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
         [

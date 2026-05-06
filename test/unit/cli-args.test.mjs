@@ -9,7 +9,11 @@ test('toRefList returns undefined for empty input', () => {
 
 test('toRefList splits comma-separated and trims values', () => {
     assert.deepEqual(toRefList(' one, two ,three '), ['one', 'two', 'three']);
-    assert.deepEqual(toRefList(['one,two', ' three ']), ['one', 'two', 'three']);
+    assert.deepEqual(toRefList(['one,two', ' three ']), [
+        'one',
+        'two',
+        'three',
+    ]);
 });
 
 test('includesRef defaults to true for undefined refs', () => {
