@@ -20,13 +20,19 @@ type GetUserFilesResponse = {
     data: Array<UserFile>;
 };
 
+const ACTUAL_TRANSACTION_HISTORY_START_DATE = format(
+    new Date(2000, 0, 1),
+    'yyyy-MM-dd'
+);
+
 class ActualApi {
     protected isInitialized = false;
     // private _api: typeof actual | null = null;
 
     constructor(
         private serverConfig: ActualServerConfig,
-        private logger: Logger
+        private logger: Logger,
+        private actualApi = actual
     ) {}
 
     async init() {
@@ -116,11 +122,11 @@ class ActualApi {
     }
 
     getTransactions(accountId: string) {
-        const startDate = format(new Date(2000, 1, 1), 'yyyy-MM-dd');
+        const startDate = ACTUAL_TRANSACTION_HISTORY_START_DATE;
         const endDate = format(new Date(), 'yyyy-MM-dd');
 
         return this.withLogControl(() =>
-            actual.getTransactions(accountId, startDate, endDate)
+            this.actualApi.getTransactions(accountId, startDate, endDate)
         );
     }
 
