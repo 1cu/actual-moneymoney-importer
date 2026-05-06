@@ -1,7 +1,3 @@
-# Pull Request
-
-> **Note**: This template is for changes to `actual-moneymoney-importer`.
-
 ## Description
 
 Brief description of the changes and why they're needed.
@@ -25,7 +21,3 @@ Brief description of the changes and why they're needed.
 - [ ] Release impact / breaking changes documented
 - [ ] No breaking changes (or clearly documented)
 - [ ] Ready for review
-
-## Additional Notes
-
-Any additional context or considerations for the reviewer or maintainer.
