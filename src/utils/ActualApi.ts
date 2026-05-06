@@ -32,7 +32,8 @@ class ActualApi {
     constructor(
         private serverConfig: ActualServerConfig,
         private logger: Logger,
-        private actualApi = actual
+        private actualApi = actual,
+        private fetchImpl = fetch
     ) {}
 
     async init() {
@@ -191,7 +192,9 @@ class ActualApi {
     }
 
     private async getUserToken() {
-        const response = await fetch(
+        const responseData = await this.fetchJson<{
+            data: { token: string | null };
+        }>(
             `${this.serverConfig.serverUrl}/account/login`,
             {
                 method: 'POST',
@@ -201,12 +204,9 @@ class ActualApi {
                 body: JSON.stringify({
                     password: this.serverConfig.serverPassword,
                 }),
-            }
+            },
+            'Could not get user token'
         );
-
-        const responseData = (await response.json()) as {
-            data: { token: string | null };
-        };
 
         const userToken = responseData.data?.token;
 
@@ -222,18 +222,49 @@ class ActualApi {
     async getUserFiles() {
         const userToken = await this.getUserToken();
 
-        const response = await fetch(
+        const responseData = await this.fetchJson<GetUserFilesResponse>(
             `${this.serverConfig.serverUrl}/sync/list-user-files`,
             {
                 headers: {
                     'X-Actual-Token': userToken,
                 },
-            }
+            },
+            'Could not get user files'
         );
 
-        const responseData = (await response.json()) as GetUserFilesResponse;
-
         return responseData.data.filter((f) => f.deleted === 0);
+    }
+
+    private async fetchJson<T>(
+        url: string,
+        init: Parameters<typeof fetch>[1],
+        context: string
+    ): Promise<T> {
+        const response = await this.fetchImpl(url, init);
+
+        if (!response.ok) {
+            throw new Error(
+                `${context}: HTTP ${response.status} ${response.statusText}.`
+            );
+        }
+
+        try {
+            return (await response.json()) as T;
+        } catch (error) {
+            if (
+                error instanceof SyntaxError ||
+                (typeof error === 'object' &&
+                    error !== null &&
+                    'name' in error &&
+                    error.name === 'SyntaxError')
+            ) {
+                throw new Error(`${context}: Server returned invalid JSON.`, {
+                    cause: error,
+                });
+            }
+
+            throw error;
+        }
     }
 
     private async withLogControl<T>(callback: () => T | Promise<T>) {
