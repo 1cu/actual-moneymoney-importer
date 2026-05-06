@@ -58,7 +58,10 @@ test('renderTextTable respects truncation priority', () => {
     });
 
     const table = lines.join('\n');
-    assert.equal(table.includes('This path should truncate before the id does'), false);
+    assert.equal(
+        table.includes('This path should truncate before the id does'),
+        false
+    );
     assert.equal(table.includes('id-1234567890'), true);
 });
 

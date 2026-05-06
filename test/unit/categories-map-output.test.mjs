@@ -115,15 +115,30 @@ test('formatters include expected headers and rows', () => {
     const unresolvedLines = formatUnresolvedMoneyMoneySection(report, 120);
     const unusedLines = formatUnusedActualSection(report, 120);
 
-    assert.equal(configuredLines.some((line) => line.includes('╔')), true);
+    assert.equal(
+        configuredLines.some((line) => line.includes('╔')),
+        true
+    );
     assert.equal(
         configuredLines.some((line) => line.includes('MoneyMoney Path')),
         true
     );
-    assert.equal(invalidLines.some((line) => line.includes('Reason')), true);
-    assert.equal(suggestionsLines.some((line) => line.includes('Actual Path')), true);
-    assert.equal(unresolvedLines.some((line) => line.includes('UUID')), true);
-    assert.equal(unusedLines.some((line) => line.includes('ID')), true);
+    assert.equal(
+        invalidLines.some((line) => line.includes('Reason')),
+        true
+    );
+    assert.equal(
+        suggestionsLines.some((line) => line.includes('Actual Path')),
+        true
+    );
+    assert.equal(
+        unresolvedLines.some((line) => line.includes('UUID')),
+        true
+    );
+    assert.equal(
+        unusedLines.some((line) => line.includes('ID')),
+        true
+    );
 });
 
 test('table report includes sections in expected order', () => {
@@ -165,7 +180,9 @@ test('unsafe write failures return a non-zero exit code', () => {
 
     assert.equal(exitCode, 1);
     assert.deepEqual(calls.error, [
-        ['Could not safely write category mapping to config: no budget blocks found.'],
+        [
+            'Could not safely write category mapping to config: no budget blocks found.',
+        ],
     ]);
     assert.equal(calls.info.length, 1);
     assert.deepEqual(calls.info[0][1], [
@@ -176,7 +193,9 @@ test('unsafe write failures return a non-zero exit code', () => {
 
 test('next actions prioritizes invalid mappings over unresolved categories', () => {
     const report = makeReport({
-        invalidMappings: [{ sourceRef: 'a', targetRef: 'b', reason: 'invalid' }],
+        invalidMappings: [
+            { sourceRef: 'a', targetRef: 'b', reason: 'invalid' },
+        ],
         unresolvedMoneyMoneyCategories: [{ uuid: 'u', path: 'P > Q' }],
     });
 

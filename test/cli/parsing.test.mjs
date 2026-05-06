@@ -84,20 +84,13 @@ test('shows short aliases for root and import options in help', () => {
     assert.match(result.output, /-a,\s*--account/i);
     assert.match(result.output, /-s,\s*--server/i);
     assert.match(result.output, /-b,\s*--budget/i);
-    assert.match(
-        result.output,
-        /-C,\s*--category-sync-on-existing/i
-    );
+    assert.match(result.output, /-C,\s*--category-sync-on-existing/i);
     assert.match(result.output, /-f,\s*--from/i);
     assert.match(result.output, /-t,\s*--to/i);
 });
 
 test('fails for invalid category sync policy value', () => {
-    const result = runCli([
-        'import',
-        '--category-sync-on-existing',
-        'invalid',
-    ]);
+    const result = runCli(['import', '--category-sync-on-existing', 'invalid']);
 
     assert.equal(result.status, 1);
     assert.match(result.output, /Invalid values/i);

@@ -8,6 +8,8 @@ The project is a TypeScript CLI importer. Main source lives in `src/`:
 - `src/commands/`: command handlers (`import`, `validate`).
 - `src/utils/`: integration and domain logic (Actual API, importer flow, config, logging, mapping).
 - `src/types/`: local type declarations.
+- `test/cli/`: CLI integration tests for parsing, exit codes, and end-to-end flows.
+- `test/unit/`: focused unit tests for helpers, adapters, output formatting, and error handling.
 
 Build output is written to `dist/` (generated). Static assets are in `assets/`. CI and release automation are under `.github/workflows/`.
 
@@ -16,10 +18,12 @@ Build output is written to `dist/` (generated). Static assets are in `assets/`. 
 - `npm install` or `bun install`: install dependencies.
 - `npm run build`: compile TypeScript to `dist/` using `tsc`.
 - `npm run start`: run built CLI (`node dist/index.js`).
-- `npm run test` or `npm run test:cli`: run CLI integration tests.
+- `npm run test`: compile TypeScript and run the full automated suite (`test/cli` + `test/unit`).
+- `npm run test:cli`: compile TypeScript and run CLI integration tests.
+- `npm run test:unit`: compile TypeScript and run unit tests.
 - `npm run lint:eslint`: run ESLint on `src/`.
-- `npm run lint:prettier`: check formatting for `src/**/*.ts`.
-- `npm run lint:fix`: auto-fix lint and formatting issues.
+- `npm run lint:prettier`: check formatting for `src/**/*.ts`, `test/**/*.mjs`, `*.md`, `.github/**/*.md`, and `package.json`.
+- `npm run lint:fix`: auto-fix lint and formatting issues in the same file sets.
 
 Example local validation flow:
 
@@ -27,7 +31,7 @@ Example local validation flow:
 npm run lint:eslint
 npm run lint:prettier
 npm run build
-npm run test:cli
+npm run test
 ```
 
 ## Release & Publishing
@@ -50,14 +54,15 @@ Follow existing naming patterns:
 
 ## Testing Guidelines
 
-CLI parser behavior is covered by integration tests in `test/cli/`.
+CLI parser and end-to-end command behavior is covered by integration tests in `test/cli/`.
+Focused helpers, API wrappers, output formatters, and error handling belong in `test/unit/`.
 
 For behavior changes, run:
 
 1. `npm run build`
-2. `npm run test:cli`
-3. `actual-monmon validate` with a real config
-4. `actual-monmon import --from=YYYY-MM-DD` against a safe test budget/server when possible
+2. `npm run test` or the targeted subset(s) (`npm run test:cli` / `npm run test:unit`)
+3. `node dist/index.js validate` with a real config
+4. `node dist/index.js import --from=YYYY-MM-DD` against a safe test budget/server when possible
 
 Document manual verification steps in PR descriptions.
 
@@ -87,7 +92,7 @@ Do not block on minor stylistic ambiguity; follow existing repository convention
 
 Every non-trivial code change must include verification evidence:
 
-- automated tests (`npm run test:cli`) and/or
+- automated tests (`npm run test`, `npm run test:cli`, or `npm run test:unit`) and/or
 - lint/build results and
 - manual scenario checks for integrations that cannot be fully automated.
 

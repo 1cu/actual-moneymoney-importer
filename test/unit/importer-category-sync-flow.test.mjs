@@ -22,14 +22,14 @@ const makeLogger = () => {
             infos.push({ message, hints: toHintArray(hint) }),
         warn: (message, hint) =>
             warnings.push({ message, hints: toHintArray(hint) }),
-        error: () => { },
+        error: () => {},
     };
 };
 
 const makeImporter = ({
     mappingByUuid = {},
     policy = 'ask',
-    updateTransaction = async () => { },
+    updateTransaction = async () => {},
 } = {}) => {
     const logger = makeLogger();
     const actualApi = {
@@ -317,10 +317,7 @@ test('buildAccountTransactionBuckets warns for suspicious duplicate groups', () 
 
     assert.equal(logger.infos.length, 0);
     assert.equal(logger.warnings.length, 1);
-    assert.match(
-        logger.warnings[0]?.message ?? '',
-        /1 group\(s\) need review/
-    );
+    assert.match(logger.warnings[0]?.message ?? '', /1 group\(s\) need review/);
     assert.equal(logger.debugs.length, 1);
     assert.match(
         logger.debugs[0]?.hints[0] ?? '',
