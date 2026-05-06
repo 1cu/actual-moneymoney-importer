@@ -10,6 +10,7 @@ import {
     formatTomlReport,
     formatUnresolvedMoneyMoneySection,
     formatUnusedActualSection,
+    handleUnsafeWriteConfigFailure,
 } from '../../dist/commands/categories.command.js';
 
 const makeReport = ({
@@ -144,6 +145,33 @@ test('table report includes sections in expected order', () => {
     assert.ok(unusedIdx > unresolvedIdx);
     assert.ok(warningsIdx > unusedIdx);
     assert.ok(actionsIdx > warningsIdx);
+});
+
+test('unsafe write failures return a non-zero exit code', () => {
+    const calls = {
+        error: [],
+        info: [],
+    };
+    const logger = {
+        error: (...args) => calls.error.push(args),
+        info: (...args) => calls.info.push(args),
+    };
+
+    const exitCode = handleUnsafeWriteConfigFailure(
+        logger,
+        [],
+        'no budget blocks found.'
+    );
+
+    assert.equal(exitCode, 1);
+    assert.deepEqual(calls.error, [
+        ['Could not safely write category mapping to config: no budget blocks found.'],
+    ]);
+    assert.equal(calls.info.length, 1);
+    assert.deepEqual(calls.info[0][1], [
+        '[actualServers.budgets.categoryMapping]',
+        '# No mappings generated.',
+    ]);
 });
 
 test('next actions prioritizes invalid mappings over unresolved categories', () => {

@@ -43,6 +43,18 @@ const printFallbackSnippet = (
     );
 };
 
+export const handleUnsafeWriteConfigFailure = (
+    logger: Logger,
+    entries: CanonicalMappingEntry[],
+    reason: string
+) => {
+    logger.error(
+        `Could not safely write category mapping to config: ${reason}`
+    );
+    printFallbackSnippet(logger, entries);
+    return 1 as const;
+};
+
 const handleMapCommand = async (argv: ArgumentsCamelCase) => {
     const config = await getConfig(argv);
     const configPath = getConfigFile(argv);
@@ -143,11 +155,13 @@ const handleMapCommand = async (argv: ArgumentsCamelCase) => {
     const configText = await fs.readFile(configPath, 'utf8');
 
     if (getBudgetBlocks(configText).length === 0) {
-        logger.error(
-            `Could not safely write category mapping to config: no budget blocks found.`
+        process.exit(
+            handleUnsafeWriteConfigFailure(
+                logger,
+                report.canonicalMappingEntries,
+                'no budget blocks found.'
+            )
         );
-        printFallbackSnippet(logger, report.canonicalMappingEntries);
-        process.exit(0);
     }
 
     logger.warn(
@@ -161,11 +175,13 @@ const handleMapCommand = async (argv: ArgumentsCamelCase) => {
     );
 
     if (!writeResult.ok) {
-        logger.error(
-            `Could not safely write category mapping to config: ${writeResult.reason}`
+        process.exit(
+            handleUnsafeWriteConfigFailure(
+                logger,
+                report.canonicalMappingEntries,
+                writeResult.reason
+            )
         );
-        printFallbackSnippet(logger, report.canonicalMappingEntries);
-        process.exit(0);
     }
 
     const parsedAfterWrite = toml.parse(writeResult.content);
