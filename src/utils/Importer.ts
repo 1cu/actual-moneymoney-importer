@@ -1640,6 +1640,8 @@ class Importer {
         return targetTransactions.filter((transaction) => {
             const candidateImportedId =
                 this.getIdForMoneyMoneyTransaction(transaction);
+            const isTargetAccountMatch =
+                transaction.accountUuid === candidate.targetMonMonAccount.uuid;
             const hasMatchingPurpose =
                 !!candidate.transaction.purpose &&
                 !!transaction.purpose &&
@@ -1653,7 +1655,9 @@ class Importer {
             return (
                 candidateImportedId !== candidate.importedId &&
                 Math.round(transaction.amount * 100) === -sourceAmount &&
-                (hasMatchingPurpose || hasReciprocalAccountNumber) &&
+                (isTargetAccountMatch ||
+                    hasMatchingPurpose ||
+                    hasReciprocalAccountNumber) &&
                 Math.abs(
                     differenceInCalendarDays(
                         transaction.valueDate,

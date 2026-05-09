@@ -357,7 +357,7 @@ test('buildTransferPlan suppresses unique same-run counterpart and carries metad
     assert.equal(counterpart?.cleared, true);
 });
 
-test('buildTransferPlan does not suppress unrelated same-amount target transaction with different purpose', () => {
+test('buildTransferPlan suppresses same-run counterpart when source has hard target signal, even with different purpose', () => {
     const importer = makeImporter();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
@@ -418,10 +418,11 @@ test('buildTransferPlan does not suppress unrelated same-amount target transacti
 
     assert.equal(plan.seedByImportedId.size, 1);
     assert.equal(
-        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart,
-        undefined
+        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart
+            ?.importedId,
+        'mm-target-200'
     );
-    assert.deepEqual([...plan.suppressedImportedIds], []);
+    assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-200']);
 });
 
 test('buildTransferPlan skips ambiguous same-run counterpart matches', () => {
