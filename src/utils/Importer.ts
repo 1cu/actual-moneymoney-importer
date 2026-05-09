@@ -1,4 +1,4 @@
-import { format, subMonths } from 'date-fns';
+import { differenceInCalendarDays, format, subMonths } from 'date-fns';
 import chalk from 'chalk';
 import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
@@ -74,6 +74,33 @@ type DuplicateImportedIdGroup = {
     representativeTransaction: ReadTransaction;
     normalizedPayee: string;
     isLikelySplit: boolean;
+};
+type TransferPlan = {
+    seedByImportedId: Map<string, PlannedTransferSeed>;
+    suppressedImportedIds: Set<string>;
+};
+type PlannedTransferSeed = {
+    importedId: string;
+    transferPayeeId: string;
+    targetActualAccountId: string;
+    targetActualAccountName: string;
+    sameRunCounterpart?: PlannedTransferCounterpart;
+};
+type PlannedTransferCounterpart = {
+    importedId: string;
+    importedPayee: string;
+    date: string;
+    notes?: string;
+    cleared?: boolean;
+};
+type TransferPlanningCandidate = {
+    transaction: MonMonTransaction;
+    importedId: string;
+    sourceMonMonAccount: MonMonAccount;
+    sourceActualAccount: Account;
+    targetMonMonAccount: MonMonAccount;
+    targetActualAccount: Account;
+    transferPayeeId: string;
 };
 
 export const classifyCategoryUpdate = ({
@@ -336,11 +363,32 @@ class Importer {
             {} as Record<string, MonMonTransaction[]>
         );
 
-        const accountMapping = this.accountMap.getMap(accountRefs);
+        const transfersEnabled = this.config.import.transfers.enabled;
+        const fullAccountMapping = transfersEnabled
+            ? this.accountMap.getMap()
+            : undefined;
+        const accountMapping = accountRefs
+            ? this.accountMap.getMap(accountRefs)
+            : (fullAccountMapping ?? this.accountMap.getMap());
+        const existingActualTransactionsByAccountId = new Map<
+            string,
+            ReadTransaction[]
+        >();
+
+        for (const [, actualAccount] of fullAccountMapping ?? accountMapping) {
+            existingActualTransactionsByAccountId.set(
+                actualAccount.id,
+                await this.actualApi.getTransactions(actualAccount.id)
+            );
+        }
 
         let existingPayeeNames: string[] = [];
+        const shouldLoadPayeesForTransfers = transfersEnabled;
+        const existingPayees =
+            (this.payeeTransformer && !isDryRun) || shouldLoadPayeesForTransfers
+                ? await this.actualApi.getPayees()
+                : [];
         if (this.payeeTransformer && !isDryRun) {
-            const existingPayees = await this.actualApi.getPayees();
             existingPayeeNames = existingPayees
                 .filter(
                     (p: { name: string; transfer_acct?: string }) =>
@@ -353,8 +401,55 @@ class Importer {
             );
         }
 
-        const unmappedCategoryWarnings = new Set<string>();
+        const transferPayeeIdByAccountId = new Map(
+            existingPayees
+                .filter((payee) => payee.transfer_acct)
+                .map((payee) => [payee.transfer_acct as string, payee.id])
+        );
         const shouldSyncCategories = this.config.import.synchronizeCategories;
+
+        const accountStates = Array.from(accountMapping.entries()).map(
+            ([monMonAccount, actualAccount]) => {
+                const accountTransactions =
+                    monMonTransactionMap[monMonAccount.uuid] ?? [];
+                const existingActualTransactions =
+                    existingActualTransactionsByAccountId.get(
+                        actualAccount.id
+                    ) ?? [];
+                const { newMonMonTransactions, existingPairs } =
+                    this.buildAccountTransactionBuckets({
+                        monMonAccount,
+                        accountTransactions,
+                        existingActualTransactions,
+                        actualAccountName: actualAccount.name,
+                        shouldSyncCategories,
+                    });
+
+                return {
+                    monMonAccount,
+                    actualAccount,
+                    accountTransactions,
+                    existingActualTransactions,
+                    newMonMonTransactions,
+                    existingPairs,
+                };
+            }
+        );
+
+        const transferPlan = transfersEnabled
+            ? this.buildTransferPlan({
+                  fullAccountMapping: fullAccountMapping!,
+                  accountStates,
+                  monMonTransactionMap,
+                  existingActualTransactionsByAccountId,
+                  transferPayeeIdByAccountId,
+              })
+            : {
+                  seedByImportedId: new Map<string, PlannedTransferSeed>(),
+                  suppressedImportedIds: new Set<string>(),
+              };
+
+        const unmappedCategoryWarnings = new Set<string>();
         const runMetrics: ImportRunMetrics = {
             accountsScanned: 0,
             accountsWithImportActivity: 0,
@@ -375,30 +470,35 @@ class Importer {
         const promptState: PromptState = { mode: 'prompt' };
 
         try {
-            for (const [monMonAccount, actualAccount] of accountMapping) {
+            for (const {
+                monMonAccount,
+                actualAccount,
+                accountTransactions,
+                existingActualTransactions,
+                newMonMonTransactions,
+                existingPairs,
+            } of accountStates) {
                 runMetrics.accountsScanned++;
-                const accountTransactions =
-                    monMonTransactionMap[monMonAccount.uuid] ?? [];
-
-                const existingActualTransactions =
-                    await this.actualApi.getTransactions(actualAccount.id);
-                const { newMonMonTransactions, existingPairs } =
-                    this.buildAccountTransactionBuckets({
-                        monMonAccount,
-                        accountTransactions,
-                        existingActualTransactions,
-                        actualAccountName: actualAccount.name,
-                        shouldSyncCategories,
-                    });
 
                 const createTransactions: CreateTransaction[] = [];
                 // Maps imported_id → intended category ID (for auto-rule override detection).
                 const intendedCategoryByImportedId = new Map<string, string>();
                 for (const transaction of newMonMonTransactions) {
-                    const createTransaction =
-                        await this.convertToActualTransaction(transaction);
+                    const importedId =
+                        this.getIdForMoneyMoneyTransaction(transaction);
+                    if (transferPlan.suppressedImportedIds.has(importedId)) {
+                        continue;
+                    }
 
-                    if (shouldSyncCategories) {
+                    const plannedTransfer =
+                        transferPlan.seedByImportedId.get(importedId);
+                    const createTransaction =
+                        await this.convertToActualTransaction(
+                            transaction,
+                            plannedTransfer
+                        );
+
+                    if (shouldSyncCategories && !plannedTransfer) {
                         const categoryResolution =
                             this.categoryMap.getMappedActualCategoryId(
                                 transaction.categoryUuid
@@ -434,7 +534,15 @@ class Importer {
                     createTransactions.push(createTransaction);
                 }
 
-                if (existingActualTransactions.length === 0) {
+                const effectiveExistingActualTransactions =
+                    await this.getExistingTransactionsForStartBalanceCheck({
+                        actualAccountId: actualAccount.id,
+                        existingActualTransactions,
+                        transfersEnabled,
+                        isDryRun,
+                    });
+
+                if (effectiveExistingActualTransactions.length === 0) {
                     const startTransaction: CreateTransaction = {
                         date: format(
                             accountTransactions.length > 0
@@ -462,9 +570,9 @@ class Importer {
                     );
 
                     if (this.payeeTransformer && !isDryRun) {
-                        const transactionPayees = createTransactions.map(
-                            (t) => t.imported_payee as string
-                        );
+                        const transactionPayees = createTransactions
+                            .filter((t) => !t.payee)
+                            .map((t) => t.imported_payee as string);
                         const uniquePayees = [
                             ...new Set(transactionPayees),
                         ].filter((p) => p && p.trim());
@@ -481,6 +589,9 @@ class Importer {
 
                         if (transformedPayees !== null) {
                             createTransactions.forEach((t) => {
+                                if (t.payee) {
+                                    return;
+                                }
                                 t.payee_name =
                                     transformedPayees[
                                         t.imported_payee as string
@@ -504,11 +615,17 @@ class Importer {
                             );
 
                             createTransactions.forEach((t) => {
+                                if (t.payee) {
+                                    return;
+                                }
                                 t.payee_name = t.imported_payee ?? '';
                             });
                         }
                     } else {
                         createTransactions.forEach((t) => {
+                            if (t.payee) {
+                                return;
+                            }
                             t.payee_name = t.imported_payee ?? '';
                         });
                     }
@@ -548,15 +665,28 @@ class Importer {
                             ]
                         );
 
+                        const importedTransactions =
+                            result.added.length > 0 || result.updated.length > 0
+                                ? await this.actualApi.getTransactionsByIds(
+                                      actualAccount.id,
+                                      [...result.added, ...result.updated]
+                                  )
+                                : [];
+
+                        await this.applyTransferCounterpartUpdates({
+                            importedTransactions,
+                            transferPlan,
+                        });
+
                         if (
                             intendedCategoryByImportedId.size > 0 &&
                             result.added.length > 0
                         ) {
                             const overrideCount =
                                 await this.detectAndWarnAutoRuleOverrides({
-                                    actualAccountId: actualAccount.id,
                                     actualAccountName: actualAccount.name,
                                     addedIds: result.added,
+                                    importedTransactions,
                                     intendedCategoryByImportedId,
                                 });
                             runMetrics.totalAutoRuleOverrides += overrideCount;
@@ -692,19 +822,19 @@ class Importer {
     }
 
     async detectAndWarnAutoRuleOverrides({
-        actualAccountId,
         actualAccountName,
         addedIds,
+        importedTransactions,
         intendedCategoryByImportedId,
     }: {
-        actualAccountId: string;
         actualAccountName: string;
         addedIds: string[];
+        importedTransactions: ReadTransaction[];
         intendedCategoryByImportedId: Map<string, string>;
     }): Promise<number> {
-        const freshTransactions = await this.actualApi.getTransactionsByIds(
-            actualAccountId,
-            addedIds
+        const addedIdSet = new Set(addedIds);
+        const freshTransactions = importedTransactions.filter((transaction) =>
+            addedIdSet.has(transaction.id)
         );
 
         let overrideCount = 0;
@@ -1133,6 +1263,378 @@ class Importer {
         );
     }
 
+    private buildTransferPlan({
+        fullAccountMapping,
+        accountStates,
+        monMonTransactionMap,
+        existingActualTransactionsByAccountId,
+        transferPayeeIdByAccountId,
+    }: {
+        fullAccountMapping: Map<MonMonAccount, Account>;
+        accountStates: Array<{
+            monMonAccount: MonMonAccount;
+            actualAccount: Account;
+            newMonMonTransactions: MonMonTransaction[];
+        }>;
+        monMonTransactionMap: Record<string, MonMonTransaction[]>;
+        existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
+        transferPayeeIdByAccountId: Map<string, string>;
+    }): TransferPlan {
+        const emptyPlan: TransferPlan = {
+            seedByImportedId: new Map<string, PlannedTransferSeed>(),
+            suppressedImportedIds: new Set<string>(),
+        };
+
+        const transferConfig = this.config.import.transfers;
+        if (
+            !transferConfig.enabled ||
+            transferConfig.categoryRefs.length === 0
+        ) {
+            return emptyPlan;
+        }
+
+        const { resolvedUuids, invalidRefs } =
+            this.categoryMap.resolveMoneyMoneyCategoryRefs(
+                transferConfig.categoryRefs
+            );
+
+        if (invalidRefs.length > 0) {
+            throw new Error(
+                `Invalid transfer category refs: ${invalidRefs
+                    .map(({ ref, reason }) => `${ref} (${reason})`)
+                    .join('; ')}`
+            );
+        }
+
+        if (resolvedUuids.size === 0) {
+            return emptyPlan;
+        }
+
+        const mappedAccounts = Array.from(fullAccountMapping.entries()).map(
+            ([monMonAccount, actualAccount]) => ({
+                monMonAccount,
+                actualAccount,
+            })
+        );
+        const newTransactionsByAccountUuid = Object.fromEntries(
+            accountStates.map(({ monMonAccount, newMonMonTransactions }) => [
+                monMonAccount.uuid,
+                newMonMonTransactions,
+            ])
+        ) as Record<string, MonMonTransaction[]>;
+        const mappedByAccountNumber = new Map<
+            string,
+            Array<{
+                monMonAccount: MonMonAccount;
+                actualAccount: Account;
+            }>
+        >();
+        for (const entry of mappedAccounts) {
+            const accountNumber = entry.monMonAccount.accountNumber;
+            if (!accountNumber) {
+                continue;
+            }
+
+            const entries = mappedByAccountNumber.get(accountNumber) ?? [];
+            entries.push(entry);
+            mappedByAccountNumber.set(accountNumber, entries);
+        }
+        const ambiguousMappedAccountNumbers = new Set(
+            Array.from(mappedByAccountNumber.entries())
+                .filter(([, entries]) => entries.length > 1)
+                .map(([accountNumber]) => accountNumber)
+        );
+        for (const accountNumber of ambiguousMappedAccountNumbers) {
+            this.logger.warn(
+                `Automatic transfer detection is disabled for mapped account number '${accountNumber}' because it resolves to multiple MoneyMoney accounts.`
+            );
+        }
+
+        const candidates: TransferPlanningCandidate[] = [];
+
+        for (const { monMonAccount, actualAccount } of mappedAccounts) {
+            const accountTransactions =
+                newTransactionsByAccountUuid[monMonAccount.uuid] ?? [];
+
+            for (const transaction of accountTransactions) {
+                if (!resolvedUuids.has(transaction.categoryUuid)) {
+                    continue;
+                }
+
+                if (!transaction.accountNumber) {
+                    continue;
+                }
+
+                if (
+                    ambiguousMappedAccountNumbers.has(transaction.accountNumber)
+                ) {
+                    continue;
+                }
+
+                const target = mappedByAccountNumber.get(
+                    transaction.accountNumber
+                )?.[0];
+
+                if (
+                    !target ||
+                    target.monMonAccount.uuid === monMonAccount.uuid
+                ) {
+                    continue;
+                }
+
+                const transferPayeeId = transferPayeeIdByAccountId.get(
+                    target.actualAccount.id
+                );
+                if (!transferPayeeId) {
+                    continue;
+                }
+
+                candidates.push({
+                    transaction,
+                    importedId: this.getIdForMoneyMoneyTransaction(transaction),
+                    sourceMonMonAccount: monMonAccount,
+                    sourceActualAccount: actualAccount,
+                    targetMonMonAccount: target.monMonAccount,
+                    targetActualAccount: target.actualAccount,
+                    transferPayeeId,
+                });
+            }
+        }
+
+        candidates.sort((a, b) => a.importedId.localeCompare(b.importedId));
+
+        const seedByImportedId = new Map<string, PlannedTransferSeed>();
+        const suppressedImportedIds = new Set<string>();
+        const claimedCounterpartIds = new Set<string>();
+
+        for (const candidate of candidates) {
+            if (suppressedImportedIds.has(candidate.importedId)) {
+                continue;
+            }
+
+            const matchingCounterparts = this.findMatchingTransferCounterparts({
+                candidate,
+                monMonTransactionMap: newTransactionsByAccountUuid,
+                matchWindowDays: transferConfig.matchWindowDays,
+            });
+
+            if (matchingCounterparts.length > 1) {
+                this.logger.debug(
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-run counterpart candidates were found.`
+                );
+                continue;
+            }
+
+            const sameRunCounterpart = matchingCounterparts[0];
+            if (sameRunCounterpart) {
+                const counterpartImportedId =
+                    this.getIdForMoneyMoneyTransaction(sameRunCounterpart);
+                if (claimedCounterpartIds.has(counterpartImportedId)) {
+                    this.logger.debug(
+                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${counterpartImportedId}' was already claimed by another transfer seed.`
+                    );
+                    continue;
+                }
+
+                const existingTargetTransactions =
+                    existingActualTransactionsByAccountId.get(
+                        candidate.targetActualAccount.id
+                    ) ?? [];
+                if (
+                    existingTargetTransactions.some(
+                        (transaction) =>
+                            transaction.imported_id === counterpartImportedId
+                    )
+                ) {
+                    this.logger.debug(
+                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${counterpartImportedId}' already exists in Actual.`
+                    );
+                    continue;
+                }
+
+                suppressedImportedIds.add(counterpartImportedId);
+                claimedCounterpartIds.add(counterpartImportedId);
+
+                seedByImportedId.set(candidate.importedId, {
+                    importedId: candidate.importedId,
+                    transferPayeeId: candidate.transferPayeeId,
+                    targetActualAccountId: candidate.targetActualAccount.id,
+                    targetActualAccountName: candidate.targetActualAccount.name,
+                    sameRunCounterpart: {
+                        importedId: counterpartImportedId,
+                        importedPayee: sameRunCounterpart.name ?? '',
+                        date: format(sameRunCounterpart.valueDate, DATE_FORMAT),
+                        notes:
+                            this.buildTransactionNotes(sameRunCounterpart) ||
+                            '',
+                        ...(this.config.import.synchronizeClearedStatus
+                            ? { cleared: sameRunCounterpart.booked }
+                            : {}),
+                    },
+                });
+                continue;
+            }
+
+            const existingCounterparts = this.findMatchingTransferCounterparts({
+                candidate,
+                monMonTransactionMap,
+                matchWindowDays: transferConfig.matchWindowDays,
+            });
+            if (existingCounterparts.length > 1) {
+                this.logger.debug(
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple historical counterpart candidates were found.`
+                );
+                continue;
+            }
+
+            const existingCounterpart = existingCounterparts[0];
+            if (existingCounterpart) {
+                const existingCounterpartImportedId =
+                    this.getIdForMoneyMoneyTransaction(existingCounterpart);
+                const existingTargetTransactions =
+                    existingActualTransactionsByAccountId.get(
+                        candidate.targetActualAccount.id
+                    ) ?? [];
+                if (
+                    existingTargetTransactions.some(
+                        (transaction) =>
+                            transaction.imported_id ===
+                            existingCounterpartImportedId
+                    )
+                ) {
+                    this.logger.debug(
+                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${existingCounterpartImportedId}' was already imported in an earlier run.`
+                    );
+                    continue;
+                }
+            }
+
+            seedByImportedId.set(candidate.importedId, {
+                importedId: candidate.importedId,
+                transferPayeeId: candidate.transferPayeeId,
+                targetActualAccountId: candidate.targetActualAccount.id,
+                targetActualAccountName: candidate.targetActualAccount.name,
+            });
+        }
+
+        this.logger.debug(
+            `Automatic transfer planning: seeds=${seedByImportedId.size}, suppressedCounterparts=${suppressedImportedIds.size}`
+        );
+
+        return {
+            seedByImportedId,
+            suppressedImportedIds,
+        };
+    }
+
+    private findMatchingTransferCounterparts({
+        candidate,
+        monMonTransactionMap,
+        matchWindowDays,
+    }: {
+        candidate: TransferPlanningCandidate;
+        monMonTransactionMap: Record<string, MonMonTransaction[]>;
+        matchWindowDays: number;
+    }): MonMonTransaction[] {
+        const targetTransactions =
+            monMonTransactionMap[candidate.targetMonMonAccount.uuid] ?? [];
+        const sourceAmount = Math.round(candidate.transaction.amount * 100);
+
+        return targetTransactions.filter((transaction) => {
+            const candidateImportedId =
+                this.getIdForMoneyMoneyTransaction(transaction);
+            const hasMatchingPurpose =
+                !!candidate.transaction.purpose &&
+                !!transaction.purpose &&
+                candidate.transaction.purpose === transaction.purpose;
+            const hasReciprocalAccountNumber =
+                !!transaction.accountNumber &&
+                !!candidate.sourceMonMonAccount.accountNumber &&
+                transaction.accountNumber ===
+                    candidate.sourceMonMonAccount.accountNumber;
+
+            return (
+                candidateImportedId !== candidate.importedId &&
+                Math.round(transaction.amount * 100) === -sourceAmount &&
+                (hasMatchingPurpose || hasReciprocalAccountNumber) &&
+                Math.abs(
+                    differenceInCalendarDays(
+                        transaction.valueDate,
+                        candidate.transaction.valueDate
+                    )
+                ) <= matchWindowDays
+            );
+        });
+    }
+
+    private async getExistingTransactionsForStartBalanceCheck({
+        actualAccountId,
+        existingActualTransactions,
+        transfersEnabled,
+        isDryRun,
+    }: {
+        actualAccountId: string;
+        existingActualTransactions: ReadTransaction[];
+        transfersEnabled: boolean;
+        isDryRun: boolean;
+    }): Promise<ReadTransaction[]> {
+        if (
+            existingActualTransactions.length > 0 ||
+            !transfersEnabled ||
+            isDryRun
+        ) {
+            return existingActualTransactions;
+        }
+
+        return this.actualApi.getTransactions(actualAccountId);
+    }
+
+    private async applyTransferCounterpartUpdates({
+        importedTransactions,
+        transferPlan,
+    }: {
+        importedTransactions: ReadTransaction[];
+        transferPlan: TransferPlan;
+    }) {
+        if (importedTransactions.length === 0) {
+            return;
+        }
+
+        for (const transaction of importedTransactions) {
+            if (!transaction.imported_id) {
+                continue;
+            }
+
+            const plannedSeed = transferPlan.seedByImportedId.get(
+                transaction.imported_id
+            );
+            if (!plannedSeed?.sameRunCounterpart || !transaction.transfer_id) {
+                continue;
+            }
+
+            const counterpartUpdate: Partial<UpdateTransaction> = {
+                imported_id: plannedSeed.sameRunCounterpart.importedId,
+                imported_payee: plannedSeed.sameRunCounterpart.importedPayee,
+                date: plannedSeed.sameRunCounterpart.date,
+                notes: plannedSeed.sameRunCounterpart.notes ?? '',
+            };
+
+            if (plannedSeed.sameRunCounterpart.cleared !== undefined) {
+                counterpartUpdate.cleared =
+                    plannedSeed.sameRunCounterpart.cleared;
+            }
+
+            await this.actualApi.updateTransaction(
+                transaction.transfer_id,
+                counterpartUpdate
+            );
+
+            this.logger.debug(
+                `Stamped generated transfer counterpart '${transaction.transfer_id}' in '${plannedSeed.targetActualAccountName}' with imported_id '${plannedSeed.sameRunCounterpart.importedId}'.`
+            );
+        }
+    }
+
     private async promptForConflictDecision(
         promptInterface: ReturnType<typeof createInterface>,
         pair: ExistingTransactionPair,
@@ -1163,16 +1665,10 @@ class Importer {
     }
 
     private async convertToActualTransaction(
-        transaction: MonMonTransaction
+        transaction: MonMonTransaction,
+        plannedTransfer?: PlannedTransferSeed
     ): Promise<CreateTransaction> {
-        const transactionNotes = [
-            transaction.purpose,
-            transaction.comment && this.config.import.importComments
-                ? `${this.config.import.commentPrefix}${transaction.comment}`
-                : undefined,
-        ]
-            .filter(Boolean)
-            .join(' | ');
+        const transactionNotes = this.buildTransactionNotes(transaction);
 
         const createTransaction: CreateTransaction = {
             date: format(transaction.valueDate, 'yyyy-MM-dd'),
@@ -1180,6 +1676,10 @@ class Importer {
             imported_id: this.getIdForMoneyMoneyTransaction(transaction),
             imported_payee: transaction.name ?? '',
         };
+
+        if (plannedTransfer) {
+            createTransaction.payee = plannedTransfer.transferPayeeId;
+        }
 
         if (this.config.import.synchronizeClearedStatus) {
             createTransaction.cleared = transaction.booked;
@@ -1190,6 +1690,17 @@ class Importer {
         }
 
         return createTransaction;
+    }
+
+    private buildTransactionNotes(transaction: MonMonTransaction): string {
+        return [
+            transaction.purpose,
+            transaction.comment && this.config.import.importComments
+                ? `${this.config.import.commentPrefix}${transaction.comment}`
+                : undefined,
+        ]
+            .filter(Boolean)
+            .join(' | ');
     }
 
     private getIdForMoneyMoneyTransaction(transaction: MonMonTransaction) {

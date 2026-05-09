@@ -158,7 +158,10 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
                         actualApi,
                         logger
                     );
-                    if (config.import.synchronizeCategories) {
+                    if (
+                        config.import.synchronizeCategories ||
+                        config.import.transfers.enabled
+                    ) {
                         await categoryMap.load();
                     }
 

@@ -187,6 +187,42 @@ class CategoryMap {
         return category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR);
     }
 
+    resolveMoneyMoneyCategoryRefs(refs: string[]): {
+        resolvedUuids: Set<string>;
+        invalidRefs: Array<{ ref: string; reason: string }>;
+    } {
+        const resolvedUuids = new Set<string>();
+        const invalidRefs: Array<{ ref: string; reason: string }> = [];
+
+        for (const ref of refs) {
+            const resolution = this.resolveMoneyMoneyCategoryRef(ref);
+            if (!resolution.info) {
+                invalidRefs.push({
+                    ref,
+                    reason:
+                        resolution.reason ??
+                        `MoneyMoney category ref '${ref}' not found.`,
+                });
+                continue;
+            }
+
+            if (resolution.info.isGroup) {
+                invalidRefs.push({
+                    ref,
+                    reason: `MoneyMoney category ref '${ref}' resolved to a category group. Use a leaf category instead.`,
+                });
+                continue;
+            }
+
+            resolvedUuids.add(resolution.info.uuid);
+        }
+
+        return {
+            resolvedUuids,
+            invalidRefs,
+        };
+    }
+
     getReport(): CategoryMapReport {
         const unresolvedMoneyMoneyCategories = this.getUnmappedCategories();
         const unusedActualCategories = this.computeUnusedActualCategories();
@@ -357,6 +393,20 @@ class CategoryMap {
                     targetRef,
                     status: 'invalid',
                     reason: 'MoneyMoney uncategorized default category cannot be mapped',
+                    sourceUuid: sourceResolution.info.uuid,
+                    sourcePath: sourceResolution.info.path.join(
+                        DEFAULT_CATEGORY_PATH_SEPARATOR
+                    ),
+                });
+                continue;
+            }
+
+            if (sourceResolution.info.isGroup) {
+                this.invalidMappings.push({
+                    sourceRef,
+                    targetRef,
+                    status: 'invalid',
+                    reason: 'MoneyMoney category groups cannot be mapped; use a leaf category instead',
                     sourceUuid: sourceResolution.info.uuid,
                     sourcePath: sourceResolution.info.path.join(
                         DEFAULT_CATEGORY_PATH_SEPARATOR
@@ -537,16 +587,14 @@ class CategoryMap {
         reason?: string;
     } {
         const byUuid = this.monMonCategoryInfos.get(ref);
-        if (byUuid && !byUuid.isGroup) {
+        if (byUuid) {
             return { info: byUuid };
         }
 
         const normalizedRef = this.normalizeCategoryName(ref);
-        const leafCategories = Array.from(
-            this.monMonCategoryInfos.values()
-        ).filter((category) => !category.isGroup);
+        const categories = Array.from(this.monMonCategoryInfos.values());
 
-        const byPath = leafCategories.filter((category) => {
+        const byPath = categories.filter((category) => {
             const normalizedPath = this.normalizeCategoryName(
                 category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR)
             );
@@ -567,7 +615,7 @@ class CategoryMap {
             };
         }
 
-        const byName = leafCategories.filter((category) => {
+        const byName = categories.filter((category) => {
             return this.normalizeCategoryName(category.name) === normalizedRef;
         });
 

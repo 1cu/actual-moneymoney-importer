@@ -52,6 +52,13 @@ const payeeTransformationSchema = z.object({
     prompt: z.string().optional(),
 });
 
+const transferImportSchema = z.object({
+    enabled: z.boolean().default(false),
+    categoryRefs: z.array(z.string()).default([]),
+    matchWindowDays: z.number().int().min(0).default(5),
+});
+const defaultTransferImportConfig = transferImportSchema.parse({});
+
 export const configSchema = z
     .object({
         payeeTransformation: payeeTransformationSchema,
@@ -64,6 +71,9 @@ export const configSchema = z
                 .default('ask'),
             importComments: z.boolean().default(false),
             commentPrefix: z.string().default('MoneyMoney Comment: '),
+            transfers: transferImportSchema.default(
+                defaultTransferImportConfig
+            ),
             ignorePatterns: z
                 .object({
                     commentPatterns: z.array(z.string()).optional(),
@@ -84,6 +94,18 @@ export const configSchema = z
                 code: 'custom',
                 message:
                     'OpenAI key must not be empty if payeeTransformation is enabled',
+            });
+        }
+
+        if (
+            val.import.transfers.enabled &&
+            val.import.transfers.categoryRefs.length === 0
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                message:
+                    'At least one transfer category ref must be configured if automatic transfers are enabled',
+                path: ['import', 'transfers', 'categoryRefs'],
             });
         }
     });
