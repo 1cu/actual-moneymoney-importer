@@ -945,6 +945,7 @@ test('applyTransferCounterpartUpdates stamps generated counterpart with second i
     });
 
     await importer.applyTransferCounterpartUpdates({
+        actualAccountName: 'Source',
         importedTransactions: [
             {
                 id: 'source-tx',

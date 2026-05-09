@@ -696,6 +696,7 @@ class Importer {
                                 : [];
 
                         await this.applyTransferCounterpartUpdates({
+                            actualAccountName: actualAccount.name,
                             importedTransactions,
                             transferPlan,
                         });
@@ -1663,9 +1664,11 @@ class Importer {
     }
 
     private async applyTransferCounterpartUpdates({
+        actualAccountName,
         importedTransactions,
         transferPlan,
     }: {
+        actualAccountName: string;
         importedTransactions: ReadTransaction[];
         transferPlan: TransferPlan;
     }) {
@@ -1681,7 +1684,17 @@ class Importer {
             const plannedSeed = transferPlan.seedByImportedId.get(
                 transaction.imported_id
             );
-            if (!plannedSeed?.sameRunCounterpart || !transaction.transfer_id) {
+            if (!plannedSeed || !transaction.transfer_id) {
+                continue;
+            }
+
+            const transactionNotes = transaction.notes || undefined;
+
+            this.logger.info(
+                `Seeded transfer in '${actualAccountName}' to '${plannedSeed.targetActualAccountName}' with amount ${(transaction.amount / 100).toFixed(2)} on ${transaction.date}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+            );
+
+            if (!plannedSeed.sameRunCounterpart) {
                 continue;
             }
 
