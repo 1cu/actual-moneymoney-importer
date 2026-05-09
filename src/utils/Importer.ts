@@ -82,6 +82,7 @@ type TransferPlan = {
         string,
         PlannedExistingCounterpartConversion
     >;
+    resolvedTransferCategoryUuids: Set<string>;
 };
 type PlannedTransferSeed = {
     importedId: string;
@@ -463,6 +464,7 @@ class Importer {
                   seedByImportedId: new Map<string, PlannedTransferSeed>(),
                   suppressedImportedIds: new Set<string>(),
                   existingCounterpartConversionsByImportedId: new Map(),
+                  resolvedTransferCategoryUuids: new Set<string>(),
               };
 
         const unmappedCategoryWarnings = new Set<string>();
@@ -537,11 +539,24 @@ class Importer {
                                 categoryResolution.categoryPath ??
                                 transaction.categoryUuid;
 
-                            if (!unmappedCategoryWarnings.has(warningKey)) {
+                            if (
+                                !unmappedCategoryWarnings.has(warningKey) &&
+                                !transferPlan.resolvedTransferCategoryUuids.has(
+                                    transaction.categoryUuid
+                                )
+                            ) {
                                 unmappedCategoryWarnings.add(warningKey);
                                 runMetrics.totalUnmappedCategoryWarnings++;
                                 this.logger.warn(
                                     `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
+                                );
+                            } else if (
+                                transferPlan.resolvedTransferCategoryUuids.has(
+                                    transaction.categoryUuid
+                                )
+                            ) {
+                                this.logger.debug(
+                                    `Skipping unmapped category warning for transfer-handled category '${warningKey}'.`
                                 );
                             }
                         }
@@ -1308,6 +1323,7 @@ class Importer {
             seedByImportedId: new Map<string, PlannedTransferSeed>(),
             suppressedImportedIds: new Set<string>(),
             existingCounterpartConversionsByImportedId: new Map(),
+            resolvedTransferCategoryUuids: new Set(),
         };
 
         const transferConfig = this.config.import.transfers;
@@ -1601,6 +1617,7 @@ class Importer {
             seedByImportedId,
             suppressedImportedIds,
             existingCounterpartConversionsByImportedId,
+            resolvedTransferCategoryUuids: resolvedUuids,
         };
     }
 

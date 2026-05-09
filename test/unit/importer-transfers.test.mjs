@@ -741,6 +741,7 @@ test('applyExistingCounterpartConversions converts plain counterpart and stamps 
         transferPlan: {
             seedByImportedId: new Map(),
             suppressedImportedIds: new Set(),
+            resolvedTransferCategoryUuids: new Set(),
             existingCounterpartConversionsByImportedId: new Map([
                 [
                     'mm-source-100',
