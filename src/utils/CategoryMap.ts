@@ -187,6 +187,42 @@ class CategoryMap {
         return category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR);
     }
 
+    resolveMoneyMoneyCategoryRefs(refs: string[]): {
+        resolvedUuids: Set<string>;
+        invalidRefs: Array<{ ref: string; reason: string }>;
+    } {
+        const resolvedUuids = new Set<string>();
+        const invalidRefs: Array<{ ref: string; reason: string }> = [];
+
+        for (const ref of refs) {
+            const resolution = this.resolveMoneyMoneyCategoryRef(ref);
+            if (!resolution.info) {
+                invalidRefs.push({
+                    ref,
+                    reason:
+                        resolution.reason ??
+                        `MoneyMoney category ref '${ref}' not found.`,
+                });
+                continue;
+            }
+
+            if (resolution.info.isGroup) {
+                invalidRefs.push({
+                    ref,
+                    reason: `MoneyMoney category ref '${ref}' resolved to a category group. Use a leaf category instead.`,
+                });
+                continue;
+            }
+
+            resolvedUuids.add(resolution.info.uuid);
+        }
+
+        return {
+            resolvedUuids,
+            invalidRefs,
+        };
+    }
+
     getReport(): CategoryMapReport {
         const unresolvedMoneyMoneyCategories = this.getUnmappedCategories();
         const unusedActualCategories = this.computeUnusedActualCategories();

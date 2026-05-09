@@ -78,6 +78,11 @@ categorySyncOnExisting = "ask" # ask|new|always
 importComments = false # Optional: Import MoneyMoney comments into Actual
 commentPrefix = "MoneyMoney Comment: " # Optional: Set a prefix for MoneyMoney comments inside the notes
 
+[import.transfers]
+enabled = false
+categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
+matchWindowDays = 5
+
 # Actual servers, you can add multiple servers
 [[actualServers]]
 serverUrl = "http://localhost:5006"
@@ -131,6 +136,23 @@ The AI receives existing payees from your budget to prefer matching over creatin
 | `categorySyncOnExisting`      | `ask`                    | Policy for existing transactions: `ask`, `new`, or `always` |
 | `importComments`              | `false`                  | Import MoneyMoney comments into Actual notes                |
 | `commentPrefix`               | `"MoneyMoney Comment: "` | Prefix added to imported comments                           |
+
+#### Automatic transfers
+
+Enable `[import.transfers]` to seed Actual transfers from MoneyMoney transactions when the source-side booking carries a configured transfer category and its `accountNumber` points to another mapped MoneyMoney account.
+
+| Option            | Default | Description                                                                 |
+| ----------------- | ------- | --------------------------------------------------------------------------- |
+| `enabled`         | `false` | Enable automatic transfer seeding                                           |
+| `categoryRefs`    | `[]`    | MoneyMoney transfer categories by UUID, full path, or exact leaf name       |
+| `matchWindowDays` | `5`     | Date window used to detect a same-run counterpart in another mapped account |
+
+Notes:
+
+- `categoryRefs` must be non-empty when `enabled = true`
+- If only one side is present, the importer seeds a transfer on the recognized side and lets a later import update the generated counterpart
+- If both sides are present in the same run and the counterpart match is unique, the importer suppresses the second plain import and stamps the generated transfer counterpart with the second `imported_id`
+- If the target account cannot be identified confidently, the transaction is imported normally
 
 ### Comment import
 

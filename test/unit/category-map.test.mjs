@@ -196,6 +196,100 @@ test('ambiguous name matches do not produce suggestions', () => {
     assert.equal(report.safeSuggestions.length, 0);
 });
 
+test('resolveMoneyMoneyCategoryRefs accepts UUID, path, and leaf name refs', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+    };
+
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
+
+    map.loadFromData(
+        [
+            makeMonMonCategory({
+                uuid: 'mm-root',
+                name: 'Umbuchungen',
+                group: true,
+            }),
+            makeMonMonCategory({
+                uuid: 'mm-transfer',
+                name: 'Echte Umbuchungen',
+                indentation: 1,
+            }),
+        ],
+        [],
+        []
+    );
+
+    const resolved = map.resolveMoneyMoneyCategoryRefs([
+        'mm-transfer',
+        'Umbuchungen > Echte Umbuchungen',
+        'Echte Umbuchungen',
+    ]);
+
+    assert.deepEqual([...resolved.resolvedUuids], ['mm-transfer']);
+    assert.deepEqual(resolved.invalidRefs, []);
+});
+
+test('resolveMoneyMoneyCategoryRefs reports ambiguous leaf name refs', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+    };
+
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
+
+    map.loadFromData(
+        [
+            makeMonMonCategory({
+                uuid: 'mm-root-a',
+                name: 'A',
+                group: true,
+            }),
+            makeMonMonCategory({
+                uuid: 'mm-root-b',
+                name: 'B',
+                group: true,
+            }),
+            makeMonMonCategory({
+                uuid: 'mm-transfer-a',
+                name: 'Transfer',
+                indentation: 1,
+            }),
+            makeMonMonCategory({
+                uuid: 'mm-transfer-b',
+                name: 'Transfer',
+                indentation: 1,
+            }),
+        ],
+        [],
+        []
+    );
+
+    const resolved = map.resolveMoneyMoneyCategoryRefs(['Transfer']);
+
+    assert.deepEqual([...resolved.resolvedUuids], []);
+    assert.equal(resolved.invalidRefs.length, 1);
+    assert.match(
+        resolved.invalidRefs[0]?.reason ?? '',
+        /Ambiguous MoneyMoney category ref 'Transfer'/
+    );
+});
+
 test('getCanonicalMapping excludes suggestions when includeSuggestions is false', () => {
     const budgetConfig = {
         syncId: 'sync-id',
