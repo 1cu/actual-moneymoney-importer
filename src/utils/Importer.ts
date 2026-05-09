@@ -1728,7 +1728,6 @@ class Importer {
             const counterpartUpdate: Partial<UpdateTransaction> = {
                 imported_id: plannedSeed.sameRunCounterpart.importedId,
                 imported_payee: plannedSeed.sameRunCounterpart.importedPayee,
-                date: plannedSeed.sameRunCounterpart.date,
                 notes: plannedSeed.sameRunCounterpart.notes ?? '',
             };
 

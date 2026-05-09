@@ -986,7 +986,6 @@ test('applyTransferCounterpartUpdates stamps generated counterpart with second i
         {
             imported_id: 'mm-target-200',
             imported_payee: 'Einzahlung',
-            date: '2026-04-23',
             notes: 'Ruecklagen',
             cleared: true,
         },
