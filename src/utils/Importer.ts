@@ -539,22 +539,25 @@ class Importer {
                                 categoryResolution.categoryPath ??
                                 transaction.categoryUuid;
 
+                            const isTransferHandled =
+                                transferPlan.seedByImportedId.has(importedId) ||
+                                transferPlan.suppressedImportedIds.has(
+                                    importedId
+                                ) ||
+                                transferPlan.existingCounterpartConversionsByImportedId.has(
+                                    importedId
+                                );
+
                             if (
                                 !unmappedCategoryWarnings.has(warningKey) &&
-                                !transferPlan.resolvedTransferCategoryUuids.has(
-                                    transaction.categoryUuid
-                                )
+                                !isTransferHandled
                             ) {
                                 unmappedCategoryWarnings.add(warningKey);
                                 runMetrics.totalUnmappedCategoryWarnings++;
                                 this.logger.warn(
                                     `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
                                 );
-                            } else if (
-                                transferPlan.resolvedTransferCategoryUuids.has(
-                                    transaction.categoryUuid
-                                )
-                            ) {
+                            } else if (isTransferHandled) {
                                 this.logger.debug(
                                     `Skipping unmapped category warning for transfer-handled category '${warningKey}'.`
                                 );
@@ -563,6 +566,13 @@ class Importer {
                     }
 
                     createTransactions.push(createTransaction);
+                }
+
+                if (!isDryRun) {
+                    await this.applyExistingCounterpartConversions({
+                        newMonMonTransactions,
+                        transferPlan,
+                    });
                 }
 
                 const effectiveExistingActualTransactions =
@@ -593,13 +603,6 @@ class Importer {
                     };
 
                     createTransactions.push(startTransaction);
-                }
-
-                if (!isDryRun) {
-                    await this.applyExistingCounterpartConversions({
-                        newMonMonTransactions,
-                        transferPlan,
-                    });
                 }
 
                 if (createTransactions.length > 0) {
@@ -1807,6 +1810,7 @@ class Importer {
                 const counterpartUpdate: Partial<UpdateTransaction> = {
                     imported_id: conversion.sourceImportedId,
                     imported_payee: conversion.sourceImportedPayee,
+                    date: format(transaction.bookingDate, DATE_FORMAT),
                 };
 
                 if (conversion.sourceNotes !== undefined) {

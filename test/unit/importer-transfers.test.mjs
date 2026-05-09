@@ -771,6 +771,7 @@ test('applyExistingCounterpartConversions converts plain counterpart and stamps 
         {
             imported_id: 'mm-source-100',
             imported_payee: 'Example Sender',
+            date: '2026-04-21',
             notes: 'Ruecklagen',
             cleared: true,
         },
