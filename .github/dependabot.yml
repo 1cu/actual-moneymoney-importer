@@ -12,3 +12,11 @@ updates:
           - dependency-name: zod
             update-types: ["version-update:semver-major"]
             versions: [">=4.0.0"]
+    - package-ecosystem: github-actions
+      directory: '/'
+      schedule:
+          interval: weekly
+      groups:
+          actions:
+              patterns:
+                  - '*'
