@@ -1547,6 +1547,10 @@ class Importer {
 
                     suppressedImportedIds.add(candidate.importedId);
 
+                    const sourceNotes = this.buildTransactionNotes(
+                        candidate.transaction
+                    );
+
                     existingCounterpartConversionsByImportedId.set(
                         candidate.importedId,
                         {
@@ -1560,15 +1564,7 @@ class Importer {
                             sourceImportedId: candidate.importedId,
                             sourceImportedPayee:
                                 candidate.transaction.name ?? '',
-                            ...(this.buildTransactionNotes(
-                                candidate.transaction
-                            )
-                                ? {
-                                      sourceNotes: this.buildTransactionNotes(
-                                          candidate.transaction
-                                      ),
-                                  }
-                                : {}),
+                            ...(sourceNotes ? { sourceNotes } : {}),
                             ...(this.config.import.synchronizeClearedStatus
                                 ? {
                                       sourceCleared:
@@ -1729,10 +1725,17 @@ class Importer {
                 continue;
             }
 
-            await this.actualApi.updateTransaction(
-                conversion.existingCounterpartTransactionId,
-                { payee: conversion.sourceTransferPayeeId }
-            );
+            try {
+                await this.actualApi.updateTransaction(
+                    conversion.existingCounterpartTransactionId,
+                    { payee: conversion.sourceTransferPayeeId }
+                );
+            } catch (error) {
+                this.logger.warn(
+                    `Failed to convert plain transaction '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountName}' to a transfer: ${error instanceof Error ? error.message : String(error)}`
+                );
+                continue;
+            }
 
             const transactionNotes = this.buildTransactionNotes(transaction);
 
@@ -1740,16 +1743,34 @@ class Importer {
                 `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer pair with source amount ${transaction.amount.toFixed(2)} on ${transaction.bookingDate.toISOString().slice(0, 10)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
             );
 
-            await new Promise((resolve) => setTimeout(resolve, 250));
+            let convertAttempt = 0;
+            let transferId: string | undefined;
 
-            const targetTransactions = await this.actualApi.getTransactions(
-                conversion.existingCounterpartAccountId
-            );
-            const convertedTarget = targetTransactions.find(
-                (tx) => tx.id === conversion.existingCounterpartTransactionId
-            );
+            while (convertAttempt < 5 && !transferId) {
+                if (convertAttempt > 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                }
 
-            if (convertedTarget?.transfer_id) {
+                const targetTransactions = await this.actualApi.getTransactions(
+                    conversion.existingCounterpartAccountId
+                );
+                const convertedTarget = targetTransactions.find(
+                    (tx) =>
+                        tx.id === conversion.existingCounterpartTransactionId
+                );
+
+                transferId = convertedTarget?.transfer_id;
+                convertAttempt++;
+            }
+
+            if (!transferId) {
+                this.logger.warn(
+                    `Could not locate auto-created transfer counterpart for converted transaction '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountName}' after retries.`
+                );
+                continue;
+            }
+
+            try {
                 const counterpartUpdate: Partial<UpdateTransaction> = {
                     imported_id: conversion.sourceImportedId,
                     imported_payee: conversion.sourceImportedPayee,
@@ -1764,12 +1785,16 @@ class Importer {
                 }
 
                 await this.actualApi.updateTransaction(
-                    convertedTarget.transfer_id,
+                    transferId,
                     counterpartUpdate
                 );
 
                 this.logger.debug(
-                    `Stamped auto-created transfer counterpart '${convertedTarget.transfer_id}' with imported_id '${conversion.sourceImportedId}'.`
+                    `Stamped auto-created transfer counterpart '${transferId}' with imported_id '${conversion.sourceImportedId}'.`
+                );
+            } catch (error) {
+                this.logger.warn(
+                    `Failed to stamp auto-created transfer counterpart for converted transaction '${conversion.existingCounterpartTransactionId}': ${error instanceof Error ? error.message : String(error)}`
                 );
             }
         }
