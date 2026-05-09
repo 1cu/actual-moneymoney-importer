@@ -150,11 +150,6 @@ class ActualApi {
         return this.withLogControl(() => (actual as any).getPayees());
     }
 
-    async getTransferPayeeForAccount(accountId: string) {
-        const payees = await this.getPayees();
-        return payees.find((payee) => payee.transfer_acct === accountId);
-    }
-
     async getCategories(): Promise<Category[]> {
         await this.ensureInitialization();
         const categoryItems = await this.withLogControl(() =>

@@ -483,21 +483,19 @@ test('detectAndWarnAutoRuleOverrides warns when stored category differs from int
         mappingByUuid: {},
     });
 
-    importer.actualApi.getTransactionsByIds = async (_accountId, _ids) => [
-        {
-            id: 'actual-imp-1',
-            imported_id: 'imp-1',
-            imported_payee: 'Amazon',
-            category: 'cat-auto-rule',
-            date: '2026-02-23',
-            amount: -500,
-        },
-    ];
-
     const overrideCount = await importer.detectAndWarnAutoRuleOverrides({
-        actualAccountId: 'acc-1',
         actualAccountName: 'Checking',
         addedIds: ['actual-imp-1'],
+        importedTransactions: [
+            {
+                id: 'actual-imp-1',
+                imported_id: 'imp-1',
+                imported_payee: 'Amazon',
+                category: 'cat-auto-rule',
+                date: '2026-02-23',
+                amount: -500,
+            },
+        ],
         intendedCategoryByImportedId: new Map([['imp-1', 'cat-intended']]),
     });
 
@@ -514,21 +512,19 @@ test('detectAndWarnAutoRuleOverrides warns when stored category differs from int
 test('detectAndWarnAutoRuleOverrides is silent when stored category matches intended', async () => {
     const { importer, logger } = makeImporter();
 
-    importer.actualApi.getTransactionsByIds = async (_accountId, _ids) => [
-        {
-            id: 'actual-imp-1',
-            imported_id: 'imp-1',
-            imported_payee: 'Rewe',
-            category: 'cat-intended',
-            date: '2026-02-23',
-            amount: -200,
-        },
-    ];
-
     const overrideCount = await importer.detectAndWarnAutoRuleOverrides({
-        actualAccountId: 'acc-1',
         actualAccountName: 'Checking',
         addedIds: ['actual-imp-1'],
+        importedTransactions: [
+            {
+                id: 'actual-imp-1',
+                imported_id: 'imp-1',
+                imported_payee: 'Rewe',
+                category: 'cat-intended',
+                date: '2026-02-23',
+                amount: -200,
+            },
+        ],
         intendedCategoryByImportedId: new Map([['imp-1', 'cat-intended']]),
     });
 
@@ -539,22 +535,20 @@ test('detectAndWarnAutoRuleOverrides is silent when stored category matches inte
 test('detectAndWarnAutoRuleOverrides ignores transactions not in the intended-category map', async () => {
     const { importer, logger } = makeImporter();
 
-    importer.actualApi.getTransactionsByIds = async (_accountId, _ids) => [
-        {
-            id: 'actual-imp-2',
-            imported_id: 'imp-2',
-            imported_payee: 'Dm',
-            category: 'cat-whatever',
-            date: '2026-02-23',
-            amount: -100,
-        },
-    ];
-
     // intendedCategoryByImportedId only has 'imp-1', not 'imp-2'
     const overrideCount = await importer.detectAndWarnAutoRuleOverrides({
-        actualAccountId: 'acc-1',
         actualAccountName: 'Checking',
         addedIds: ['actual-imp-2'],
+        importedTransactions: [
+            {
+                id: 'actual-imp-2',
+                imported_id: 'imp-2',
+                imported_payee: 'Dm',
+                category: 'cat-whatever',
+                date: '2026-02-23',
+                amount: -100,
+            },
+        ],
         intendedCategoryByImportedId: new Map([['imp-1', 'cat-intended']]),
     });
 

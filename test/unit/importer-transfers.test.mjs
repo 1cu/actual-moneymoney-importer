@@ -55,11 +55,13 @@ const makeImporter = ({
     importComments = true,
     resolvedTransferCategoryUuids = new Set(['mm-transfer']),
     invalidTransferRefs = [],
+    getTransactions = async () => [],
     getTransactionsByIds = async () => [],
     updateTransaction = async () => {},
 } = {}) => {
     const logger = makeLogger();
     const actualApi = {
+        getTransactions,
         getTransactionsByIds,
         updateTransaction,
     };
@@ -117,7 +119,7 @@ test('buildTransferPlan creates delayed transfer seed from hard target account m
         accountUuid: sourceMonMon.uuid,
         amount: -1440,
         accountNumber: targetMonMon.accountNumber,
-        name: 'Jens Bergmann',
+        name: 'Example Sender',
     });
 
     const plan = importer.buildTransferPlan({
@@ -181,7 +183,7 @@ test('buildTransferPlan can seed transfer when only source account is selected',
         accountUuid: sourceMonMon.uuid,
         amount: -1440,
         accountNumber: targetMonMon.accountNumber,
-        name: 'Jens Bergmann',
+        name: 'Example Sender',
     });
 
     const plan = importer.buildTransferPlan({
@@ -300,7 +302,7 @@ test('buildTransferPlan suppresses unique same-run counterpart and carries metad
         accountUuid: sourceMonMon.uuid,
         amount: -1440,
         accountNumber: targetMonMon.accountNumber,
-        name: 'Jens Bergmann',
+        name: 'Example Sender',
         purpose: 'Ruecklagen',
     });
     const targetTx = makeTransaction({
@@ -610,6 +612,80 @@ test('buildTransferPlan does not suppress delayed counterpart when source side i
     assert.deepEqual([...plan.suppressedImportedIds], []);
 });
 
+test('getExistingTransactionsForStartBalanceCheck refreshes empty accounts for live transfer runs', async () => {
+    const getTransactions = mock.fn(async () => [
+        {
+            id: 'generated-counterpart',
+            imported_id: undefined,
+            transfer_id: 'source-transfer',
+        },
+    ]);
+    const importer = makeImporter({ getTransactions });
+    const getExistingTransactionsForStartBalanceCheck =
+        Object.getPrototypeOf(
+            importer
+        ).getExistingTransactionsForStartBalanceCheck;
+
+    const refreshed = await getExistingTransactionsForStartBalanceCheck.call(
+        importer,
+        {
+            actualAccountId: 'actual-target',
+            existingActualTransactions: [],
+            transfersEnabled: true,
+            isDryRun: false,
+        }
+    );
+
+    assert.equal(getTransactions.mock.callCount(), 1);
+    assert.equal(refreshed.length, 1);
+    assert.equal(refreshed[0]?.id, 'generated-counterpart');
+});
+
+test('getExistingTransactionsForStartBalanceCheck does not refetch non-empty or dry-run accounts', async () => {
+    const getTransactions = mock.fn(async () => [
+        {
+            id: 'should-not-be-used',
+        },
+    ]);
+    const importer = makeImporter({ getTransactions });
+    const getExistingTransactionsForStartBalanceCheck =
+        Object.getPrototypeOf(
+            importer
+        ).getExistingTransactionsForStartBalanceCheck;
+
+    const existing = [{ id: 'existing-1' }];
+
+    assert.deepEqual(
+        await getExistingTransactionsForStartBalanceCheck.call(importer, {
+            actualAccountId: 'actual-target',
+            existingActualTransactions: existing,
+            transfersEnabled: true,
+            isDryRun: false,
+        }),
+        existing
+    );
+    assert.deepEqual(
+        await getExistingTransactionsForStartBalanceCheck.call(importer, {
+            actualAccountId: 'actual-target',
+            existingActualTransactions: [],
+            transfersEnabled: true,
+            isDryRun: true,
+        }),
+        []
+    );
+    assert.deepEqual(
+        await getExistingTransactionsForStartBalanceCheck.call(importer, {
+            actualAccountId: 'actual-target',
+            existingActualTransactions: [],
+            transfersEnabled: false,
+            isDryRun: false,
+        }),
+        []
+    );
+
+    assert.equal(getTransactions.mock.callCount(), 0);
+});
+
 test('convertToActualTransaction uses transfer payee for planned seed', async () => {
     const importer = makeImporter();
     const transaction = makeTransaction({
@@ -617,7 +693,7 @@ test('convertToActualTransaction uses transfer payee for planned seed', async ()
         accountUuid: 'mm-source',
         amount: -1440,
         accountNumber: 'DE-TARGET',
-        name: 'Jens Bergmann',
+        name: 'Example Sender',
         purpose: 'Ruecklagen',
         comment: 'memo',
     });
@@ -631,28 +707,25 @@ test('convertToActualTransaction uses transfer payee for planned seed', async ()
 
     assert.equal(converted.payee, 'transfer-payee');
     assert.equal(converted.imported_id, 'mm-source-100');
-    assert.equal(converted.imported_payee, 'Jens Bergmann');
+    assert.equal(converted.imported_payee, 'Example Sender');
     assert.equal(converted.notes, 'Ruecklagen | Comment: memo');
     assert.equal(converted.cleared, true);
 });
 
 test('applyTransferCounterpartUpdates stamps generated counterpart with second imported id', async () => {
-    const getTransactionsByIds = mock.fn(async () => [
-        {
-            id: 'source-tx',
-            imported_id: 'mm-source-100',
-            transfer_id: 'counterpart-tx',
-        },
-    ]);
     const updateTransaction = mock.fn(async () => {});
     const importer = makeImporter({
-        getTransactionsByIds,
         updateTransaction,
     });
 
     await importer.applyTransferCounterpartUpdates({
-        actualAccount: makeActualAccount({ id: 'actual-source', name: 'A' }),
-        importedTransactionIds: ['source-tx'],
+        importedTransactions: [
+            {
+                id: 'source-tx',
+                imported_id: 'mm-source-100',
+                transfer_id: 'counterpart-tx',
+            },
+        ],
         transferPlan: {
             seedByImportedId: new Map([
                 [
@@ -675,7 +748,6 @@ test('applyTransferCounterpartUpdates stamps generated counterpart with second i
         },
     });
 
-    assert.equal(getTransactionsByIds.mock.callCount(), 1);
     assert.equal(updateTransaction.mock.callCount(), 1);
     assert.deepEqual(updateTransaction.mock.calls[0].arguments, [
         'counterpart-tx',

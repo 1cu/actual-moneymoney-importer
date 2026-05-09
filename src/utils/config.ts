@@ -57,6 +57,7 @@ const transferImportSchema = z.object({
     categoryRefs: z.array(z.string()).default([]),
     matchWindowDays: z.number().int().min(0).default(5),
 });
+const defaultTransferImportConfig = transferImportSchema.parse({});
 
 export const configSchema = z
     .object({
@@ -70,11 +71,9 @@ export const configSchema = z
                 .default('ask'),
             importComments: z.boolean().default(false),
             commentPrefix: z.string().default('MoneyMoney Comment: '),
-            transfers: transferImportSchema.default({
-                enabled: false,
-                categoryRefs: [],
-                matchWindowDays: 5,
-            }),
+            transfers: transferImportSchema.default(
+                defaultTransferImportConfig
+            ),
             ignorePatterns: z
                 .object({
                     commentPatterns: z.array(z.string()).optional(),

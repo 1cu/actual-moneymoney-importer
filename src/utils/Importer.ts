@@ -362,16 +362,19 @@ class Importer {
             {} as Record<string, MonMonTransaction[]>
         );
 
-        const fullAccountMapping = this.accountMap.getMap();
+        const transfersEnabled = this.config.import.transfers.enabled;
+        const fullAccountMapping = transfersEnabled
+            ? this.accountMap.getMap()
+            : undefined;
         const accountMapping = accountRefs
             ? this.accountMap.getMap(accountRefs)
-            : fullAccountMapping;
+            : (fullAccountMapping ?? this.accountMap.getMap());
         const existingActualTransactionsByAccountId = new Map<
             string,
             ReadTransaction[]
         >();
 
-        for (const [, actualAccount] of fullAccountMapping) {
+        for (const [, actualAccount] of fullAccountMapping ?? accountMapping) {
             existingActualTransactionsByAccountId.set(
                 actualAccount.id,
                 await this.actualApi.getTransactions(actualAccount.id)
@@ -379,8 +382,7 @@ class Importer {
         }
 
         let existingPayeeNames: string[] = [];
-        const shouldLoadPayeesForTransfers =
-            this.config.import.transfers.enabled;
+        const shouldLoadPayeesForTransfers = transfersEnabled;
         const existingPayees =
             (this.payeeTransformer && !isDryRun) || shouldLoadPayeesForTransfers
                 ? await this.actualApi.getPayees()
@@ -433,9 +435,9 @@ class Importer {
             }
         );
 
-        const transferPlan = this.config.import.transfers.enabled
+        const transferPlan = transfersEnabled
             ? this.buildTransferPlan({
-                  fullAccountMapping,
+                  fullAccountMapping: fullAccountMapping!,
                   accountStates,
                   monMonTransactionMap,
                   existingActualTransactionsByAccountId,
@@ -531,7 +533,15 @@ class Importer {
                     createTransactions.push(createTransaction);
                 }
 
-                if (existingActualTransactions.length === 0) {
+                const effectiveExistingActualTransactions =
+                    await this.getExistingTransactionsForStartBalanceCheck({
+                        actualAccountId: actualAccount.id,
+                        existingActualTransactions,
+                        transfersEnabled,
+                        isDryRun,
+                    });
+
+                if (effectiveExistingActualTransactions.length === 0) {
                     const startTransaction: CreateTransaction = {
                         date: format(
                             accountTransactions.length > 0
@@ -654,12 +664,16 @@ class Importer {
                             ]
                         );
 
+                        const importedTransactions =
+                            result.added.length > 0 || result.updated.length > 0
+                                ? await this.actualApi.getTransactionsByIds(
+                                      actualAccount.id,
+                                      [...result.added, ...result.updated]
+                                  )
+                                : [];
+
                         await this.applyTransferCounterpartUpdates({
-                            actualAccount,
-                            importedTransactionIds: [
-                                ...result.added,
-                                ...result.updated,
-                            ],
+                            importedTransactions,
                             transferPlan,
                         });
 
@@ -669,9 +683,9 @@ class Importer {
                         ) {
                             const overrideCount =
                                 await this.detectAndWarnAutoRuleOverrides({
-                                    actualAccountId: actualAccount.id,
                                     actualAccountName: actualAccount.name,
                                     addedIds: result.added,
+                                    importedTransactions,
                                     intendedCategoryByImportedId,
                                 });
                             runMetrics.totalAutoRuleOverrides += overrideCount;
@@ -807,19 +821,19 @@ class Importer {
     }
 
     async detectAndWarnAutoRuleOverrides({
-        actualAccountId,
         actualAccountName,
         addedIds,
+        importedTransactions,
         intendedCategoryByImportedId,
     }: {
-        actualAccountId: string;
         actualAccountName: string;
         addedIds: string[];
+        importedTransactions: ReadTransaction[];
         intendedCategoryByImportedId: Map<string, string>;
     }): Promise<number> {
-        const freshTransactions = await this.actualApi.getTransactionsByIds(
-            actualAccountId,
-            addedIds
+        const addedIdSet = new Set(addedIds);
+        const freshTransactions = importedTransactions.filter((transaction) =>
+            addedIdSet.has(transaction.id)
         );
 
         let overrideCount = 0;
@@ -1551,23 +1565,38 @@ class Importer {
         });
     }
 
-    private async applyTransferCounterpartUpdates({
-        actualAccount,
-        importedTransactionIds,
-        transferPlan,
+    private async getExistingTransactionsForStartBalanceCheck({
+        actualAccountId,
+        existingActualTransactions,
+        transfersEnabled,
+        isDryRun,
     }: {
-        actualAccount: Account;
-        importedTransactionIds: string[];
-        transferPlan: TransferPlan;
-    }) {
-        if (importedTransactionIds.length === 0) {
-            return;
+        actualAccountId: string;
+        existingActualTransactions: ReadTransaction[];
+        transfersEnabled: boolean;
+        isDryRun: boolean;
+    }): Promise<ReadTransaction[]> {
+        if (
+            existingActualTransactions.length > 0 ||
+            !transfersEnabled ||
+            isDryRun
+        ) {
+            return existingActualTransactions;
         }
 
-        const importedTransactions = await this.actualApi.getTransactionsByIds(
-            actualAccount.id,
-            importedTransactionIds
-        );
+        return this.actualApi.getTransactions(actualAccountId);
+    }
+
+    private async applyTransferCounterpartUpdates({
+        importedTransactions,
+        transferPlan,
+    }: {
+        importedTransactions: ReadTransaction[];
+        transferPlan: TransferPlan;
+    }) {
+        if (importedTransactions.length === 0) {
+            return;
+        }
 
         for (const transaction of importedTransactions) {
             if (!transaction.imported_id) {

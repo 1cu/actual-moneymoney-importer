@@ -238,6 +238,48 @@ test('resolveMoneyMoneyCategoryRefs accepts UUID, path, and leaf name refs', () 
     assert.deepEqual(resolved.invalidRefs, []);
 });
 
+test('resolveMoneyMoneyCategoryRefs rejects refs that resolve to a category group', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+    };
+
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
+
+    map.loadFromData(
+        [
+            makeMonMonCategory({
+                uuid: 'mm-root',
+                name: 'Umbuchungen',
+                group: true,
+            }),
+            makeMonMonCategory({
+                uuid: 'mm-transfer',
+                name: 'Echte Umbuchungen',
+                indentation: 1,
+            }),
+        ],
+        [],
+        []
+    );
+
+    const resolved = map.resolveMoneyMoneyCategoryRefs(['Umbuchungen']);
+
+    assert.deepEqual([...resolved.resolvedUuids], []);
+    assert.equal(resolved.invalidRefs.length, 1);
+    assert.match(
+        resolved.invalidRefs[0]?.reason ?? '',
+        /resolved to a category group/
+    );
+});
+
 test('resolveMoneyMoneyCategoryRefs reports ambiguous leaf name refs', () => {
     const budgetConfig = {
         syncId: 'sync-id',

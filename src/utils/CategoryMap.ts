@@ -573,16 +573,14 @@ class CategoryMap {
         reason?: string;
     } {
         const byUuid = this.monMonCategoryInfos.get(ref);
-        if (byUuid && !byUuid.isGroup) {
+        if (byUuid) {
             return { info: byUuid };
         }
 
         const normalizedRef = this.normalizeCategoryName(ref);
-        const leafCategories = Array.from(
-            this.monMonCategoryInfos.values()
-        ).filter((category) => !category.isGroup);
+        const categories = Array.from(this.monMonCategoryInfos.values());
 
-        const byPath = leafCategories.filter((category) => {
+        const byPath = categories.filter((category) => {
             const normalizedPath = this.normalizeCategoryName(
                 category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR)
             );
@@ -603,7 +601,7 @@ class CategoryMap {
             };
         }
 
-        const byName = leafCategories.filter((category) => {
+        const byName = categories.filter((category) => {
             return this.normalizeCategoryName(category.name) === normalizedRef;
         });
 
