@@ -89,6 +89,7 @@ type PlannedTransferSeed = {
 type PlannedTransferCounterpart = {
     importedId: string;
     importedPayee: string;
+    date: string;
     notes?: string;
     cleared?: boolean;
 };
@@ -1462,6 +1463,7 @@ class Importer {
                     sameRunCounterpart: {
                         importedId: counterpartImportedId,
                         importedPayee: sameRunCounterpart.name ?? '',
+                        date: format(sameRunCounterpart.valueDate, DATE_FORMAT),
                         notes:
                             this.buildTransactionNotes(sameRunCounterpart) ||
                             '',
@@ -1613,6 +1615,7 @@ class Importer {
             const counterpartUpdate: Partial<UpdateTransaction> = {
                 imported_id: plannedSeed.sameRunCounterpart.importedId,
                 imported_payee: plannedSeed.sameRunCounterpart.importedPayee,
+                date: plannedSeed.sameRunCounterpart.date,
                 notes: plannedSeed.sameRunCounterpart.notes ?? '',
             };
 

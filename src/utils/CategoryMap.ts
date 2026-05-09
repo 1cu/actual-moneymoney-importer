@@ -401,6 +401,20 @@ class CategoryMap {
                 continue;
             }
 
+            if (sourceResolution.info.isGroup) {
+                this.invalidMappings.push({
+                    sourceRef,
+                    targetRef,
+                    status: 'invalid',
+                    reason: 'MoneyMoney category groups cannot be mapped; use a leaf category instead',
+                    sourceUuid: sourceResolution.info.uuid,
+                    sourcePath: sourceResolution.info.path.join(
+                        DEFAULT_CATEGORY_PATH_SEPARATOR
+                    ),
+                });
+                continue;
+            }
+
             if (!targetResolution.info) {
                 this.invalidMappings.push({
                     sourceRef,

@@ -280,6 +280,62 @@ test('resolveMoneyMoneyCategoryRefs rejects refs that resolve to a category grou
     );
 });
 
+test('configured categoryMapping rejects MoneyMoney category groups', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {
+            Umbuchungen: 'actual-transfer',
+        },
+    };
+
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
+
+    map.loadFromData(
+        [
+            makeMonMonCategory({
+                uuid: 'mm-root',
+                name: 'Umbuchungen',
+                group: true,
+            }),
+            makeMonMonCategory({
+                uuid: 'mm-transfer',
+                name: 'Echte Umbuchungen',
+                indentation: 1,
+            }),
+        ],
+        [
+            {
+                id: 'actual-transfer',
+                name: 'Transfer',
+                group_id: 'group-expenses',
+                is_income: false,
+            },
+        ],
+        [
+            {
+                id: 'group-expenses',
+                name: 'Expenses',
+                is_income: false,
+            },
+        ]
+    );
+
+    const report = map.getReport();
+    assert.equal(report.configuredMappings.length, 0);
+    assert.equal(report.invalidMappings.length, 1);
+    assert.match(
+        report.invalidMappings[0]?.reason ?? '',
+        /category groups cannot be mapped/
+    );
+});
+
 test('resolveMoneyMoneyCategoryRefs reports ambiguous leaf name refs', () => {
     const budgetConfig = {
         syncId: 'sync-id',

@@ -310,6 +310,7 @@ test('buildTransferPlan suppresses unique same-run counterpart and carries metad
         accountUuid: targetMonMon.uuid,
         amount: 1440,
         categoryUuid: 'mm-uncategorized',
+        valueDate: '2026-04-23',
         name: 'Einzahlung',
         purpose: 'Ruecklagen',
         comment: 'memo',
@@ -351,6 +352,7 @@ test('buildTransferPlan suppresses unique same-run counterpart and carries metad
     assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-200']);
     assert.equal(counterpart?.importedId, 'mm-target-200');
     assert.equal(counterpart?.importedPayee, 'Einzahlung');
+    assert.equal(counterpart?.date, '2026-04-23');
     assert.equal(counterpart?.notes, 'Ruecklagen | Comment: memo');
     assert.equal(counterpart?.cleared, true);
 });
@@ -738,6 +740,7 @@ test('applyTransferCounterpartUpdates stamps generated counterpart with second i
                         sameRunCounterpart: {
                             importedId: 'mm-target-200',
                             importedPayee: 'Einzahlung',
+                            date: '2026-04-23',
                             notes: 'Ruecklagen',
                             cleared: true,
                         },
@@ -754,6 +757,7 @@ test('applyTransferCounterpartUpdates stamps generated counterpart with second i
         {
             imported_id: 'mm-target-200',
             imported_payee: 'Einzahlung',
+            date: '2026-04-23',
             notes: 'Ruecklagen',
             cleared: true,
         },
