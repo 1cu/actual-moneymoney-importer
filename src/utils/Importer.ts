@@ -78,6 +78,10 @@ type DuplicateImportedIdGroup = {
 type TransferPlan = {
     seedByImportedId: Map<string, PlannedTransferSeed>;
     suppressedImportedIds: Set<string>;
+    existingCounterpartConversionsByImportedId: Map<
+        string,
+        PlannedExistingCounterpartConversion
+    >;
 };
 type PlannedTransferSeed = {
     importedId: string;
@@ -92,6 +96,16 @@ type PlannedTransferCounterpart = {
     date: string;
     notes?: string;
     cleared?: boolean;
+};
+type PlannedExistingCounterpartConversion = {
+    existingCounterpartTransactionId: string;
+    existingCounterpartAccountId: string;
+    existingCounterpartAccountName: string;
+    sourceTransferPayeeId: string;
+    sourceImportedId: string;
+    sourceImportedPayee: string;
+    sourceNotes?: string;
+    sourceCleared?: boolean;
 };
 type TransferPlanningCandidate = {
     transaction: MonMonTransaction;
@@ -447,6 +461,7 @@ class Importer {
             : {
                   seedByImportedId: new Map<string, PlannedTransferSeed>(),
                   suppressedImportedIds: new Set<string>(),
+                  existingCounterpartConversionsByImportedId: new Map(),
               };
 
         const unmappedCategoryWarnings = new Set<string>();
@@ -562,6 +577,13 @@ class Importer {
                     };
 
                     createTransactions.push(startTransaction);
+                }
+
+                if (!isDryRun) {
+                    await this.applyExistingCounterpartConversions({
+                        newMonMonTransactions,
+                        transferPlan,
+                    });
                 }
 
                 if (createTransactions.length > 0) {
@@ -1283,6 +1305,7 @@ class Importer {
         const emptyPlan: TransferPlan = {
             seedByImportedId: new Map<string, PlannedTransferSeed>(),
             suppressedImportedIds: new Set<string>(),
+            existingCounterpartConversionsByImportedId: new Map(),
         };
 
         const transferConfig = this.config.import.transfers;
@@ -1406,6 +1429,10 @@ class Importer {
         const seedByImportedId = new Map<string, PlannedTransferSeed>();
         const suppressedImportedIds = new Set<string>();
         const claimedCounterpartIds = new Set<string>();
+        const existingCounterpartConversionsByImportedId = new Map<
+            string,
+            PlannedExistingCounterpartConversion
+        >();
 
         for (const candidate of candidates) {
             if (suppressedImportedIds.has(candidate.importedId)) {
@@ -1495,15 +1522,64 @@ class Importer {
                     existingActualTransactionsByAccountId.get(
                         candidate.targetActualAccount.id
                     ) ?? [];
-                if (
-                    existingTargetTransactions.some(
+                const existingTargetTransaction =
+                    existingTargetTransactions.find(
                         (transaction) =>
                             transaction.imported_id ===
                             existingCounterpartImportedId
-                    )
-                ) {
+                    );
+
+                if (existingTargetTransaction?.transfer_id) {
                     this.logger.debug(
-                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${existingCounterpartImportedId}' was already imported in an earlier run.`
+                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${existingCounterpartImportedId}' is already a transfer.`
+                    );
+                    continue;
+                }
+
+                if (existingTargetTransaction) {
+                    const sourceTransferPayeeId =
+                        transferPayeeIdByAccountId.get(
+                            candidate.sourceActualAccount.id
+                        );
+                    if (!sourceTransferPayeeId) {
+                        continue;
+                    }
+
+                    suppressedImportedIds.add(candidate.importedId);
+
+                    existingCounterpartConversionsByImportedId.set(
+                        candidate.importedId,
+                        {
+                            existingCounterpartTransactionId:
+                                existingTargetTransaction.id,
+                            existingCounterpartAccountId:
+                                candidate.targetActualAccount.id,
+                            existingCounterpartAccountName:
+                                candidate.targetActualAccount.name,
+                            sourceTransferPayeeId,
+                            sourceImportedId: candidate.importedId,
+                            sourceImportedPayee:
+                                candidate.transaction.name ?? '',
+                            ...(this.buildTransactionNotes(
+                                candidate.transaction
+                            )
+                                ? {
+                                      sourceNotes: this.buildTransactionNotes(
+                                          candidate.transaction
+                                      ),
+                                  }
+                                : {}),
+                            ...(this.config.import.synchronizeClearedStatus
+                                ? {
+                                      sourceCleared:
+                                          candidate.transaction.booked,
+                                  }
+                                : {}),
+                        }
+                    );
+
+                    this.logger.debug(
+                        `Planning conversion of existing plain transaction '${existingTargetTransaction.id}' in '${candidate.targetActualAccount.name}' to a transfer for source '${candidate.importedId}'.`
                     );
                     continue;
                 }
@@ -1518,12 +1594,13 @@ class Importer {
         }
 
         this.logger.debug(
-            `Automatic transfer planning: seeds=${seedByImportedId.size}, suppressedCounterparts=${suppressedImportedIds.size}`
+            `Automatic transfer planning: seeds=${seedByImportedId.size}, suppressedCounterparts=${suppressedImportedIds.size}, counterpartConversions=${existingCounterpartConversionsByImportedId.size}`
         );
 
         return {
             seedByImportedId,
             suppressedImportedIds,
+            existingCounterpartConversionsByImportedId,
         };
     }
 
@@ -1632,6 +1709,69 @@ class Importer {
             this.logger.debug(
                 `Stamped generated transfer counterpart '${transaction.transfer_id}' in '${plannedSeed.targetActualAccountName}' with imported_id '${plannedSeed.sameRunCounterpart.importedId}'.`
             );
+        }
+    }
+
+    private async applyExistingCounterpartConversions({
+        newMonMonTransactions,
+        transferPlan,
+    }: {
+        newMonMonTransactions: MonMonTransaction[];
+        transferPlan: TransferPlan;
+    }) {
+        for (const transaction of newMonMonTransactions) {
+            const importedId = this.getIdForMoneyMoneyTransaction(transaction);
+            const conversion =
+                transferPlan.existingCounterpartConversionsByImportedId.get(
+                    importedId
+                );
+            if (!conversion) {
+                continue;
+            }
+
+            await this.actualApi.updateTransaction(
+                conversion.existingCounterpartTransactionId,
+                { payee: conversion.sourceTransferPayeeId }
+            );
+
+            const transactionNotes = this.buildTransactionNotes(transaction);
+
+            this.logger.info(
+                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer pair with source amount ${transaction.amount.toFixed(2)} on ${transaction.bookingDate.toISOString().slice(0, 10)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+            );
+
+            await new Promise((resolve) => setTimeout(resolve, 250));
+
+            const targetTransactions = await this.actualApi.getTransactions(
+                conversion.existingCounterpartAccountId
+            );
+            const convertedTarget = targetTransactions.find(
+                (tx) => tx.id === conversion.existingCounterpartTransactionId
+            );
+
+            if (convertedTarget?.transfer_id) {
+                const counterpartUpdate: Partial<UpdateTransaction> = {
+                    imported_id: conversion.sourceImportedId,
+                    imported_payee: conversion.sourceImportedPayee,
+                };
+
+                if (conversion.sourceNotes !== undefined) {
+                    counterpartUpdate.notes = conversion.sourceNotes;
+                }
+
+                if (conversion.sourceCleared !== undefined) {
+                    counterpartUpdate.cleared = conversion.sourceCleared;
+                }
+
+                await this.actualApi.updateTransaction(
+                    convertedTarget.transfer_id,
+                    counterpartUpdate
+                );
+
+                this.logger.debug(
+                    `Stamped auto-created transfer counterpart '${convertedTarget.transfer_id}' with imported_id '${conversion.sourceImportedId}'.`
+                );
+            }
         }
     }
 

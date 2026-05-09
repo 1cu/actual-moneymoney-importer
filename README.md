@@ -152,6 +152,7 @@ Notes:
 - `categoryRefs` must be non-empty when `enabled = true`
 - If only one side is present, the importer seeds a transfer on the recognized side and lets a later import update the generated counterpart
 - If both sides are present in the same run and the counterpart match is unique, the importer suppresses the second plain import and stamps the generated transfer counterpart with the second `imported_id`
+- If the counterpart was previously imported as a plain transaction, the importer converts the existing plain booking into a transfer when the source side is later imported
 - If the target account cannot be identified confidently, the transaction is imported normally
 
 ### Comment import
