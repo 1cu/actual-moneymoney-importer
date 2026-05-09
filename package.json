@@ -2,15 +2,18 @@
     "name": "actual-moneymoney-importer",
     "version": "2.20.0",
     "description": "An importer for syncing MoneyMoney accounts and transactions to Actual.",
+    "packageManager": "npm@11.12.1",
     "scripts": {
-        "build": "npx tsc",
+        "build": "tsc",
+        "prepack": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build",
         "start": "node dist/index.js",
         "test": "npm run build && node --test \"test/cli/**/*.test.mjs\" \"test/unit/**/*.test.mjs\"",
         "test:cli": "npm run build && node --test \"test/cli/**/*.test.mjs\"",
         "test:unit": "npm run build && node --test \"test/unit/**/*.test.mjs\"",
-        "lint:eslint": "eslint src",
-        "lint:prettier": "prettier --check 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' 'package.json'",
-        "lint:fix": "eslint src --fix && prettier --write 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' 'package.json'",
+        "test:coverage": "npm run build && node --test --experimental-test-coverage \"test/cli/**/*.test.mjs\" \"test/unit/**/*.test.mjs\"",
+        "lint:eslint": "eslint src test eslint.config.mjs commitlint.config.js",
+        "lint:prettier": "prettier --check 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js'",
+        "lint:fix": "eslint src test eslint.config.mjs commitlint.config.js --fix && prettier --write 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js'",
         "prepare": "husky"
     },
     "type": "module",
@@ -25,6 +28,9 @@
     ],
     "bin": {
         "actual-mmi": "dist/index.js"
+    },
+    "publishConfig": {
+        "access": "public"
     },
     "files": [
         "dist"
@@ -44,7 +50,6 @@
         "chalk": "^5.6.2",
         "date-fns": "^4.1.0",
         "moneymoney": "^1.3.0",
-        "node-fetch": "^3.3.2",
         "openai": "^6.37.0",
         "string-width": "^8.2.1",
         "toml": "^4.1.1",
@@ -52,7 +57,7 @@
         "zod": "^4.4.3"
     },
     "engines": {
-        "node": ">=25"
+        "node": "25.x"
     },
     "devDependencies": {
         "@commitlint/cli": "^21.0.0",
@@ -75,6 +80,7 @@
             "prettier --write"
         ],
         "test/**/*.mjs": [
+            "eslint --fix",
             "prettier --write"
         ],
         "*.md": [
@@ -83,7 +89,24 @@
         ".github/**/*.md": [
             "prettier --write"
         ],
+        ".github/**/*.yml": [
+            "prettier --write"
+        ],
         "package.json": [
+            "prettier --write"
+        ],
+        "tsconfig.json": [
+            "prettier --write"
+        ],
+        ".releaserc.json": [
+            "prettier --write"
+        ],
+        "eslint.config.mjs": [
+            "eslint --fix",
+            "prettier --write"
+        ],
+        "commitlint.config.js": [
+            "eslint --fix",
             "prettier --write"
         ]
     }

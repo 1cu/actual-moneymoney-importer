@@ -32,7 +32,7 @@
 
 - macOS with [MoneyMoney](https://moneymoney-app.com) installed
 - An [Actual Budget](https://actualbudget.org) server and budget
-- Node.js 25+
+- Node.js 25.x
 
 Install with NPM:
 

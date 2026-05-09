@@ -1,7 +1,6 @@
 import * as actual from '@actual-app/api';
 import { format } from 'date-fns';
 import fs from 'fs/promises';
-import fetch from 'node-fetch';
 import { withApiLogControl } from './ActualApiLogControl.js';
 import { ActualServerConfig } from './config.js';
 import Logger, { LogLevel } from './Logger.js';
@@ -33,7 +32,7 @@ class ActualApi {
         private serverConfig: ActualServerConfig,
         private logger: Logger,
         private actualApi = actual,
-        private fetchImpl = fetch
+        private fetchImpl = globalThis.fetch
     ) {}
 
     async init() {

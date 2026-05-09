@@ -7,7 +7,22 @@ export default tseslint.config(
     tseslint.configs.recommended,
     {
         files: ['src/**/*.ts'],
-        ignores: ['**/*.js'],
+        languageOptions: {
+            globals: globals.node,
+        },
+        rules: {
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {
+                    argsIgnorePattern: '^_',
+                    varsIgnorePattern: '^_',
+                    caughtErrorsIgnorePattern: '^_',
+                },
+            ],
+        },
+    },
+    {
+        files: ['test/**/*.mjs', '*.mjs', '*.js', '.github/**/*.js'],
         languageOptions: {
             globals: globals.node,
         },

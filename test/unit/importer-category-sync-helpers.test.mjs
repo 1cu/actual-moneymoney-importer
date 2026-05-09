@@ -7,7 +7,8 @@ import {
     shouldEmitMappingConflictGuidance,
 } from '../../dist/utils/Importer.js';
 
-const stripAnsi = (value) => value.replace(/\u001B\[[0-?]*[ -/]*[@-~]/gu, '');
+const stripAnsi = (value) =>
+    value.replace(new RegExp('\\u001B\\[[0-?]*[ -/]*[@-~]', 'gu'), ''); // eslint-disable-line no-control-regex
 
 test('classifyCategoryUpdate returns backfill for empty current category', () => {
     const result = classifyCategoryUpdate({
