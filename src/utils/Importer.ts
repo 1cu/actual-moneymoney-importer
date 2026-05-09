@@ -101,6 +101,7 @@ type PlannedExistingCounterpartConversion = {
     existingCounterpartTransactionId: string;
     existingCounterpartAccountId: string;
     existingCounterpartAccountName: string;
+    sourceActualAccountName: string;
     sourceTransferPayeeId: string;
     sourceImportedId: string;
     sourceImportedPayee: string;
@@ -1561,6 +1562,8 @@ class Importer {
                                 candidate.targetActualAccount.id,
                             existingCounterpartAccountName:
                                 candidate.targetActualAccount.name,
+                            sourceActualAccountName:
+                                candidate.sourceActualAccount.name,
                             sourceTransferPayeeId,
                             sourceImportedId: candidate.importedId,
                             sourceImportedPayee:
@@ -1691,7 +1694,7 @@ class Importer {
             const transactionNotes = transaction.notes || undefined;
 
             this.logger.info(
-                `Seeded transfer in '${actualAccountName}' to '${plannedSeed.targetActualAccountName}' with amount ${(transaction.amount / 100).toFixed(2)} on ${transaction.date}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+                `Created transfer from '${actualAccountName}' to '${plannedSeed.targetActualAccountName}' with amount ${(transaction.amount / 100).toFixed(2)} on ${transaction.date}${transactionNotes ? ` (${transactionNotes})` : ''}.`
             );
 
             if (!plannedSeed.sameRunCounterpart) {
@@ -1753,7 +1756,7 @@ class Importer {
             const transactionNotes = this.buildTransactionNotes(transaction);
 
             this.logger.info(
-                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer pair with source amount ${transaction.amount.toFixed(2)} on ${transaction.bookingDate.toISOString().slice(0, 10)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer from '${conversion.sourceActualAccountName}' with amount ${transaction.amount.toFixed(2)} on ${transaction.bookingDate.toISOString().slice(0, 10)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
             );
 
             let convertAttempt = 0;

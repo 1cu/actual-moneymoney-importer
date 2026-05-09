@@ -748,6 +748,7 @@ test('applyExistingCounterpartConversions converts plain counterpart and stamps 
                         existingCounterpartTransactionId: 'actual-counterpart',
                         existingCounterpartAccountId: 'actual-target',
                         existingCounterpartAccountName: 'Target',
+                        sourceActualAccountName: 'Source',
                         sourceTransferPayeeId: 'payee-source',
                         sourceImportedId: 'mm-source-100',
                         sourceImportedPayee: 'Example Sender',
