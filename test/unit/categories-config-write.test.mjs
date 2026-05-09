@@ -193,7 +193,7 @@ syncId = "dupe"
 });
 
 test('replaceCategoryMappingInConfig fails safely when patched TOML is invalid', () => {
-    const malformed = `${BASE_CONFIG}\ninvalid = \"unterminated`;
+    const malformed = `${BASE_CONFIG}\ninvalid = "unterminated`;
     const result = replaceCategoryMappingInConfig(malformed, 'budget-b', [
         makeEntry({
             sourceUuid: 'mm-a',

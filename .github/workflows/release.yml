@@ -18,7 +18,7 @@ jobs:
             - name: Setup Node
               uses: actions/setup-node@v4
               with:
-                  node-version: '25'
+                  node-version: '25.x'
                   registry-url: 'https://registry.npmjs.org'
 
             - name: Install dependencies
@@ -33,7 +33,10 @@ jobs:
             - name: Build & Test
               run: npm test
 
+            - name: Pack Dry Run
+              run: npm pack --dry-run
+
             - name: Semantic Release
-              run: npx semantic-release
+              run: ./node_modules/.bin/semantic-release
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
