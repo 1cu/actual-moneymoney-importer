@@ -1,7 +1,19 @@
 {
     "branches": ["main"],
     "plugins": [
-        "@semantic-release/commit-analyzer",
+        [
+            "@semantic-release/commit-analyzer",
+            {
+                "releaseRules": [
+                    {
+                        "type": "chore",
+                        "scope": "deps",
+                        "subject": "bump @actual-app/api from *",
+                        "release": "patch"
+                    }
+                ]
+            }
+        ],
         "@semantic-release/release-notes-generator",
         "@semantic-release/npm",
         [
