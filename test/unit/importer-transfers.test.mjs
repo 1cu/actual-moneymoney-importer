@@ -100,7 +100,7 @@ const makeImporter = ({
     );
 };
 
-test('buildTransferPlan creates delayed transfer seed from hard target account match', () => {
+test('buildTransferPlan does not seed delayed transfer when counterpart date is unknown', () => {
     const importer = makeImporter();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
@@ -152,19 +152,10 @@ test('buildTransferPlan creates delayed transfer seed from hard target account m
         ]),
     });
 
-    assert.equal(plan.seedByImportedId.size, 1);
-    assert.deepEqual([...plan.suppressedImportedIds], []);
-    assert.equal(
-        plan.seedByImportedId.get('mm-source-100')?.transferPayeeId,
-        'payee-target'
-    );
-    assert.equal(
-        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart,
-        undefined
-    );
+    assert.equal(plan.seedByImportedId.size, 0);
 });
 
-test('buildTransferPlan can seed transfer when only source account is selected', () => {
+test('buildTransferPlan does not seed delayed transfer even when only source account is selected', () => {
     const importer = makeImporter();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
@@ -211,11 +202,7 @@ test('buildTransferPlan can seed transfer when only source account is selected',
         ]),
     });
 
-    assert.equal(plan.seedByImportedId.size, 1);
-    assert.equal(
-        plan.seedByImportedId.get('mm-source-100')?.targetActualAccountId,
-        'actual-target'
-    );
+    assert.equal(plan.seedByImportedId.size, 0);
 });
 
 test('buildTransferPlan skips automatic transfer when mapped account numbers are ambiguous', () => {
@@ -483,11 +470,7 @@ test('buildTransferPlan skips same-run transfer when source and counterpart have
         ]),
     });
 
-    assert.equal(plan.seedByImportedId.size, 1);
-    assert.equal(
-        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart,
-        undefined
-    );
+    assert.equal(plan.seedByImportedId.size, 0);
     assert.deepEqual([...plan.suppressedImportedIds], []);
 });
 
@@ -556,11 +539,8 @@ test('buildTransferPlan skips historical conversion when source and counterpart 
         ]),
     });
 
-    assert.equal(plan.seedByImportedId.size, 1);
-    assert.equal(
-        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart,
-        undefined
-    );
+    assert.equal(plan.seedByImportedId.size, 0);
+    assert.equal(plan.existingCounterpartConversionsByImportedId.size, 0);
     assert.equal(plan.existingCounterpartConversionsByImportedId.size, 0);
 });
 

@@ -1627,13 +1627,6 @@ class Importer {
                     continue;
                 }
             }
-
-            seedByImportedId.set(candidate.importedId, {
-                importedId: candidate.importedId,
-                transferPayeeId: candidate.transferPayeeId,
-                targetActualAccountId: candidate.targetActualAccount.id,
-                targetActualAccountName: candidate.targetActualAccount.name,
-            });
         }
 
         this.logger.debug(
