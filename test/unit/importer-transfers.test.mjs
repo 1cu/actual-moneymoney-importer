@@ -721,9 +721,16 @@ test('applyExistingCounterpartConversions converts plain counterpart and stamps 
             transfer_id: 'auto-created-counterpart',
         },
     ]);
+    const getTransactionsByIds = mock.fn(async () => [
+        {
+            id: 'actual-counterpart',
+            transfer_id: 'auto-created-counterpart',
+        },
+    ]);
     const updateTransaction = mock.fn(async () => {});
     const importer = makeImporter({
         getTransactions,
+        getTransactionsByIds,
         updateTransaction,
     });
 

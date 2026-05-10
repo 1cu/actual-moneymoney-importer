@@ -467,6 +467,20 @@ class Importer {
                   resolvedTransferCategoryUuids: new Set<string>(),
               };
 
+        // Sort account states so seed accounts process first — this ensures
+        // counterpart accounts import after transfer creation and reconcile
+        // onto auto-created counterparts with their correct dates.
+        const seedImportedIds = new Set(transferPlan.seedByImportedId.keys());
+        const isSeedAccount = (state: (typeof accountStates)[number]) =>
+            state.newMonMonTransactions.some((tx) =>
+                seedImportedIds.has(this.getIdForMoneyMoneyTransaction(tx))
+            );
+        accountStates.sort((a, b) => {
+            const aSeed = isSeedAccount(a) ? 0 : 1;
+            const bSeed = isSeedAccount(b) ? 0 : 1;
+            return aSeed - bSeed;
+        });
+
         const unmappedCategoryWarnings = new Set<string>();
         const runMetrics: ImportRunMetrics = {
             accountsScanned: 0,
@@ -1464,6 +1478,7 @@ class Importer {
                 candidate,
                 monMonTransactionMap: newTransactionsByAccountUuid,
                 matchWindowDays: transferConfig.matchWindowDays,
+                relaxedMatching: true,
             });
 
             if (matchingCounterparts.length > 1) {
@@ -1527,6 +1542,7 @@ class Importer {
                 candidate,
                 monMonTransactionMap,
                 matchWindowDays: transferConfig.matchWindowDays,
+                relaxedMatching: false,
             });
             if (existingCounterparts.length > 1) {
                 this.logger.debug(
@@ -1628,10 +1644,12 @@ class Importer {
         candidate,
         monMonTransactionMap,
         matchWindowDays,
+        relaxedMatching = false,
     }: {
         candidate: TransferPlanningCandidate;
         monMonTransactionMap: Record<string, MonMonTransaction[]>;
         matchWindowDays: number;
+        relaxedMatching?: boolean;
     }): MonMonTransaction[] {
         const targetTransactions =
             monMonTransactionMap[candidate.targetMonMonAccount.uuid] ?? [];
@@ -1640,8 +1658,6 @@ class Importer {
         return targetTransactions.filter((transaction) => {
             const candidateImportedId =
                 this.getIdForMoneyMoneyTransaction(transaction);
-            const isTargetAccountMatch =
-                transaction.accountUuid === candidate.targetMonMonAccount.uuid;
             const hasMatchingPurpose =
                 !!candidate.transaction.purpose &&
                 !!transaction.purpose &&
@@ -1652,18 +1668,23 @@ class Importer {
                 transaction.accountNumber ===
                     candidate.sourceMonMonAccount.accountNumber;
 
-            return (
-                candidateImportedId !== candidate.importedId &&
+            const isAmountAndDateMatch =
                 Math.round(transaction.amount * 100) === -sourceAmount &&
-                (isTargetAccountMatch ||
-                    hasMatchingPurpose ||
-                    hasReciprocalAccountNumber) &&
                 Math.abs(
                     differenceInCalendarDays(
                         transaction.valueDate,
                         candidate.transaction.valueDate
                     )
-                ) <= matchWindowDays
+                ) <= matchWindowDays;
+            const hasSignalMatch =
+                relaxedMatching ||
+                hasMatchingPurpose ||
+                hasReciprocalAccountNumber;
+
+            return (
+                candidateImportedId !== candidate.importedId &&
+                isAmountAndDateMatch &&
+                hasSignalMatch
             );
         });
     }
@@ -1779,7 +1800,7 @@ class Importer {
             const transactionNotes = this.buildTransactionNotes(transaction);
 
             this.logger.info(
-                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer from '${conversion.sourceActualAccountName}' with amount ${transaction.amount.toFixed(2)} on ${transaction.bookingDate.toISOString().slice(0, 10)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer from '${conversion.sourceActualAccountName}' with amount ${transaction.amount.toFixed(2)} on ${transaction.valueDate.toISOString().slice(0, 10)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
             );
 
             let convertAttempt = 0;
@@ -1787,16 +1808,15 @@ class Importer {
 
             while (convertAttempt < 5 && !transferId) {
                 if (convertAttempt > 0) {
-                    await new Promise((resolve) => setTimeout(resolve, 100));
+                    await new Promise((resolve) => setTimeout(resolve, 250));
                 }
 
-                const targetTransactions = await this.actualApi.getTransactions(
-                    conversion.existingCounterpartAccountId
-                );
-                const convertedTarget = targetTransactions.find(
-                    (tx) =>
-                        tx.id === conversion.existingCounterpartTransactionId
-                );
+                const targetTransactions =
+                    await this.actualApi.getTransactionsByIds(
+                        conversion.existingCounterpartAccountId,
+                        [conversion.existingCounterpartTransactionId]
+                    );
+                const convertedTarget = targetTransactions[0];
 
                 transferId = convertedTarget?.transfer_id;
                 convertAttempt++;
@@ -1813,7 +1833,7 @@ class Importer {
                 const counterpartUpdate: Partial<UpdateTransaction> = {
                     imported_id: conversion.sourceImportedId,
                     imported_payee: conversion.sourceImportedPayee,
-                    date: format(transaction.bookingDate, DATE_FORMAT),
+                    date: format(transaction.valueDate, DATE_FORMAT),
                 };
 
                 if (conversion.sourceNotes !== undefined) {
