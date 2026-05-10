@@ -1489,7 +1489,11 @@ class Importer {
             }
 
             const sameRunCounterpart = matchingCounterparts[0];
-            if (sameRunCounterpart) {
+            if (
+                sameRunCounterpart &&
+                format(candidate.transaction.valueDate, DATE_FORMAT) ===
+                    format(sameRunCounterpart.valueDate, DATE_FORMAT)
+            ) {
                 const counterpartImportedId =
                     this.getIdForMoneyMoneyTransaction(sameRunCounterpart);
                 if (claimedCounterpartIds.has(counterpartImportedId)) {
@@ -1552,7 +1556,11 @@ class Importer {
             }
 
             const existingCounterpart = existingCounterparts[0];
-            if (existingCounterpart) {
+            if (
+                existingCounterpart &&
+                format(candidate.transaction.valueDate, DATE_FORMAT) ===
+                    format(existingCounterpart.valueDate, DATE_FORMAT)
+            ) {
                 const existingCounterpartImportedId =
                     this.getIdForMoneyMoneyTransaction(existingCounterpart);
                 const existingTargetTransactions =
@@ -1667,6 +1675,15 @@ class Importer {
                 !!candidate.sourceMonMonAccount.accountNumber &&
                 transaction.accountNumber ===
                     candidate.sourceMonMonAccount.accountNumber;
+            const hasContradictoryAccountNumber =
+                !!transaction.accountNumber &&
+                !!candidate.sourceMonMonAccount.accountNumber &&
+                transaction.accountNumber !==
+                    candidate.sourceMonMonAccount.accountNumber;
+
+            if (relaxedMatching && hasContradictoryAccountNumber) {
+                return false;
+            }
 
             const isAmountAndDateMatch =
                 Math.round(transaction.amount * 100) === -sourceAmount &&
@@ -1811,14 +1828,19 @@ class Importer {
                     await new Promise((resolve) => setTimeout(resolve, 250));
                 }
 
-                const targetTransactions =
-                    await this.actualApi.getTransactionsByIds(
-                        conversion.existingCounterpartAccountId,
-                        [conversion.existingCounterpartTransactionId]
-                    );
-                const convertedTarget = targetTransactions[0];
+                try {
+                    const targetTransactions =
+                        await this.actualApi.getTransactionsByIds(
+                            conversion.existingCounterpartAccountId,
+                            [conversion.existingCounterpartTransactionId]
+                        );
+                    const convertedTarget = targetTransactions[0];
 
-                transferId = convertedTarget?.transfer_id;
+                    transferId = convertedTarget?.transfer_id;
+                } catch {
+                    // retry on transient API errors
+                }
+
                 convertAttempt++;
             }
 

@@ -310,7 +310,6 @@ test('buildTransferPlan suppresses unique same-run counterpart and carries metad
         accountUuid: targetMonMon.uuid,
         amount: 1440,
         categoryUuid: 'mm-uncategorized',
-        valueDate: '2026-04-23',
         name: 'Einzahlung',
         purpose: 'Ruecklagen',
         comment: 'memo',
@@ -352,7 +351,7 @@ test('buildTransferPlan suppresses unique same-run counterpart and carries metad
     assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-200']);
     assert.equal(counterpart?.importedId, 'mm-target-200');
     assert.equal(counterpart?.importedPayee, 'Einzahlung');
-    assert.equal(counterpart?.date, '2026-04-23');
+    assert.equal(counterpart?.date, '2026-04-21');
     assert.equal(counterpart?.notes, 'Ruecklagen | Comment: memo');
     assert.equal(counterpart?.cleared, true);
 });
@@ -423,6 +422,146 @@ test('buildTransferPlan suppresses same-run counterpart when source has hard tar
         'mm-target-200'
     );
     assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-200']);
+});
+
+test('buildTransferPlan skips same-run transfer when source and counterpart have different dates', () => {
+    const importer = makeImporter();
+    const sourceMonMon = makeMonMonAccount({
+        uuid: 'mm-source',
+        name: 'Source',
+        accountNumber: 'DE-SOURCE',
+    });
+    const targetMonMon = makeMonMonAccount({
+        uuid: 'mm-target',
+        name: 'Target',
+        accountNumber: 'DE-TARGET',
+    });
+    const sourceActual = makeActualAccount({ id: 'actual-source', name: 'A' });
+    const targetActual = makeActualAccount({ id: 'actual-target', name: 'B' });
+    const sourceTx = makeTransaction({
+        id: '100',
+        accountUuid: sourceMonMon.uuid,
+        amount: -1440,
+        accountNumber: targetMonMon.accountNumber,
+        valueDate: '2026-04-21',
+    });
+    const targetTx = makeTransaction({
+        id: '200',
+        accountUuid: targetMonMon.uuid,
+        amount: 1440,
+        categoryUuid: 'mm-uncategorized',
+        valueDate: '2026-04-24',
+    });
+
+    const plan = importer.buildTransferPlan({
+        fullAccountMapping: makeFullAccountMapping([
+            [sourceMonMon, sourceActual],
+            [targetMonMon, targetActual],
+        ]),
+        accountStates: [
+            {
+                monMonAccount: sourceMonMon,
+                actualAccount: sourceActual,
+                newMonMonTransactions: [sourceTx],
+            },
+            {
+                monMonAccount: targetMonMon,
+                actualAccount: targetActual,
+                newMonMonTransactions: [targetTx],
+            },
+        ],
+        monMonTransactionMap: {
+            [sourceMonMon.uuid]: [sourceTx],
+            [targetMonMon.uuid]: [targetTx],
+        },
+        existingActualTransactionsByAccountId: new Map([
+            [sourceActual.id, []],
+            [targetActual.id, []],
+        ]),
+        transferPayeeIdByAccountId: new Map([
+            [targetActual.id, 'payee-target'],
+        ]),
+    });
+
+    assert.equal(plan.seedByImportedId.size, 1);
+    assert.equal(
+        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart,
+        undefined
+    );
+    assert.deepEqual([...plan.suppressedImportedIds], []);
+});
+
+test('buildTransferPlan skips historical conversion when source and counterpart have different dates', () => {
+    const importer = makeImporter();
+    const sourceMonMon = makeMonMonAccount({
+        uuid: 'mm-source',
+        name: 'Source',
+        accountNumber: 'DE-SOURCE',
+    });
+    const targetMonMon = makeMonMonAccount({
+        uuid: 'mm-target',
+        name: 'Target',
+        accountNumber: 'DE-TARGET',
+    });
+    const sourceActual = makeActualAccount({ id: 'actual-source', name: 'A' });
+    const targetActual = makeActualAccount({ id: 'actual-target', name: 'B' });
+    const sourceTx = makeTransaction({
+        id: '100',
+        accountUuid: sourceMonMon.uuid,
+        amount: -1440,
+        accountNumber: targetMonMon.accountNumber,
+        purpose: 'Ruecklagen',
+        valueDate: '2026-04-21',
+    });
+    const targetTx = makeTransaction({
+        id: '200',
+        accountUuid: targetMonMon.uuid,
+        amount: 1440,
+        categoryUuid: 'mm-uncategorized',
+        purpose: 'Ruecklagen',
+        valueDate: '2026-04-24',
+    });
+
+    const plan = importer.buildTransferPlan({
+        fullAccountMapping: makeFullAccountMapping([
+            [sourceMonMon, sourceActual],
+            [targetMonMon, targetActual],
+        ]),
+        accountStates: [
+            {
+                monMonAccount: sourceMonMon,
+                actualAccount: sourceActual,
+                newMonMonTransactions: [sourceTx],
+            },
+            {
+                monMonAccount: targetMonMon,
+                actualAccount: targetActual,
+                newMonMonTransactions: [],
+            },
+        ],
+        monMonTransactionMap: {
+            [sourceMonMon.uuid]: [sourceTx],
+            [targetMonMon.uuid]: [targetTx],
+        },
+        existingActualTransactionsByAccountId: new Map([
+            [sourceActual.id, []],
+            [
+                targetActual.id,
+                [{ id: 'actual-counterpart', imported_id: 'mm-target-200' }],
+            ],
+        ]),
+        transferPayeeIdByAccountId: new Map([
+            [targetActual.id, 'payee-target'],
+            [sourceActual.id, 'payee-source'],
+        ]),
+    });
+
+    assert.equal(plan.seedByImportedId.size, 1);
+    assert.equal(
+        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart,
+        undefined
+    );
+    assert.equal(plan.existingCounterpartConversionsByImportedId.size, 0);
 });
 
 test('buildTransferPlan skips ambiguous same-run counterpart matches', () => {
