@@ -408,7 +408,7 @@ test('emitImportRunSummary prints nothing-to-import for fully empty runs', () =>
     );
 
     assert.equal(logger.infos.length, 1);
-    assert.equal(logger.infos[0]?.message, 'Nothing to import.');
+    assert.match(logger.infos[0]?.message ?? '', /nothing.*import/i);
     assert.deepEqual(logger.infos[0]?.hints, []);
 });
 

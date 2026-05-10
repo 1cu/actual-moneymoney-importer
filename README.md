@@ -81,7 +81,6 @@ commentPrefix = "MoneyMoney Comment: " # Optional: Set a prefix for MoneyMoney c
 [import.transfers]
 enabled = false
 categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
-matchWindowDays = 5
 
 # Actual servers, you can add multiple servers
 [[actualServers]]
@@ -139,21 +138,35 @@ The AI receives existing payees from your budget to prefer matching over creatin
 
 #### Automatic transfers
 
-Enable `[import.transfers]` to seed Actual transfers from MoneyMoney transactions when the source-side booking carries a configured transfer category and its `accountNumber` points to another mapped MoneyMoney account.
+Enable `[import.transfers]` to create native Actual transfers from MoneyMoney transactions when the source-side transaction carries a configured transfer category, its `accountNumber` points to another mapped MoneyMoney account, and both sides share the same value date.
 
-| Option            | Default | Description                                                                 |
-| ----------------- | ------- | --------------------------------------------------------------------------- |
-| `enabled`         | `false` | Enable automatic transfer seeding                                           |
-| `categoryRefs`    | `[]`    | MoneyMoney transfer categories by UUID, full path, or exact leaf name       |
-| `matchWindowDays` | `5`     | Date window used to detect a same-run counterpart in another mapped account |
+| Option         | Default | Description                                                     |
+| -------------- | ------- | --------------------------------------------------------------- |
+| `enabled`      | `false` | Enable automatic transfer handling                              |
+| `categoryRefs` | `[]`    | MoneyMoney transfer categories by UUID, full path, or leaf name |
 
-Notes:
+Native Actual transfers are only created when both matched sides share the same value date.
+Matching is exact-date only for now; off-date candidates are ignored.
 
-- `categoryRefs` must be non-empty when `enabled = true`
-- If only one side is present, the importer seeds a transfer on the recognized side and lets a later import update the generated counterpart
-- If both sides are present in the same run and the counterpart match is unique, the importer suppresses the second plain import and stamps the generated transfer counterpart with the second `imported_id`
-- If the counterpart was previously imported as a plain transaction, the importer converts the existing plain booking into a transfer when the source side is later imported
-- If the target account cannot be identified confidently, the transaction is imported normally
+Supported cases:
+
+- Same-run, same-date, unique match: the importer suppresses the second plain import and stamps the generated transfer counterpart with the second `imported_id`
+- Historical plain counterpart, same-date, unique match: the importer converts the existing plain booking into a transfer when the source side is later imported
+
+Unsupported cases:
+
+- Different-date pairs: imported as two normal transactions so each side keeps its own date
+    - Reason: Actual mirrors transfer dates across linked sides, so a native transfer would not preserve independent value dates
+- Counterparts already part of another transfer: left untouched
+    - Reason: the importer cannot safely prove they belong to this source transaction
+- Ambiguous target mapping: imported normally
+    - Reason: the importer only creates transfers when the target account can be identified uniquely
+- Single-sided delayed seeds: not auto-created as native transfers
+    - Reason: without the counterpart already visible, the importer cannot confirm the date safely
+- Ambiguous or weak matches: imported normally
+    - Reason: avoid guessing and creating false positives
+
+`categoryRefs` must be non-empty when `enabled = true`.
 
 ### Comment import
 
