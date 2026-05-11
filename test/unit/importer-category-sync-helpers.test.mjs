@@ -4,7 +4,6 @@ import {
     buildConflictPromptText,
     classifyCategoryUpdate,
     parsePromptDecision,
-    shouldEmitMappingConflictGuidance,
 } from '../../dist/utils/Importer.js';
 
 const stripAnsi = (value) =>
@@ -115,28 +114,4 @@ test('buildConflictPromptText groups transaction details, choices, and prompt la
         /Choose:\s+\[y\] update\s+\[n\] keep\s+\[A\] update all\s+\[N\] keep all\s+\[q\] quit/
     );
     assert.match(prompt, /Your choice:\s*$/);
-});
-
-test('shouldEmitMappingConflictGuidance requires both unmapped warnings and conflicts', () => {
-    assert.equal(
-        shouldEmitMappingConflictGuidance({
-            totalUnmappedCategoryWarnings: 1,
-            accountsWithConflicts: 1,
-        }),
-        true
-    );
-    assert.equal(
-        shouldEmitMappingConflictGuidance({
-            totalUnmappedCategoryWarnings: 1,
-            accountsWithConflicts: 0,
-        }),
-        false
-    );
-    assert.equal(
-        shouldEmitMappingConflictGuidance({
-            totalUnmappedCategoryWarnings: 0,
-            accountsWithConflicts: 1,
-        }),
-        false
-    );
 });

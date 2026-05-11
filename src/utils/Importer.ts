@@ -1950,8 +1950,20 @@ class Importer {
                     const convertedTarget = targetTransactions[0];
 
                     transferId = convertedTarget?.transfer_id;
-                } catch {
-                    // retry on transient API errors
+
+                    if (!transferId) {
+                        this.logger.debug(
+                            `Retrying auto-created transfer counterpart lookup for '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountId}' (attempt ${convertAttempt + 1}/5) after ${convertedTarget ? `transaction '${convertedTarget.id}' without a transfer id` : 'no matching transaction'}.`
+                        );
+                    }
+                } catch (error) {
+                    this.logger.debug(
+                        `Retrying auto-created transfer counterpart lookup for '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountId}' (attempt ${convertAttempt + 1}/5) after error: ${error instanceof Error ? error.message : String(error)}`
+                    );
+
+                    if (this.isAuthOrPermissionError(error)) {
+                        throw error;
+                    }
                 }
 
                 convertAttempt++;
@@ -1992,13 +2004,23 @@ class Importer {
             const transactionNotes = this.buildTransactionNotes(transaction);
 
             this.logger.info(
-                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer from '${conversion.sourceActualAccountName}' with amount ${transaction.amount.toFixed(2)} on ${transaction.valueDate.toISOString().slice(0, 10)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer from '${conversion.sourceActualAccountName}' with amount ${transaction.amount.toFixed(2)} on ${format(transaction.valueDate, DATE_FORMAT)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
             );
 
             this.logger.debug(
                 `Stamped auto-created transfer counterpart '${transferId}' with imported_id '${conversion.sourceImportedId}'.`
             );
         }
+    }
+
+    private isAuthOrPermissionError(error: unknown): boolean {
+        if (!error || typeof error !== 'object') {
+            return false;
+        }
+
+        const status = (error as { status?: unknown }).status;
+
+        return status === 401 || status === 403;
     }
 
     private async promptForConflictDecision(

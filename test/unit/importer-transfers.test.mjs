@@ -3,10 +3,22 @@ import { mock, test } from 'node:test';
 import Importer from '../../dist/utils/Importer.js';
 
 const makeLogger = () => ({
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
+    debugMessages: [],
+    infoMessages: [],
+    warnMessages: [],
+    errorMessages: [],
+    debug(message) {
+        this.debugMessages.push(message);
+    },
+    info(message) {
+        this.infoMessages.push(message);
+    },
+    warn(message) {
+        this.warnMessages.push(message);
+    },
+    error(message) {
+        this.errorMessages.push(message);
+    },
 });
 
 const makeMonMonAccount = ({ uuid, name, accountNumber }) => ({
@@ -58,8 +70,8 @@ const makeImporter = ({
     getTransactions = async () => [],
     getTransactionsByIds = async () => [],
     updateTransaction = async () => {},
+    logger = makeLogger(),
 } = {}) => {
-    const logger = makeLogger();
     const actualApi = {
         getTransactions,
         getTransactionsByIds,
@@ -1320,7 +1332,12 @@ test('applyExistingCounterpartConversions throws when the conversion payee updat
 test('applyExistingCounterpartConversions throws when the auto-created counterpart cannot be located', async () => {
     const updateTransaction = mock.fn(async () => {});
     const getTransactionsByIds = mock.fn(async () => []);
-    const importer = makeImporter({ updateTransaction, getTransactionsByIds });
+    const logger = makeLogger();
+    const importer = makeImporter({
+        updateTransaction,
+        getTransactionsByIds,
+        logger,
+    });
 
     await assert.rejects(
         () =>
@@ -1363,6 +1380,69 @@ test('applyExistingCounterpartConversions throws when the auto-created counterpa
         getTransactionsByIds.mock.callCount() >= 5,
         'expected retry attempts when the counterpart is initially missing'
     );
+    assert.ok(
+        logger.debugMessages.some(
+            (message) =>
+                message.includes('actual-counterpart') &&
+                message.includes('actual-target') &&
+                message.includes('attempt 5/5')
+        ),
+        'expected retry diagnostics to include the missing counterpart details'
+    );
+});
+
+test('applyExistingCounterpartConversions stops retrying on auth failures', async () => {
+    const updateTransaction = mock.fn(async () => {});
+    const authError = Object.assign(new Error('forbidden'), { status: 403 });
+    const getTransactionsByIds = mock.fn(async () => {
+        throw authError;
+    });
+    const logger = makeLogger();
+    const importer = makeImporter({
+        updateTransaction,
+        getTransactionsByIds,
+        logger,
+    });
+
+    await assert.rejects(
+        () =>
+            importer.applyExistingCounterpartConversions({
+                newMonMonTransactions: [
+                    makeTransaction({
+                        id: '100',
+                        accountUuid: 'mm-source',
+                        amount: -1440,
+                        accountNumber: 'DE-TARGET',
+                        name: 'Example Sender',
+                        purpose: 'Ruecklagen',
+                    }),
+                ],
+                transferPlan: {
+                    seedByImportedId: new Map(),
+                    suppressedImportedIds: new Set(),
+                    resolvedTransferCategoryUuids: new Set(),
+                    existingCounterpartConversionsByImportedId: new Map([
+                        [
+                            'mm-source-100',
+                            {
+                                existingCounterpartTransactionId:
+                                    'actual-counterpart',
+                                existingCounterpartAccountId: 'actual-target',
+                                existingCounterpartAccountName: 'Target',
+                                sourceActualAccountName: 'Source',
+                                sourceTransferPayeeId: 'payee-source',
+                                sourceImportedId: 'mm-source-100',
+                                sourceImportedPayee: 'Example Sender',
+                            },
+                        ],
+                    ]),
+                },
+            }),
+        /forbidden/
+    );
+
+    assert.equal(updateTransaction.mock.callCount(), 1);
+    assert.equal(getTransactionsByIds.mock.callCount(), 1);
 });
 
 test('applyExistingCounterpartConversions throws when stamping the auto-created counterpart fails', async () => {
