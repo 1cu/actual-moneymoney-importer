@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, format, subMonths } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 import chalk from 'chalk';
 import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
@@ -78,6 +78,11 @@ type DuplicateImportedIdGroup = {
 type TransferPlan = {
     seedByImportedId: Map<string, PlannedTransferSeed>;
     suppressedImportedIds: Set<string>;
+    existingCounterpartConversionsByImportedId: Map<
+        string,
+        PlannedExistingCounterpartConversion
+    >;
+    resolvedTransferCategoryUuids: Set<string>;
 };
 type PlannedTransferSeed = {
     importedId: string;
@@ -89,9 +94,19 @@ type PlannedTransferSeed = {
 type PlannedTransferCounterpart = {
     importedId: string;
     importedPayee: string;
-    date: string;
     notes?: string;
     cleared?: boolean;
+};
+type PlannedExistingCounterpartConversion = {
+    existingCounterpartTransactionId: string;
+    existingCounterpartAccountId: string;
+    existingCounterpartAccountName: string;
+    sourceActualAccountName: string;
+    sourceTransferPayeeId: string;
+    sourceImportedId: string;
+    sourceImportedPayee: string;
+    sourceNotes?: string;
+    sourceCleared?: boolean;
 };
 type TransferPlanningCandidate = {
     transaction: MonMonTransaction;
@@ -447,7 +462,23 @@ class Importer {
             : {
                   seedByImportedId: new Map<string, PlannedTransferSeed>(),
                   suppressedImportedIds: new Set<string>(),
+                  existingCounterpartConversionsByImportedId: new Map(),
+                  resolvedTransferCategoryUuids: new Set<string>(),
               };
+
+        // Sort account states so seed accounts process first — this ensures
+        // counterpart accounts import after transfer creation and can stamp
+        // auto-created counterparts in the same run.
+        const seedImportedIds = new Set(transferPlan.seedByImportedId.keys());
+        const isSeedAccount = (state: (typeof accountStates)[number]) =>
+            state.newMonMonTransactions.some((tx) =>
+                seedImportedIds.has(this.getIdForMoneyMoneyTransaction(tx))
+            );
+        accountStates.sort((a, b) => {
+            const aSeed = isSeedAccount(a) ? 0 : 1;
+            const bSeed = isSeedAccount(b) ? 0 : 1;
+            return aSeed - bSeed;
+        });
 
         const unmappedCategoryWarnings = new Set<string>();
         const runMetrics: ImportRunMetrics = {
@@ -521,17 +552,40 @@ class Importer {
                                 categoryResolution.categoryPath ??
                                 transaction.categoryUuid;
 
-                            if (!unmappedCategoryWarnings.has(warningKey)) {
+                            const isTransferHandled =
+                                transferPlan.seedByImportedId.has(importedId) ||
+                                transferPlan.suppressedImportedIds.has(
+                                    importedId
+                                ) ||
+                                transferPlan.existingCounterpartConversionsByImportedId.has(
+                                    importedId
+                                );
+
+                            if (
+                                !unmappedCategoryWarnings.has(warningKey) &&
+                                !isTransferHandled
+                            ) {
                                 unmappedCategoryWarnings.add(warningKey);
                                 runMetrics.totalUnmappedCategoryWarnings++;
                                 this.logger.warn(
                                     `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
+                                );
+                            } else if (isTransferHandled) {
+                                this.logger.debug(
+                                    `Skipping unmapped category warning for transfer-handled category '${warningKey}'.`
                                 );
                             }
                         }
                     }
 
                     createTransactions.push(createTransaction);
+                }
+
+                if (!isDryRun) {
+                    await this.applyExistingCounterpartConversions({
+                        newMonMonTransactions,
+                        transferPlan,
+                    });
                 }
 
                 const effectiveExistingActualTransactions =
@@ -674,6 +728,7 @@ class Importer {
                                 : [];
 
                         await this.applyTransferCounterpartUpdates({
+                            actualAccountName: actualAccount.name,
                             importedTransactions,
                             transferPlan,
                         });
@@ -1283,6 +1338,8 @@ class Importer {
         const emptyPlan: TransferPlan = {
             seedByImportedId: new Map<string, PlannedTransferSeed>(),
             suppressedImportedIds: new Set<string>(),
+            existingCounterpartConversionsByImportedId: new Map(),
+            resolvedTransferCategoryUuids: new Set(),
         };
 
         const transferConfig = this.config.import.transfers;
@@ -1406,29 +1463,36 @@ class Importer {
         const seedByImportedId = new Map<string, PlannedTransferSeed>();
         const suppressedImportedIds = new Set<string>();
         const claimedCounterpartIds = new Set<string>();
+        const claimedExistingCounterpartTransactionIds = new Set<string>();
+        const existingCounterpartConversionsByImportedId = new Map<
+            string,
+            PlannedExistingCounterpartConversion
+        >();
 
         for (const candidate of candidates) {
             if (suppressedImportedIds.has(candidate.importedId)) {
                 continue;
             }
 
-            const matchingCounterparts = this.findMatchingTransferCounterparts({
+            const matchingCounterparts = this.findSameRunTransferCounterparts({
                 candidate,
-                monMonTransactionMap: newTransactionsByAccountUuid,
-                matchWindowDays: transferConfig.matchWindowDays,
+                targetTransactions:
+                    newTransactionsByAccountUuid[
+                        candidate.targetMonMonAccount.uuid
+                    ] ?? [],
             });
 
             if (matchingCounterparts.length > 1) {
                 this.logger.debug(
-                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-run counterpart candidates were found.`
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-date same-run counterpart candidates were found.`
                 );
                 continue;
             }
 
-            const sameRunCounterpart = matchingCounterparts[0];
-            if (sameRunCounterpart) {
+            if (matchingCounterparts.length === 1) {
+                const exactSameRunCounterpart = matchingCounterparts[0]!;
                 const counterpartImportedId =
-                    this.getIdForMoneyMoneyTransaction(sameRunCounterpart);
+                    this.getIdForMoneyMoneyTransaction(exactSameRunCounterpart);
                 if (claimedCounterpartIds.has(counterpartImportedId)) {
                     this.logger.debug(
                         `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${counterpartImportedId}' was already claimed by another transfer seed.`
@@ -1462,27 +1526,30 @@ class Importer {
                     targetActualAccountName: candidate.targetActualAccount.name,
                     sameRunCounterpart: {
                         importedId: counterpartImportedId,
-                        importedPayee: sameRunCounterpart.name ?? '',
-                        date: format(sameRunCounterpart.valueDate, DATE_FORMAT),
+                        importedPayee: exactSameRunCounterpart.name ?? '',
                         notes:
-                            this.buildTransactionNotes(sameRunCounterpart) ||
-                            '',
+                            this.buildTransactionNotes(
+                                exactSameRunCounterpart
+                            ) || '',
                         ...(this.config.import.synchronizeClearedStatus
-                            ? { cleared: sameRunCounterpart.booked }
+                            ? { cleared: exactSameRunCounterpart.booked }
                             : {}),
                     },
                 });
                 continue;
             }
 
-            const existingCounterparts = this.findMatchingTransferCounterparts({
-                candidate,
-                monMonTransactionMap,
-                matchWindowDays: transferConfig.matchWindowDays,
-            });
+            const existingCounterparts =
+                this.findHistoricalTransferCounterparts({
+                    candidate,
+                    targetTransactions:
+                        monMonTransactionMap[
+                            candidate.targetMonMonAccount.uuid
+                        ] ?? [],
+                });
             if (existingCounterparts.length > 1) {
                 this.logger.debug(
-                    `Skipping automatic transfer for '${candidate.importedId}' because multiple historical counterpart candidates were found.`
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-date historical counterpart candidates were found.`
                 );
                 continue;
             }
@@ -1495,76 +1562,267 @@ class Importer {
                     existingActualTransactionsByAccountId.get(
                         candidate.targetActualAccount.id
                     ) ?? [];
+                const existingSourceTransactions =
+                    existingActualTransactionsByAccountId.get(
+                        candidate.sourceActualAccount.id
+                    ) ?? [];
+                // If the source-side counterpart was already stamped during a
+                // partial historical conversion, skip re-planning it.
                 if (
-                    existingTargetTransactions.some(
+                    existingSourceTransactions.some(
                         (transaction) =>
-                            transaction.imported_id ===
-                            existingCounterpartImportedId
+                            transaction.imported_id === candidate.importedId &&
+                            !!transaction.transfer_id
                     )
                 ) {
                     this.logger.debug(
-                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${existingCounterpartImportedId}' was already imported in an earlier run.`
+                        `Skipping automatic transfer for '${candidate.importedId}' because its transfer counterpart already exists in '${candidate.sourceActualAccount.name}'.`
+                    );
+                    continue;
+                }
+
+                const existingTargetTransaction =
+                    existingTargetTransactions.find(
+                        (transaction) =>
+                            transaction.imported_id ===
+                            existingCounterpartImportedId
+                    );
+
+                if (
+                    existingTargetTransaction &&
+                    existingTargetTransaction.transfer_id
+                ) {
+                    this.logger.debug(
+                        `Skipping automatic transfer for '${candidate.importedId}' because historical counterpart '${existingTargetTransaction.id}' is already part of a transfer.`
+                    );
+                    continue;
+                }
+
+                const sourceTransferPayeeId = transferPayeeIdByAccountId.get(
+                    candidate.sourceActualAccount.id
+                );
+                if (!sourceTransferPayeeId) {
+                    continue;
+                }
+
+                if (existingTargetTransaction) {
+                    if (
+                        claimedExistingCounterpartTransactionIds.has(
+                            existingTargetTransaction.id
+                        )
+                    ) {
+                        this.logger.debug(
+                            `Skipping automatic transfer for '${candidate.importedId}' because historical counterpart '${existingTargetTransaction.id}' was already claimed by another transfer conversion.`
+                        );
+                        continue;
+                    }
+
+                    claimedExistingCounterpartTransactionIds.add(
+                        existingTargetTransaction.id
+                    );
+
+                    suppressedImportedIds.add(candidate.importedId);
+
+                    const sourceNotes = this.buildTransactionNotes(
+                        candidate.transaction
+                    );
+
+                    existingCounterpartConversionsByImportedId.set(
+                        candidate.importedId,
+                        {
+                            existingCounterpartTransactionId:
+                                existingTargetTransaction.id,
+                            existingCounterpartAccountId:
+                                candidate.targetActualAccount.id,
+                            existingCounterpartAccountName:
+                                candidate.targetActualAccount.name,
+                            sourceActualAccountName:
+                                candidate.sourceActualAccount.name,
+                            sourceTransferPayeeId,
+                            sourceImportedId: candidate.importedId,
+                            sourceImportedPayee:
+                                candidate.transaction.name ?? '',
+                            ...(sourceNotes ? { sourceNotes } : {}),
+                            ...(this.config.import.synchronizeClearedStatus
+                                ? {
+                                      sourceCleared:
+                                          candidate.transaction.booked,
+                                  }
+                                : {}),
+                        }
+                    );
+
+                    this.logger.debug(
+                        `Planning conversion of historical counterpart '${existingTargetTransaction.id}' in '${candidate.targetActualAccount.name}' to a transfer for source '${candidate.importedId}'.`
                     );
                     continue;
                 }
             }
-
-            seedByImportedId.set(candidate.importedId, {
-                importedId: candidate.importedId,
-                transferPayeeId: candidate.transferPayeeId,
-                targetActualAccountId: candidate.targetActualAccount.id,
-                targetActualAccountName: candidate.targetActualAccount.name,
-            });
         }
 
         this.logger.debug(
-            `Automatic transfer planning: seeds=${seedByImportedId.size}, suppressedCounterparts=${suppressedImportedIds.size}`
+            `Automatic transfer planning: seeds=${seedByImportedId.size}, suppressedCounterparts=${suppressedImportedIds.size}, counterpartConversions=${existingCounterpartConversionsByImportedId.size}`
         );
 
         return {
             seedByImportedId,
             suppressedImportedIds,
+            existingCounterpartConversionsByImportedId,
+            resolvedTransferCategoryUuids: resolvedUuids,
         };
     }
 
-    private findMatchingTransferCounterparts({
+    // Same-run matching is permissive but still needs a positive signal so
+    // unrelated same-date, same-amount transactions do not get linked.
+    private findSameRunTransferCounterparts({
         candidate,
-        monMonTransactionMap,
-        matchWindowDays,
+        targetTransactions,
     }: {
         candidate: TransferPlanningCandidate;
-        monMonTransactionMap: Record<string, MonMonTransaction[]>;
-        matchWindowDays: number;
+        targetTransactions: MonMonTransaction[];
     }): MonMonTransaction[] {
-        const targetTransactions =
-            monMonTransactionMap[candidate.targetMonMonAccount.uuid] ?? [];
         const sourceAmount = Math.round(candidate.transaction.amount * 100);
+        const candidateDate = format(
+            candidate.transaction.valueDate,
+            DATE_FORMAT
+        );
 
-        return targetTransactions.filter((transaction) => {
-            const candidateImportedId =
-                this.getIdForMoneyMoneyTransaction(transaction);
-            const hasMatchingPurpose =
-                !!candidate.transaction.purpose &&
-                !!transaction.purpose &&
-                candidate.transaction.purpose === transaction.purpose;
-            const hasReciprocalAccountNumber =
-                !!transaction.accountNumber &&
-                !!candidate.sourceMonMonAccount.accountNumber &&
-                transaction.accountNumber ===
-                    candidate.sourceMonMonAccount.accountNumber;
+        return targetTransactions.filter((transaction) =>
+            this.isMatchingTransferCounterpart({
+                candidate,
+                transaction,
+                relaxedMatching: true,
+                sourceAmount,
+                candidateDate,
+            })
+        );
+    }
 
+    private findHistoricalTransferCounterparts({
+        candidate,
+        targetTransactions,
+    }: {
+        candidate: TransferPlanningCandidate;
+        targetTransactions: MonMonTransaction[];
+    }): MonMonTransaction[] {
+        const sourceAmount = Math.round(candidate.transaction.amount * 100);
+        const candidateDate = format(
+            candidate.transaction.valueDate,
+            DATE_FORMAT
+        );
+
+        return targetTransactions.filter((transaction) =>
+            this.isMatchingTransferCounterpart({
+                candidate,
+                transaction,
+                relaxedMatching: false,
+                sourceAmount,
+                candidateDate,
+            })
+        );
+    }
+
+    private isMatchingTransferCounterpart({
+        candidate,
+        transaction,
+        relaxedMatching,
+        sourceAmount,
+        candidateDate,
+    }: {
+        candidate: TransferPlanningCandidate;
+        transaction: MonMonTransaction;
+        relaxedMatching: boolean;
+        sourceAmount: number;
+        candidateDate: string;
+    }): boolean {
+        const candidateImportedId =
+            this.getIdForMoneyMoneyTransaction(transaction);
+        if (candidateImportedId === candidate.importedId) {
+            return false;
+        }
+
+        if (
+            !this.matchesTransferCounterpartAmountAndDate({
+                transaction,
+                sourceAmount,
+                candidateDate,
+            })
+        ) {
+            return false;
+        }
+
+        if (relaxedMatching) {
             return (
-                candidateImportedId !== candidate.importedId &&
-                Math.round(transaction.amount * 100) === -sourceAmount &&
-                (hasMatchingPurpose || hasReciprocalAccountNumber) &&
-                Math.abs(
-                    differenceInCalendarDays(
-                        transaction.valueDate,
-                        candidate.transaction.valueDate
-                    )
-                ) <= matchWindowDays
+                !this.hasContradictoryAccountNumber({
+                    candidate,
+                    transaction,
+                }) &&
+                (this.hasMatchingTransferSignal({ candidate, transaction }) ||
+                    this.hasHardTargetAccountReference(candidate))
             );
-        });
+        }
+
+        return this.hasMatchingTransferSignal({ candidate, transaction });
+    }
+
+    private matchesTransferCounterpartAmountAndDate({
+        transaction,
+        sourceAmount,
+        candidateDate,
+    }: {
+        transaction: MonMonTransaction;
+        sourceAmount: number;
+        candidateDate: string;
+    }): boolean {
+        return (
+            Math.round(transaction.amount * 100) === -sourceAmount &&
+            format(transaction.valueDate, DATE_FORMAT) === candidateDate
+        );
+    }
+
+    private hasMatchingTransferSignal({
+        candidate,
+        transaction,
+    }: {
+        candidate: TransferPlanningCandidate;
+        transaction: MonMonTransaction;
+    }): boolean {
+        const hasMatchingPurpose =
+            !!candidate.transaction.purpose &&
+            !!transaction.purpose &&
+            candidate.transaction.purpose === transaction.purpose;
+        const hasReciprocalAccountNumber =
+            !!transaction.accountNumber &&
+            !!candidate.sourceMonMonAccount.accountNumber &&
+            transaction.accountNumber ===
+                candidate.sourceMonMonAccount.accountNumber;
+
+        return hasMatchingPurpose || hasReciprocalAccountNumber;
+    }
+
+    private hasHardTargetAccountReference(
+        candidate: TransferPlanningCandidate
+    ): boolean {
+        return (
+            !!candidate.transaction.accountNumber &&
+            candidate.transaction.accountNumber ===
+                candidate.targetMonMonAccount.accountNumber
+        );
+    }
+
+    private hasContradictoryAccountNumber({
+        candidate,
+        transaction,
+    }: {
+        candidate: TransferPlanningCandidate;
+        transaction: MonMonTransaction;
+    }): boolean {
+        return (
+            !!transaction.accountNumber &&
+            !!candidate.sourceMonMonAccount.accountNumber &&
+            transaction.accountNumber !==
+                candidate.sourceMonMonAccount.accountNumber
+        );
     }
 
     private async getExistingTransactionsForStartBalanceCheck({
@@ -1590,9 +1848,11 @@ class Importer {
     }
 
     private async applyTransferCounterpartUpdates({
+        actualAccountName,
         importedTransactions,
         transferPlan,
     }: {
+        actualAccountName: string;
         importedTransactions: ReadTransaction[];
         transferPlan: TransferPlan;
     }) {
@@ -1608,14 +1868,23 @@ class Importer {
             const plannedSeed = transferPlan.seedByImportedId.get(
                 transaction.imported_id
             );
-            if (!plannedSeed?.sameRunCounterpart || !transaction.transfer_id) {
+            if (!plannedSeed || !transaction.transfer_id) {
+                continue;
+            }
+
+            const transactionNotes = transaction.notes || undefined;
+
+            this.logger.info(
+                `Created transfer from '${actualAccountName}' to '${plannedSeed.targetActualAccountName}' with amount ${(transaction.amount / 100).toFixed(2)} on ${transaction.date}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+            );
+
+            if (!plannedSeed.sameRunCounterpart) {
                 continue;
             }
 
             const counterpartUpdate: Partial<UpdateTransaction> = {
                 imported_id: plannedSeed.sameRunCounterpart.importedId,
                 imported_payee: plannedSeed.sameRunCounterpart.importedPayee,
-                date: plannedSeed.sameRunCounterpart.date,
                 notes: plannedSeed.sameRunCounterpart.notes ?? '',
             };
 
@@ -1633,6 +1902,125 @@ class Importer {
                 `Stamped generated transfer counterpart '${transaction.transfer_id}' in '${plannedSeed.targetActualAccountName}' with imported_id '${plannedSeed.sameRunCounterpart.importedId}'.`
             );
         }
+    }
+
+    private async applyExistingCounterpartConversions({
+        newMonMonTransactions,
+        transferPlan,
+    }: {
+        newMonMonTransactions: MonMonTransaction[];
+        transferPlan: TransferPlan;
+    }) {
+        for (const transaction of newMonMonTransactions) {
+            const importedId = this.getIdForMoneyMoneyTransaction(transaction);
+            const conversion =
+                transferPlan.existingCounterpartConversionsByImportedId.get(
+                    importedId
+                );
+            if (!conversion) {
+                continue;
+            }
+
+            try {
+                await this.actualApi.updateTransaction(
+                    conversion.existingCounterpartTransactionId,
+                    { payee: conversion.sourceTransferPayeeId }
+                );
+            } catch (error) {
+                throw new Error(
+                    `Failed to convert plain transaction '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountName}' to a transfer: ${error instanceof Error ? error.message : String(error)}`,
+                    { cause: error }
+                );
+            }
+
+            let convertAttempt = 0;
+            let transferId: string | undefined;
+
+            while (convertAttempt < 5 && !transferId) {
+                if (convertAttempt > 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 250));
+                }
+
+                try {
+                    const targetTransactions =
+                        await this.actualApi.getTransactionsByIds(
+                            conversion.existingCounterpartAccountId,
+                            [conversion.existingCounterpartTransactionId]
+                        );
+                    const convertedTarget = targetTransactions[0];
+
+                    transferId = convertedTarget?.transfer_id;
+
+                    if (!transferId) {
+                        this.logger.debug(
+                            `Retrying auto-created transfer counterpart lookup for '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountId}' (attempt ${convertAttempt + 1}/5) after ${convertedTarget ? `transaction '${convertedTarget.id}' without a transfer id` : 'no matching transaction'}.`
+                        );
+                    }
+                } catch (error) {
+                    this.logger.debug(
+                        `Retrying auto-created transfer counterpart lookup for '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountId}' (attempt ${convertAttempt + 1}/5) after error: ${error instanceof Error ? error.message : String(error)}`
+                    );
+
+                    if (this.isAuthOrPermissionError(error)) {
+                        throw error;
+                    }
+                }
+
+                convertAttempt++;
+            }
+
+            if (!transferId) {
+                throw new Error(
+                    `Could not locate auto-created transfer counterpart for converted transaction '${conversion.existingCounterpartTransactionId}' in '${conversion.existingCounterpartAccountName}' after retries.`
+                );
+            }
+
+            try {
+                const counterpartUpdate: Partial<UpdateTransaction> = {
+                    imported_id: conversion.sourceImportedId,
+                    imported_payee: conversion.sourceImportedPayee,
+                    date: format(transaction.valueDate, DATE_FORMAT),
+                };
+
+                if (conversion.sourceNotes !== undefined) {
+                    counterpartUpdate.notes = conversion.sourceNotes;
+                }
+
+                if (conversion.sourceCleared !== undefined) {
+                    counterpartUpdate.cleared = conversion.sourceCleared;
+                }
+
+                await this.actualApi.updateTransaction(
+                    transferId,
+                    counterpartUpdate
+                );
+            } catch (error) {
+                throw new Error(
+                    `Failed to stamp auto-created transfer counterpart '${transferId}' for converted transaction '${conversion.existingCounterpartTransactionId}': ${error instanceof Error ? error.message : String(error)}`,
+                    { cause: error }
+                );
+            }
+
+            const transactionNotes = this.buildTransactionNotes(transaction);
+
+            this.logger.info(
+                `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer from '${conversion.sourceActualAccountName}' with amount ${transaction.amount.toFixed(2)} on ${format(transaction.valueDate, DATE_FORMAT)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
+            );
+
+            this.logger.debug(
+                `Stamped auto-created transfer counterpart '${transferId}' with imported_id '${conversion.sourceImportedId}'.`
+            );
+        }
+    }
+
+    private isAuthOrPermissionError(error: unknown): boolean {
+        if (!error || typeof error !== 'object') {
+            return false;
+        }
+
+        const status = (error as { status?: unknown }).status;
+
+        return status === 401 || status === 403;
     }
 
     private async promptForConflictDecision(

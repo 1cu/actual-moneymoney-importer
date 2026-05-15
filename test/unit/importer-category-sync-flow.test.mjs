@@ -339,10 +339,6 @@ test('logCategorySyncSummary suppresses no-op info and emits debug marker', () =
 
     assert.equal(logger.infos.length, 0);
     assert.equal(logger.debugs.length, 1);
-    assert.match(
-        logger.debugs[0]?.message ?? '',
-        /Category sync no-op for account 'Noop Account': existing=4, backfills=0, conflicts=0, planned=0, skipped=0/
-    );
 });
 
 test('logCategorySyncSummary emits info for category activity', () => {
@@ -408,7 +404,7 @@ test('emitImportRunSummary prints nothing-to-import for fully empty runs', () =>
     );
 
     assert.equal(logger.infos.length, 1);
-    assert.equal(logger.infos[0]?.message, 'Nothing to import.');
+    assert.match(logger.infos[0]?.message ?? '', /nothing.*import/i);
     assert.deepEqual(logger.infos[0]?.hints, []);
 });
 

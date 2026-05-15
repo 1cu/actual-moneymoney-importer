@@ -31,7 +31,6 @@ test('config defaults synchronizeCategories to false when omitted', () => {
     assert.equal(parsed.import.synchronizeCategories, false);
     assert.equal(parsed.import.transfers.enabled, false);
     assert.deepEqual(parsed.import.transfers.categoryRefs, []);
-    assert.equal(parsed.import.transfers.matchWindowDays, 5);
 });
 
 test('automatic transfers require at least one category ref when enabled', () => {

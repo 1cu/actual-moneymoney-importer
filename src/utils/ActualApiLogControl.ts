@@ -1,4 +1,8 @@
-const API_NOISE_PATTERNS = [/^Syncing since /, /^Got messages from server /];
+const API_NOISE_PATTERNS = [
+    /^Syncing since /,
+    /^Got messages from server /,
+    /^\[Breadcrumb\]/,
+];
 
 const isApiNoiseLine = (line: string): boolean =>
     API_NOISE_PATTERNS.some((pattern) => pattern.test(line.trim()));
