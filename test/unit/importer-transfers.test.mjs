@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import Importer from '../../dist/utils/Importer.js';
+import Importer, {
+    getTransferFetchWindow,
+    isWithinRequestedImportRange,
+} from '../../dist/utils/Importer.js';
 
 const makeLogger = () => ({
     debugMessages: [],
@@ -120,6 +123,36 @@ const makeImporter = ({
         categoryMap
     );
 };
+
+test('getTransferFetchWindow pads the requested MoneyMoney range', () => {
+    const fetchWindow = getTransferFetchWindow({
+        importDate: new Date('2026-04-24'),
+        toDate: new Date('2026-04-24'),
+        matchWindowDays: 5,
+    });
+
+    assert.equal(fetchWindow.from.toISOString().slice(0, 10), '2026-04-19');
+    assert.equal(fetchWindow.to?.toISOString().slice(0, 10), '2026-04-29');
+});
+
+test('isWithinRequestedImportRange excludes padded boundary transactions', () => {
+    assert.equal(
+        isWithinRequestedImportRange({
+            transactionDate: new Date('2026-04-21'),
+            importDate: new Date('2026-04-24'),
+            toDate: new Date('2026-04-24'),
+        }),
+        false
+    );
+    assert.equal(
+        isWithinRequestedImportRange({
+            transactionDate: new Date('2026-04-24'),
+            importDate: new Date('2026-04-24'),
+            toDate: new Date('2026-04-24'),
+        }),
+        true
+    );
+});
 
 test('buildTransferPlan suppresses unique same-run counterpart and carries metadata', () => {
     const importer = makeImporter();

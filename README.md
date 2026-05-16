@@ -141,14 +141,14 @@ The AI receives existing payees from your budget to prefer matching over creatin
 
 Enable `[import.transfers]` to create native Actual transfers from MoneyMoney transactions when the source-side transaction carries a configured transfer category, its `accountNumber` points to another mapped MoneyMoney account, and the counterpart falls within the configured match window.
 
-| Option            | Default | Description                                                     |
-| ----------------- | ------- | --------------------------------------------------------------- |
-| `enabled`         | `false` | Enable automatic transfer handling                              |
-| `categoryRefs`    | `[]`    | MoneyMoney transfer categories by UUID, full path, or leaf name |
-| `matchWindowDays` | `0`     | Max day difference allowed when matching counterparts           |
+| Option            | Default | Description                                                                                                        |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `enabled`         | `false` | Enable automatic transfer handling                                                                                 |
+| `categoryRefs`    | `[]`    | MoneyMoney transfer categories by UUID, full path, or leaf name                                                    |
+| `matchWindowDays` | `0`     | Max day difference allowed when matching counterparts; also pads the MoneyMoney fetch window for transfer matching |
 
 Native Actual transfers preserve each side's date when created through the importer.
-With `matchWindowDays = 0`, matching stays exact-date only.
+With `matchWindowDays = 0`, matching stays exact-date only. When `matchWindowDays > 0`, the importer also fetches MoneyMoney transactions a few days before/after the requested import range so boundary transfers can still be matched, while only importing transactions that fall inside the requested range.
 
 Supported cases:
 

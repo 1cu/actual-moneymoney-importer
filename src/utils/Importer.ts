@@ -1,4 +1,10 @@
-import { differenceInCalendarDays, format, subMonths } from 'date-fns';
+import {
+    addDays,
+    differenceInCalendarDays,
+    format,
+    subDays,
+    subMonths,
+} from 'date-fns';
 import chalk from 'chalk';
 import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
@@ -132,6 +138,47 @@ export const shouldEmitMappingConflictGuidance = ({
     accountsWithConflicts: number;
 }): boolean => totalUnmappedCategoryWarnings > 0 && accountsWithConflicts > 0;
 
+export const getTransferFetchWindow = ({
+    importDate,
+    toDate,
+    matchWindowDays,
+}: {
+    importDate: Date;
+    toDate?: Date;
+    matchWindowDays: number;
+}) => ({
+    from:
+        matchWindowDays > 0 ? subDays(importDate, matchWindowDays) : importDate,
+    ...(toDate
+        ? {
+              to:
+                  matchWindowDays > 0
+                      ? addDays(toDate, matchWindowDays)
+                      : toDate,
+          }
+        : {}),
+});
+
+export const isWithinRequestedImportRange = ({
+    transactionDate,
+    importDate,
+    toDate,
+}: {
+    transactionDate: Date;
+    importDate: Date;
+    toDate?: Date;
+}): boolean => {
+    if (differenceInCalendarDays(transactionDate, importDate) < 0) {
+        return false;
+    }
+
+    if (toDate && differenceInCalendarDays(transactionDate, toDate) > 0) {
+        return false;
+    }
+
+    return true;
+};
+
 const buildExistingCategoryUpdate = ({
     pair,
     targetCategoryId,
@@ -199,6 +246,16 @@ class Importer {
             );
         }
 
+        const transfersEnabled = this.config.import.transfers.enabled;
+        const matchWindowDays = transfersEnabled
+            ? (this.config.import.transfers.matchWindowDays ?? 0)
+            : 0;
+        const fetchWindow = getTransferFetchWindow({
+            importDate,
+            matchWindowDays,
+            ...(toDate ? { toDate } : {}),
+        });
+
         this.logger.debug(
             `Cleared status synchronization is ${
                 this.config.import.synchronizeClearedStatus
@@ -215,15 +272,21 @@ class Importer {
             }`
         );
 
+        if (matchWindowDays > 0) {
+            this.logger.debug(
+                `Transfer matching window is widened to ${format(fetchWindow.from, DATE_FORMAT)}${fetchWindow.to ? ` .. ${format(fetchWindow.to, DATE_FORMAT)}` : ''} (requested import window: ${format(importDate, DATE_FORMAT)}${toDate ? ` .. ${format(toDate, DATE_FORMAT)}` : ''}).`
+            );
+        }
+
         const getTransactionsOptions: {
             from: Date;
             to?: Date;
         } = {
-            from: importDate,
+            from: fetchWindow.from,
         };
 
-        if (toDate) {
-            getTransactionsOptions.to = toDate;
+        if (fetchWindow.to) {
+            getTransactionsOptions.to = fetchWindow.to;
         }
 
         let monMonTransactions = await getTransactions(getTransactionsOptions);
@@ -290,7 +353,6 @@ class Importer {
             {} as Record<string, MonMonTransaction[]>
         );
 
-        const transfersEnabled = this.config.import.transfers.enabled;
         const fullAccountMapping = transfersEnabled
             ? this.accountMap.getMap()
             : undefined;
@@ -430,6 +492,16 @@ class Importer {
                     const importedId =
                         this.getIdForMoneyMoneyTransaction(transaction);
                     if (transferPlan.suppressedImportedIds.has(importedId)) {
+                        continue;
+                    }
+
+                    if (
+                        !isWithinRequestedImportRange({
+                            transactionDate: transaction.valueDate,
+                            importDate,
+                            ...(toDate ? { toDate } : {}),
+                        })
+                    ) {
                         continue;
                     }
 
