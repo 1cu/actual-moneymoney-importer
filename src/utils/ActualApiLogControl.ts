@@ -4,8 +4,24 @@ const API_NOISE_PATTERNS = [
     /^\[Breadcrumb\]/,
 ];
 
+// Keep this list small and explicit; these are the only known Actual log lines
+// we want to suppress while preserving everything else.
 const isApiNoiseLine = (line: string): boolean =>
     API_NOISE_PATTERNS.some((pattern) => pattern.test(line.trim()));
+
+type ConsoleMethod = typeof console.log;
+type StreamWrite = typeof process.stdout.write;
+type StreamWriteArgs = Parameters<StreamWrite>;
+type StreamWriteCallback = (err?: Error | null) => void;
+
+// Only one top-level suppressing call should be active at a time.
+// Nested calls within a single async chain are safe.
+let globalApiNoiseFilterDepth = 0;
+
+const getStreamWriteCallback = (args: StreamWriteArgs) =>
+    args.find(
+        (value): value is StreamWriteCallback => typeof value === 'function'
+    );
 
 export async function withApiLogControl<T>(
     verbose: boolean,
@@ -33,17 +49,31 @@ export async function withGlobalApiNoiseFilter<T>(
         return await callback();
     }
 
+    const shouldPatchGlobals = globalApiNoiseFilterDepth === 0;
+    globalApiNoiseFilterDepth++;
+
+    if (!shouldPatchGlobals) {
+        try {
+            return await callback();
+        } finally {
+            globalApiNoiseFilterDepth--;
+        }
+    }
+
     const originalConsoleLog = console.log;
     const originalConsoleInfo = console.info;
     const originalConsoleWarn = console.warn;
     const originalConsoleError = console.error;
-    const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-    const originalStderrWrite = process.stderr.write.bind(process.stderr);
-    let suppressNextStandaloneNewline = false;
+    const originalStdoutWrite = process.stdout.write.bind(
+        process.stdout
+    ) as StreamWrite;
+    const originalStderrWrite = process.stderr.write.bind(
+        process.stderr
+    ) as StreamWrite;
 
     const filterConsoleMethod =
-        (method: (...args: unknown[]) => void) =>
-        (...args: unknown[]) => {
+        (method: ConsoleMethod): ConsoleMethod =>
+        (...args: Parameters<ConsoleMethod>) => {
             const firstArg = args[0];
             if (typeof firstArg === 'string' && isApiNoiseLine(firstArg)) {
                 return;
@@ -51,10 +81,11 @@ export async function withGlobalApiNoiseFilter<T>(
             method(...args);
         };
 
-    const filterWrite =
-        (write: (...args: StreamWriteArg[]) => boolean) =>
-        (...args: StreamWriteArg[]) => {
-            const chunk = args[0] as string | Uint8Array;
+    const filterWrite = (write: StreamWrite) => {
+        let suppressNextStandaloneNewline = false;
+
+        return ((...args: StreamWriteArgs) => {
+            const chunk = args[0];
             const text =
                 typeof chunk === 'string'
                     ? chunk
@@ -62,46 +93,31 @@ export async function withGlobalApiNoiseFilter<T>(
 
             if (suppressNextStandaloneNewline && /^\r?\n$/.test(text)) {
                 suppressNextStandaloneNewline = false;
-                const completionCallback = args.find(
-                    (value): value is (err?: Error | null) => void =>
-                        typeof value === 'function'
-                );
+                const completionCallback = getStreamWriteCallback(args);
                 completionCallback?.();
                 return true;
             }
 
             if (isApiNoiseLine(text)) {
+                // Actual sometimes emits the payload and the trailing newline as
+                // separate writes. Keep the next standalone newline from leaking.
                 suppressNextStandaloneNewline = true;
-                const completionCallback = args.find(
-                    (value): value is (err?: Error | null) => void =>
-                        typeof value === 'function'
-                );
+                const completionCallback = getStreamWriteCallback(args);
                 completionCallback?.();
                 return true;
             }
 
             suppressNextStandaloneNewline = false;
             return write(...args);
-        };
+        }) as StreamWrite;
+    };
 
-    console.log = filterConsoleMethod(
-        originalConsoleLog as unknown as (...args: unknown[]) => void
-    );
-    console.info = filterConsoleMethod(
-        originalConsoleInfo as unknown as (...args: unknown[]) => void
-    );
-    console.warn = filterConsoleMethod(
-        originalConsoleWarn as unknown as (...args: unknown[]) => void
-    );
-    console.error = filterConsoleMethod(
-        originalConsoleError as unknown as (...args: unknown[]) => void
-    );
-    process.stdout.write = filterWrite(
-        originalStdoutWrite as unknown as (...args: StreamWriteArg[]) => boolean
-    ) as unknown as typeof process.stdout.write;
-    process.stderr.write = filterWrite(
-        originalStderrWrite as unknown as (...args: StreamWriteArg[]) => boolean
-    ) as unknown as typeof process.stderr.write;
+    console.log = filterConsoleMethod(originalConsoleLog);
+    console.info = filterConsoleMethod(originalConsoleInfo);
+    console.warn = filterConsoleMethod(originalConsoleWarn);
+    console.error = filterConsoleMethod(originalConsoleError);
+    process.stdout.write = filterWrite(originalStdoutWrite);
+    process.stderr.write = filterWrite(originalStderrWrite);
 
     try {
         return await callback();
@@ -112,11 +128,6 @@ export async function withGlobalApiNoiseFilter<T>(
         console.error = originalConsoleError;
         process.stdout.write = originalStdoutWrite;
         process.stderr.write = originalStderrWrite;
+        globalApiNoiseFilterDepth--;
     }
 }
-type StreamWriteCallback = (err?: Error | null) => void;
-type StreamWriteArg =
-    | string
-    | Uint8Array
-    | BufferEncoding
-    | StreamWriteCallback;
