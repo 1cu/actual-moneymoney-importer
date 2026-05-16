@@ -85,12 +85,16 @@ search live transactions directly instead of guessing from names alone.
 
 Example live search pattern:
 
+- Replace `...` with a real `accountUuid` from `getAccounts()`.
+- Run this as a Node one-liner from the repo root after the `moneymoney` package is installed and configured.
+- Verified against live MoneyMoney data for `2026-03-01`..`2026-05-16`; output rows include `accountUuid`, `date`, `amount`, `purpose`, and related fields.
+
 ```bash
 node --input-type=module -e "
   const { getAccounts, getTransactions } = await import('moneymoney');
   const accounts = await getAccounts();
   const txs = await getTransactions({ from: '2026-03-01', to: '2026-05-16' });
-  const relevant = txs.filter((t) => t.accountUuid === '...');
+  const relevant = txs.filter((t) => t.accountUuid === '<replace with accountUuid from getAccounts() output>');
   console.log(JSON.stringify(relevant, null, 2));
 "
 ```
