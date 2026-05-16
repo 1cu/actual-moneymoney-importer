@@ -1426,53 +1426,83 @@ class Importer {
             if (preferredMatchingCounterparts.length === 1) {
                 const exactSameRunCounterpart =
                     preferredMatchingCounterparts[0]!;
-                const counterpartImportedId =
-                    this.getIdForMoneyMoneyTransaction(exactSameRunCounterpart);
-                if (claimedCounterpartIds.has(counterpartImportedId)) {
-                    this.logger.debug(
-                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${counterpartImportedId}' was already claimed by another transfer seed.`
-                    );
-                    continue;
-                }
+                const sameRunCounterpartIsExactDate =
+                    differenceInCalendarDays(
+                        exactSameRunCounterpart.valueDate,
+                        candidate.transaction.valueDate
+                    ) === 0;
+                const exactHistoricalCounterparts =
+                    sameRunCounterpartIsExactDate
+                        ? []
+                        : this.findHistoricalTransferCounterparts({
+                              candidate,
+                              matchWindowDays: 0,
+                              targetTransactions:
+                                  monMonTransactionMap[
+                                      candidate.targetMonMonAccount.uuid
+                                  ] ?? [],
+                          });
 
-                const existingTargetTransactions =
-                    existingActualTransactionsByAccountId.get(
-                        candidate.targetActualAccount.id
-                    ) ?? [];
                 if (
-                    existingTargetTransactions.some(
-                        (transaction) =>
-                            transaction.imported_id === counterpartImportedId
-                    )
+                    !sameRunCounterpartIsExactDate &&
+                    exactHistoricalCounterparts.length > 0
                 ) {
                     this.logger.debug(
-                        `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${counterpartImportedId}' already exists in Actual.`
+                        `Skipping off-date same-run counterpart for '${candidate.importedId}' because an exact-date historical counterpart was found.`
                     );
+                } else {
+                    const counterpartImportedId =
+                        this.getIdForMoneyMoneyTransaction(
+                            exactSameRunCounterpart
+                        );
+                    if (claimedCounterpartIds.has(counterpartImportedId)) {
+                        this.logger.debug(
+                            `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${counterpartImportedId}' was already claimed by another transfer seed.`
+                        );
+                        continue;
+                    }
+
+                    const existingTargetTransactions =
+                        existingActualTransactionsByAccountId.get(
+                            candidate.targetActualAccount.id
+                        ) ?? [];
+                    if (
+                        existingTargetTransactions.some(
+                            (transaction) =>
+                                transaction.imported_id ===
+                                counterpartImportedId
+                        )
+                    ) {
+                        this.logger.debug(
+                            `Skipping automatic transfer for '${candidate.importedId}' because counterpart '${counterpartImportedId}' already exists in Actual.`
+                        );
+                        continue;
+                    }
+
+                    suppressedImportedIds.add(counterpartImportedId);
+                    claimedCounterpartIds.add(counterpartImportedId);
+
+                    seedByImportedId.set(candidate.importedId, {
+                        importedId: candidate.importedId,
+                        transferPayeeId: candidate.transferPayeeId,
+                        targetActualAccountId: candidate.targetActualAccount.id,
+                        targetActualAccountName:
+                            candidate.targetActualAccount.name,
+                        sameRunCounterpart: {
+                            importedId: counterpartImportedId,
+                            importedPayee: exactSameRunCounterpart.name ?? '',
+                            valueDate: exactSameRunCounterpart.valueDate,
+                            notes:
+                                this.buildTransactionNotes(
+                                    exactSameRunCounterpart
+                                ) || '',
+                            ...(this.config.import.synchronizeClearedStatus
+                                ? { cleared: exactSameRunCounterpart.booked }
+                                : {}),
+                        },
+                    });
                     continue;
                 }
-
-                suppressedImportedIds.add(counterpartImportedId);
-                claimedCounterpartIds.add(counterpartImportedId);
-
-                seedByImportedId.set(candidate.importedId, {
-                    importedId: candidate.importedId,
-                    transferPayeeId: candidate.transferPayeeId,
-                    targetActualAccountId: candidate.targetActualAccount.id,
-                    targetActualAccountName: candidate.targetActualAccount.name,
-                    sameRunCounterpart: {
-                        importedId: counterpartImportedId,
-                        importedPayee: exactSameRunCounterpart.name ?? '',
-                        valueDate: exactSameRunCounterpart.valueDate,
-                        notes:
-                            this.buildTransactionNotes(
-                                exactSameRunCounterpart
-                            ) || '',
-                        ...(this.config.import.synchronizeClearedStatus
-                            ? { cleared: exactSameRunCounterpart.booked }
-                            : {}),
-                    },
-                });
-                continue;
             }
 
             const existingCounterparts =
