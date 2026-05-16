@@ -1485,16 +1485,22 @@ class Importer {
                         candidate.targetMonMonAccount.uuid
                     ] ?? [],
             });
+            const preferredMatchingCounterparts =
+                this.preferExactDateCounterparts({
+                    counterparts: matchingCounterparts,
+                    candidateDate: candidate.transaction.valueDate,
+                });
 
-            if (matchingCounterparts.length > 1) {
+            if (preferredMatchingCounterparts.length > 1) {
                 this.logger.debug(
-                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-window same-run counterpart candidates were found.`
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-date same-run counterpart candidates were found.`
                 );
                 continue;
             }
 
-            if (matchingCounterparts.length === 1) {
-                const exactSameRunCounterpart = matchingCounterparts[0]!;
+            if (preferredMatchingCounterparts.length === 1) {
+                const exactSameRunCounterpart =
+                    preferredMatchingCounterparts[0]!;
                 const counterpartImportedId =
                     this.getIdForMoneyMoneyTransaction(exactSameRunCounterpart);
                 if (claimedCounterpartIds.has(counterpartImportedId)) {
@@ -1553,14 +1559,20 @@ class Importer {
                             candidate.targetMonMonAccount.uuid
                         ] ?? [],
                 });
-            if (existingCounterparts.length > 1) {
+            const preferredExistingCounterparts =
+                this.preferExactDateCounterparts({
+                    counterparts: existingCounterparts,
+                    candidateDate: candidate.transaction.valueDate,
+                });
+
+            if (preferredExistingCounterparts.length > 1) {
                 this.logger.debug(
-                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-window historical counterpart candidates were found.`
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-date historical counterpart candidates were found.`
                 );
                 continue;
             }
 
-            const existingCounterpart = existingCounterparts[0];
+            const existingCounterpart = preferredExistingCounterparts[0];
             if (existingCounterpart) {
                 const existingCounterpartImportedId =
                     this.getIdForMoneyMoneyTransaction(existingCounterpart);
@@ -1789,6 +1801,26 @@ class Importer {
                 differenceInCalendarDays(transaction.valueDate, candidateDate)
             ) <= matchWindowDays
         );
+    }
+
+    private preferExactDateCounterparts({
+        counterparts,
+        candidateDate,
+    }: {
+        counterparts: MonMonTransaction[];
+        candidateDate: Date;
+    }): MonMonTransaction[] {
+        const exactDateCounterparts = counterparts.filter(
+            (transaction) =>
+                differenceInCalendarDays(
+                    transaction.valueDate,
+                    candidateDate
+                ) === 0
+        );
+
+        return exactDateCounterparts.length > 0
+            ? exactDateCounterparts
+            : counterparts;
     }
 
     private hasMatchingTransferSignal({
