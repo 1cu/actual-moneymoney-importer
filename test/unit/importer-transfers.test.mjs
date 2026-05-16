@@ -1091,6 +1091,116 @@ test('buildTransferPlan keeps an off-date same-run fallback when exact-date hist
     assert.equal(plan.existingCounterpartConversionsByImportedId.size, 0);
 });
 
+test('buildTransferPlan ranks usable same-run exact matches ahead of unusable historical exact matches', () => {
+    const importer = makeImporter({ matchWindowDays: 5 });
+    const sourceMonMonEarly = makeMonMonAccount({
+        uuid: 'mm-source-early',
+        name: 'Source Early',
+        accountNumber: 'DE-SOURCE-1',
+    });
+    const sourceMonMonExact = makeMonMonAccount({
+        uuid: 'mm-source-exact',
+        name: 'Source Exact',
+        accountNumber: 'DE-SOURCE-2',
+    });
+    const targetMonMon = makeMonMonAccount({
+        uuid: 'mm-target',
+        name: 'Target',
+        accountNumber: 'DE-TARGET',
+    });
+    const sourceActualEarly = makeActualAccount({
+        id: 'actual-source-early',
+        name: 'A',
+    });
+    const sourceActualExact = makeActualAccount({
+        id: 'actual-source-exact',
+        name: 'B',
+    });
+    const targetActual = makeActualAccount({ id: 'actual-target', name: 'C' });
+    const sourceTxEarly = makeTransaction({
+        id: '100',
+        accountUuid: sourceMonMonEarly.uuid,
+        amount: -1440,
+        accountNumber: targetMonMon.accountNumber,
+        valueDate: '2026-04-21',
+        purpose: 'Ruecklagen',
+    });
+    const sourceTxExact = makeTransaction({
+        id: '200',
+        accountUuid: sourceMonMonExact.uuid,
+        amount: -1440,
+        accountNumber: targetMonMon.accountNumber,
+        valueDate: '2026-04-24',
+        purpose: 'Ruecklagen',
+    });
+    const historicalTargetTx = makeTransaction({
+        id: '300',
+        accountUuid: targetMonMon.uuid,
+        amount: 1440,
+        categoryUuid: 'mm-uncategorized',
+        accountNumber: sourceMonMonEarly.accountNumber,
+        valueDate: '2026-04-21',
+        purpose: 'Ruecklagen',
+    });
+    const sameRunTargetTx = makeTransaction({
+        id: '400',
+        accountUuid: targetMonMon.uuid,
+        amount: 1440,
+        categoryUuid: 'mm-uncategorized',
+        accountNumber: sourceMonMonExact.accountNumber,
+        valueDate: '2026-04-24',
+        purpose: 'Ruecklagen',
+    });
+
+    const plan = importer.buildTransferPlan({
+        fullAccountMapping: makeFullAccountMapping([
+            [sourceMonMonEarly, sourceActualEarly],
+            [sourceMonMonExact, sourceActualExact],
+            [targetMonMon, targetActual],
+        ]),
+        accountStates: [
+            {
+                monMonAccount: sourceMonMonEarly,
+                actualAccount: sourceActualEarly,
+                newMonMonTransactions: [sourceTxEarly],
+            },
+            {
+                monMonAccount: sourceMonMonExact,
+                actualAccount: sourceActualExact,
+                newMonMonTransactions: [sourceTxExact],
+            },
+            {
+                monMonAccount: targetMonMon,
+                actualAccount: targetActual,
+                newMonMonTransactions: [sameRunTargetTx],
+            },
+        ],
+        monMonTransactionMap: {
+            [sourceMonMonEarly.uuid]: [sourceTxEarly],
+            [sourceMonMonExact.uuid]: [sourceTxExact],
+            [targetMonMon.uuid]: [historicalTargetTx, sameRunTargetTx],
+        },
+        existingActualTransactionsByAccountId: new Map([
+            [sourceActualEarly.id, []],
+            [sourceActualExact.id, []],
+            [targetActual.id, []],
+        ]),
+        transferPayeeIdByAccountId: new Map([
+            [sourceActualEarly.id, 'payee-early'],
+            [sourceActualExact.id, 'payee-exact'],
+            [targetActual.id, 'payee-target'],
+        ]),
+    });
+
+    const counterpart = plan.seedByImportedId.get(
+        'mm-source-exact-200'
+    )?.sameRunCounterpart;
+    assert.equal(plan.seedByImportedId.size, 1);
+    assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-400']);
+    assert.equal(counterpart?.importedId, 'mm-target-400');
+    assert.equal(plan.seedByImportedId.has('mm-source-early-100'), false);
+});
+
 test('buildTransferPlan skips ambiguous same-run counterpart matches', () => {
     const importer = makeImporter();
     const sourceMonMon = makeMonMonAccount({

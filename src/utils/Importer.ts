@@ -1379,6 +1379,7 @@ class Importer {
                     candidate,
                     newTransactionsByAccountUuid,
                     monMonTransactionMap,
+                    existingActualTransactionsByAccountId,
                 }),
             }))
             .sort(
@@ -1702,11 +1703,31 @@ class Importer {
         candidate,
         newTransactionsByAccountUuid,
         monMonTransactionMap,
+        existingActualTransactionsByAccountId,
     }: {
         candidate: TransferPlanningCandidate;
         newTransactionsByAccountUuid: Record<string, MonMonTransaction[]>;
         monMonTransactionMap: Record<string, MonMonTransaction[]>;
+        existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
     }): boolean {
+        const exactHistoricalCounterpart = this.findUsableHistoricalCounterpart(
+            {
+                candidate,
+                historicalCounterparts: this.findHistoricalTransferCounterparts(
+                    {
+                        candidate,
+                        matchWindowDays: 0,
+                        targetTransactions:
+                            monMonTransactionMap[
+                                candidate.targetMonMonAccount.uuid
+                            ] ?? [],
+                    }
+                ),
+                existingActualTransactionsByAccountId,
+                claimedExistingCounterpartTransactionIds: new Set(),
+            }
+        );
+
         return (
             this.findSameRunTransferCounterparts({
                 candidate,
@@ -1715,14 +1736,7 @@ class Importer {
                     newTransactionsByAccountUuid[
                         candidate.targetMonMonAccount.uuid
                     ] ?? [],
-            }).length > 0 ||
-            this.findHistoricalTransferCounterparts({
-                candidate,
-                matchWindowDays: 0,
-                targetTransactions:
-                    monMonTransactionMap[candidate.targetMonMonAccount.uuid] ??
-                    [],
-            }).length > 0
+            }).length > 0 || !!exactHistoricalCounterpart
         );
     }
 
