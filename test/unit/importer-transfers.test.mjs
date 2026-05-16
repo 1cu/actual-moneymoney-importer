@@ -37,30 +37,36 @@ const makeActualAccount = ({ id, name }) => ({
 
 const makeFullAccountMapping = (entries) => new Map(entries);
 
-const makeTransaction = ({
-    id,
-    accountUuid,
-    amount,
-    categoryUuid = 'mm-transfer',
-    accountNumber,
-    valueDate = '2026-04-21',
-    booked = true,
-    name = 'Txn',
-    purpose = 'Purpose',
-    comment,
-}) => ({
-    id,
-    accountUuid,
-    amount,
-    categoryUuid,
-    accountNumber,
-    valueDate: new Date(valueDate),
-    bookingDate: new Date(valueDate),
-    booked,
-    name,
-    purpose,
-    comment,
-});
+const makeTransaction = (params) => {
+    const {
+        id,
+        accountUuid,
+        amount,
+        categoryUuid = 'mm-transfer',
+        accountNumber,
+        valueDate = '2026-04-21',
+        booked = true,
+        name = 'Txn',
+        purpose,
+        comment,
+    } = params;
+
+    return {
+        id,
+        accountUuid,
+        amount,
+        categoryUuid,
+        accountNumber,
+        valueDate: new Date(valueDate),
+        bookingDate: new Date(valueDate),
+        booked,
+        name,
+        purpose: Object.prototype.hasOwnProperty.call(params, 'purpose')
+            ? purpose
+            : 'Purpose',
+        comment,
+    };
+};
 
 const makeImporter = ({
     synchronizeClearedStatus = true,
@@ -328,6 +334,70 @@ test('buildTransferPlan suppresses same-run counterpart when source has hard tar
         'mm-target-200'
     );
     assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-200']);
+});
+
+test('buildTransferPlan rejects same-run counterpart with contradictory target IBAN', () => {
+    const importer = makeImporter();
+    const sourceMonMon = makeMonMonAccount({
+        uuid: 'mm-source',
+        name: 'Source',
+        accountNumber: 'DE-SOURCE',
+    });
+    const targetMonMon = makeMonMonAccount({
+        uuid: 'mm-target',
+        name: 'Target',
+        accountNumber: 'DE-TARGET',
+    });
+    const sourceActual = makeActualAccount({ id: 'actual-source', name: 'A' });
+    const targetActual = makeActualAccount({ id: 'actual-target', name: 'B' });
+    const sourceTx = makeTransaction({
+        id: '100',
+        accountUuid: sourceMonMon.uuid,
+        amount: -1440,
+        accountNumber: targetMonMon.accountNumber,
+        purpose: 'Ruecklagen',
+    });
+    const targetTx = makeTransaction({
+        id: '200',
+        accountUuid: targetMonMon.uuid,
+        amount: 1440,
+        categoryUuid: 'mm-uncategorized',
+        accountNumber: 'DE-OTHER',
+        purpose: 'Ruecklagen',
+    });
+
+    const plan = importer.buildTransferPlan({
+        fullAccountMapping: makeFullAccountMapping([
+            [sourceMonMon, sourceActual],
+            [targetMonMon, targetActual],
+        ]),
+        accountStates: [
+            {
+                monMonAccount: sourceMonMon,
+                actualAccount: sourceActual,
+                newMonMonTransactions: [sourceTx],
+            },
+            {
+                monMonAccount: targetMonMon,
+                actualAccount: targetActual,
+                newMonMonTransactions: [targetTx],
+            },
+        ],
+        monMonTransactionMap: {
+            [sourceMonMon.uuid]: [sourceTx],
+            [targetMonMon.uuid]: [targetTx],
+        },
+        existingActualTransactionsByAccountId: new Map([
+            [sourceActual.id, []],
+            [targetActual.id, []],
+        ]),
+        transferPayeeIdByAccountId: new Map([
+            [targetActual.id, 'payee-target'],
+        ]),
+    });
+
+    assert.equal(plan.seedByImportedId.size, 0);
+    assert.deepEqual([...plan.suppressedImportedIds], []);
 });
 
 test('buildTransferPlan rejects unrelated same-run transactions without a positive signal', () => {

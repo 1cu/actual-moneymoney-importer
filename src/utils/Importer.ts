@@ -1651,8 +1651,8 @@ class Importer {
         };
     }
 
-    // Same-run matching is permissive but still needs a positive signal so
-    // unrelated same-window, same-amount transactions do not get linked.
+    // Same-run matching is permissive for same-window transfers, but still
+    // rejects contradictory target-side IBANs so unrelated bookings stay out.
     private findSameRunTransferCounterparts({
         candidate,
         matchWindowDays,
