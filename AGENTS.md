@@ -66,6 +66,35 @@ For behavior changes, run:
 
 Document manual verification steps in PR descriptions.
 
+### Live probe transaction search
+
+When you need to verify an importer change against real MoneyMoney/Actual data,
+search live transactions directly instead of guessing from names alone.
+
+- In MoneyMoney, `accountUuid` is the owning account; `accountNumber` on a transaction is the counterparty IBAN.
+- Use `getAccounts()` to resolve account names, UUIDs, and IBANs first.
+- Use `getTransactions({ from, to })` and filter by `accountUuid` for the source account.
+- For transfer probes, look for:
+    - opposite amounts
+    - different `valueDate`s when proving cross-date behavior
+    - a transfer category on the source side
+    - a source `accountNumber` that matches the target account's IBAN
+    - matching `purpose` text when possible
+- In Actual, use `getTransactions(accountId, startDate, endDate)` after `downloadBudget(...)` to verify the imported state.
+- If a probe was already imported, delete the Actual transaction first and re-sync before rerunning the import.
+
+Example live search pattern:
+
+```bash
+node --input-type=module -e "
+  const { getAccounts, getTransactions } = await import('moneymoney');
+  const accounts = await getAccounts();
+  const txs = await getTransactions({ from: '2026-03-01', to: '2026-05-16' });
+  const relevant = txs.filter((t) => t.accountUuid === '...');
+  console.log(JSON.stringify(relevant, null, 2));
+"
+```
+
 ## Specification-Driven Workflow
 
 Before writing code for behavior changes:

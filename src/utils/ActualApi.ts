@@ -19,6 +19,14 @@ type GetUserFilesResponse = {
     data: Array<UserFile>;
 };
 
+type TransactionBatchUpdateChanges = {
+    added?: Array<Record<string, unknown>>;
+    updated?: Array<Record<string, unknown>>;
+    deleted?: Array<{ id: string }>;
+    runTransfers?: boolean;
+    learnCategories?: boolean;
+};
+
 const ACTUAL_TRANSACTION_HISTORY_START_DATE = format(
     new Date(2000, 0, 1),
     'yyyy-MM-dd'
@@ -26,6 +34,12 @@ const ACTUAL_TRANSACTION_HISTORY_START_DATE = format(
 
 class ActualApi {
     protected isInitialized = false;
+    private actualInternal: {
+        send: (
+            name: string,
+            payload: TransactionBatchUpdateChanges
+        ) => Promise<unknown>;
+    } | null = null;
     // private _api: typeof actual | null = null;
 
     constructor(
@@ -55,11 +69,16 @@ class ActualApi {
         );
 
         await this.withLogControl(async () => {
-            await actual.init({
+            this.actualInternal = (await actual.init({
                 dataDir: actualDataDir,
                 serverURL: this.serverConfig.serverUrl,
                 password: this.serverConfig.serverPassword,
-            });
+            })) as {
+                send: (
+                    name: string,
+                    payload: TransactionBatchUpdateChanges
+                ) => Promise<unknown>;
+            };
         });
 
         this.isInitialized = true;
@@ -182,6 +201,46 @@ class ActualApi {
         await this.ensureInitialization();
         return await this.withLogControl(() =>
             actual.updateTransaction(transactionId, fields)
+        );
+    }
+
+    async batchUpdateTransactions(changes: TransactionBatchUpdateChanges) {
+        await this.ensureInitialization();
+
+        const {
+            updated = [],
+            added = [],
+            deleted = [],
+            runTransfers = false,
+        } = changes;
+
+        if (added.length > 0 || deleted.length > 0) {
+            throw new Error(
+                'batchUpdateTransactions currently supports updated transactions only.'
+            );
+        }
+
+        const actualInternal =
+            this.actualInternal ??
+            (this.actualApi.internal as NonNullable<
+                typeof this.actualInternal
+            >);
+
+        if (!actualInternal) {
+            throw new Error('Actual API is not initialized.');
+        }
+
+        return await this.withLogControl(() =>
+            actualInternal.send('transactions-batch-update', {
+                updated: updated.map(({ ...transaction }) => {
+                    const { subtransactions: _subtransactions, ...clean } =
+                        transaction as Record<string, unknown> & {
+                            subtransactions?: unknown;
+                        };
+                    return clean;
+                }),
+                runTransfers,
+            })
         );
     }
 

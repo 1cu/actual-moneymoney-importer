@@ -210,3 +210,25 @@ test('ActualApi.getUserFiles uses globalThis.fetch by default', async (t) => {
     assert.equal(loginJson.mock.callCount(), 1);
     assert.equal(filesJson.mock.callCount(), 1);
 });
+
+test('ActualApi.batchUpdateTransactions sends internal batch update with runTransfers disabled', async () => {
+    const send = mock.fn(async () => 'ok');
+    const api = new ActualApi(makeServerConfig(), makeLogger(), {
+        internal: { send },
+    });
+    api.isInitialized = true;
+
+    await api.batchUpdateTransactions({
+        updated: [{ id: 'txn-1', date: '2026-05-11', notes: 'memo' }],
+        runTransfers: false,
+    });
+
+    assert.equal(send.mock.callCount(), 1);
+    assert.deepEqual(send.mock.calls[0].arguments, [
+        'transactions-batch-update',
+        {
+            updated: [{ id: 'txn-1', date: '2026-05-11', notes: 'memo' }],
+            runTransfers: false,
+        },
+    ]);
+});

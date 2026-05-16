@@ -65,17 +65,20 @@ const makeTransaction = ({
 const makeImporter = ({
     synchronizeClearedStatus = true,
     importComments = true,
+    matchWindowDays = 0,
     resolvedTransferCategoryUuids = new Set(['mm-transfer']),
     invalidTransferRefs = [],
     getTransactions = async () => [],
     getTransactionsByIds = async () => [],
     updateTransaction = async () => {},
+    batchUpdateTransactions = async () => {},
     logger = makeLogger(),
 } = {}) => {
     const actualApi = {
         getTransactions,
         getTransactionsByIds,
         updateTransaction,
+        batchUpdateTransactions,
     };
     const categoryMap = {
         resolveMoneyMoneyCategoryRefs: () => ({
@@ -94,6 +97,7 @@ const makeImporter = ({
             transfers: {
                 enabled: true,
                 categoryRefs: ['Transfer'],
+                matchWindowDays,
             },
         },
         payeeTransformation: {
@@ -572,6 +576,78 @@ test('buildTransferPlan skips same-run transfer when source and counterpart have
     assert.deepEqual([...plan.suppressedImportedIds], []);
 });
 
+test('buildTransferPlan matches same-run transfer within the configured date window', () => {
+    const importer = makeImporter({ matchWindowDays: 5 });
+    const sourceMonMon = makeMonMonAccount({
+        uuid: 'mm-source',
+        name: 'Source',
+        accountNumber: 'DE-SOURCE',
+    });
+    const targetMonMon = makeMonMonAccount({
+        uuid: 'mm-target',
+        name: 'Target',
+        accountNumber: 'DE-TARGET',
+    });
+    const sourceActual = makeActualAccount({ id: 'actual-source', name: 'A' });
+    const targetActual = makeActualAccount({ id: 'actual-target', name: 'B' });
+    const sourceTx = makeTransaction({
+        id: '100',
+        accountUuid: sourceMonMon.uuid,
+        amount: -1440,
+        accountNumber: targetMonMon.accountNumber,
+        valueDate: '2026-04-21',
+        purpose: 'Ruecklagen',
+    });
+    const targetTx = makeTransaction({
+        id: '200',
+        accountUuid: targetMonMon.uuid,
+        amount: 1440,
+        categoryUuid: 'mm-uncategorized',
+        valueDate: '2026-04-24',
+        purpose: 'Ruecklagen',
+    });
+
+    const plan = importer.buildTransferPlan({
+        fullAccountMapping: makeFullAccountMapping([
+            [sourceMonMon, sourceActual],
+            [targetMonMon, targetActual],
+        ]),
+        accountStates: [
+            {
+                monMonAccount: sourceMonMon,
+                actualAccount: sourceActual,
+                newMonMonTransactions: [sourceTx],
+            },
+            {
+                monMonAccount: targetMonMon,
+                actualAccount: targetActual,
+                newMonMonTransactions: [targetTx],
+            },
+        ],
+        monMonTransactionMap: {
+            [sourceMonMon.uuid]: [sourceTx],
+            [targetMonMon.uuid]: [targetTx],
+        },
+        existingActualTransactionsByAccountId: new Map([
+            [sourceActual.id, []],
+            [targetActual.id, []],
+        ]),
+        transferPayeeIdByAccountId: new Map([
+            [targetActual.id, 'payee-target'],
+        ]),
+    });
+
+    const counterpart =
+        plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart;
+    assert.equal(plan.seedByImportedId.size, 1);
+    assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-200']);
+    assert.equal(counterpart?.importedId, 'mm-target-200');
+    assert.equal(
+        counterpart?.valueDate.toISOString().slice(0, 10),
+        '2026-04-24'
+    );
+});
+
 test('buildTransferPlan skips historical conversion when source and counterpart have different dates', () => {
     const importer = makeImporter();
     const sourceMonMon = makeMonMonAccount({
@@ -639,6 +715,75 @@ test('buildTransferPlan skips historical conversion when source and counterpart 
 
     assert.equal(plan.seedByImportedId.size, 0);
     assert.equal(plan.existingCounterpartConversionsByImportedId.size, 0);
+});
+
+test('buildTransferPlan matches historical counterpart within the configured date window', () => {
+    const importer = makeImporter({ matchWindowDays: 5 });
+    const sourceMonMon = makeMonMonAccount({
+        uuid: 'mm-source',
+        name: 'Source',
+        accountNumber: 'DE-SOURCE',
+    });
+    const targetMonMon = makeMonMonAccount({
+        uuid: 'mm-target',
+        name: 'Target',
+        accountNumber: 'DE-TARGET',
+    });
+    const sourceActual = makeActualAccount({ id: 'actual-source', name: 'A' });
+    const targetActual = makeActualAccount({ id: 'actual-target', name: 'B' });
+    const sourceTx = makeTransaction({
+        id: '100',
+        accountUuid: sourceMonMon.uuid,
+        amount: -1440,
+        accountNumber: targetMonMon.accountNumber,
+        purpose: 'Ruecklagen',
+        valueDate: '2026-04-21',
+    });
+    const targetTx = makeTransaction({
+        id: '200',
+        accountUuid: targetMonMon.uuid,
+        amount: 1440,
+        categoryUuid: 'mm-uncategorized',
+        purpose: 'Ruecklagen',
+        valueDate: '2026-04-24',
+    });
+
+    const plan = importer.buildTransferPlan({
+        fullAccountMapping: makeFullAccountMapping([
+            [sourceMonMon, sourceActual],
+            [targetMonMon, targetActual],
+        ]),
+        accountStates: [
+            {
+                monMonAccount: sourceMonMon,
+                actualAccount: sourceActual,
+                newMonMonTransactions: [sourceTx],
+            },
+            {
+                monMonAccount: targetMonMon,
+                actualAccount: targetActual,
+                newMonMonTransactions: [],
+            },
+        ],
+        monMonTransactionMap: {
+            [sourceMonMon.uuid]: [sourceTx],
+            [targetMonMon.uuid]: [targetTx],
+        },
+        existingActualTransactionsByAccountId: new Map([
+            [sourceActual.id, []],
+            [
+                targetActual.id,
+                [{ id: 'actual-counterpart', imported_id: 'mm-target-200' }],
+            ],
+        ]),
+        transferPayeeIdByAccountId: new Map([
+            [targetActual.id, 'payee-target'],
+            [sourceActual.id, 'payee-source'],
+        ]),
+    });
+
+    assert.equal(plan.seedByImportedId.size, 0);
+    assert.equal(plan.existingCounterpartConversionsByImportedId.size, 1);
 });
 
 test('buildTransferPlan skips ambiguous same-run counterpart matches', () => {
@@ -1226,10 +1371,12 @@ test('applyExistingCounterpartConversions converts plain counterpart and stamps 
         },
     ]);
     const updateTransaction = mock.fn(async () => {});
+    const batchUpdateTransactions = mock.fn(async () => {});
     const importer = makeImporter({
         getTransactions,
         getTransactionsByIds,
         updateTransaction,
+        batchUpdateTransactions,
     });
 
     await importer.applyExistingCounterpartConversions({
@@ -1267,19 +1414,25 @@ test('applyExistingCounterpartConversions converts plain counterpart and stamps 
         },
     });
 
-    assert.equal(updateTransaction.mock.callCount(), 2);
+    assert.equal(updateTransaction.mock.callCount(), 1);
     assert.deepEqual(updateTransaction.mock.calls[0].arguments, [
         'actual-counterpart',
         { payee: 'payee-source' },
     ]);
-    assert.deepEqual(updateTransaction.mock.calls[1].arguments, [
-        'auto-created-counterpart',
+    assert.equal(batchUpdateTransactions.mock.callCount(), 1);
+    assert.deepEqual(batchUpdateTransactions.mock.calls[0].arguments, [
         {
-            imported_id: 'mm-source-100',
-            imported_payee: 'Example Sender',
-            date: '2026-04-21',
-            notes: 'Ruecklagen',
-            cleared: true,
+            updated: [
+                {
+                    id: 'auto-created-counterpart',
+                    imported_id: 'mm-source-100',
+                    imported_payee: 'Example Sender',
+                    date: '2026-04-21',
+                    notes: 'Ruecklagen',
+                    cleared: true,
+                },
+            ],
+            runTransfers: false,
         },
     ]);
 });
@@ -1446,10 +1599,9 @@ test('applyExistingCounterpartConversions stops retrying on auth failures', asyn
 });
 
 test('applyExistingCounterpartConversions throws when stamping the auto-created counterpart fails', async () => {
-    const updateTransaction = mock.fn(async (transactionId) => {
-        if (transactionId === 'auto-created-counterpart') {
-            throw new Error('stamp failed');
-        }
+    const updateTransaction = mock.fn(async () => {});
+    const batchUpdateTransactions = mock.fn(async () => {
+        throw new Error('stamp failed');
     });
     const getTransactionsByIds = mock.fn(async () => [
         {
@@ -1457,7 +1609,11 @@ test('applyExistingCounterpartConversions throws when stamping the auto-created 
             transfer_id: 'auto-created-counterpart',
         },
     ]);
-    const importer = makeImporter({ updateTransaction, getTransactionsByIds });
+    const importer = makeImporter({
+        updateTransaction,
+        batchUpdateTransactions,
+        getTransactionsByIds,
+    });
 
     await assert.rejects(
         () =>
@@ -1495,7 +1651,8 @@ test('applyExistingCounterpartConversions throws when stamping the auto-created 
             }),
         /Failed to stamp auto-created transfer counterpart/
     );
-    assert.equal(updateTransaction.mock.callCount(), 2);
+    assert.equal(updateTransaction.mock.callCount(), 1);
+    assert.equal(batchUpdateTransactions.mock.callCount(), 1);
     assert.equal(getTransactionsByIds.mock.callCount(), 1);
 });
 
@@ -1663,9 +1820,9 @@ test('convertToActualTransaction uses transfer payee for planned seed', async ()
 });
 
 test('applyTransferCounterpartUpdates stamps generated counterpart with second imported id', async () => {
-    const updateTransaction = mock.fn(async () => {});
+    const batchUpdateTransactions = mock.fn(async () => {});
     const importer = makeImporter({
-        updateTransaction,
+        batchUpdateTransactions,
     });
 
     await importer.applyTransferCounterpartUpdates({
@@ -1689,6 +1846,7 @@ test('applyTransferCounterpartUpdates stamps generated counterpart with second i
                         sameRunCounterpart: {
                             importedId: 'mm-target-200',
                             importedPayee: 'Einzahlung',
+                            valueDate: new Date('2026-04-24'),
                             notes: 'Ruecklagen',
                             cleared: true,
                         },
@@ -1699,14 +1857,20 @@ test('applyTransferCounterpartUpdates stamps generated counterpart with second i
         },
     });
 
-    assert.equal(updateTransaction.mock.callCount(), 1);
-    assert.deepEqual(updateTransaction.mock.calls[0].arguments, [
-        'counterpart-tx',
+    assert.equal(batchUpdateTransactions.mock.callCount(), 1);
+    assert.deepEqual(batchUpdateTransactions.mock.calls[0].arguments, [
         {
-            imported_id: 'mm-target-200',
-            imported_payee: 'Einzahlung',
-            notes: 'Ruecklagen',
-            cleared: true,
+            updated: [
+                {
+                    id: 'counterpart-tx',
+                    imported_id: 'mm-target-200',
+                    imported_payee: 'Einzahlung',
+                    notes: 'Ruecklagen',
+                    date: '2026-04-24',
+                    cleared: true,
+                },
+            ],
+            runTransfers: false,
         },
     ]);
 });

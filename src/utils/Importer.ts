@@ -1,4 +1,4 @@
-import { format, subMonths } from 'date-fns';
+import { differenceInCalendarDays, format, subMonths } from 'date-fns';
 import chalk from 'chalk';
 import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
@@ -94,6 +94,7 @@ type PlannedTransferSeed = {
 type PlannedTransferCounterpart = {
     importedId: string;
     importedPayee: string;
+    valueDate: Date;
     notes?: string;
     cleared?: boolean;
 };
@@ -1350,6 +1351,8 @@ class Importer {
             return emptyPlan;
         }
 
+        const matchWindowDays = transferConfig.matchWindowDays ?? 0;
+
         const { resolvedUuids, invalidRefs } =
             this.categoryMap.resolveMoneyMoneyCategoryRefs(
                 transferConfig.categoryRefs
@@ -1476,6 +1479,7 @@ class Importer {
 
             const matchingCounterparts = this.findSameRunTransferCounterparts({
                 candidate,
+                matchWindowDays,
                 targetTransactions:
                     newTransactionsByAccountUuid[
                         candidate.targetMonMonAccount.uuid
@@ -1484,7 +1488,7 @@ class Importer {
 
             if (matchingCounterparts.length > 1) {
                 this.logger.debug(
-                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-date same-run counterpart candidates were found.`
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-window same-run counterpart candidates were found.`
                 );
                 continue;
             }
@@ -1527,6 +1531,7 @@ class Importer {
                     sameRunCounterpart: {
                         importedId: counterpartImportedId,
                         importedPayee: exactSameRunCounterpart.name ?? '',
+                        valueDate: exactSameRunCounterpart.valueDate,
                         notes:
                             this.buildTransactionNotes(
                                 exactSameRunCounterpart
@@ -1542,6 +1547,7 @@ class Importer {
             const existingCounterparts =
                 this.findHistoricalTransferCounterparts({
                     candidate,
+                    matchWindowDays,
                     targetTransactions:
                         monMonTransactionMap[
                             candidate.targetMonMonAccount.uuid
@@ -1549,7 +1555,7 @@ class Importer {
                 });
             if (existingCounterparts.length > 1) {
                 this.logger.debug(
-                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-date historical counterpart candidates were found.`
+                    `Skipping automatic transfer for '${candidate.importedId}' because multiple same-window historical counterpart candidates were found.`
                 );
                 continue;
             }
@@ -1673,19 +1679,17 @@ class Importer {
     }
 
     // Same-run matching is permissive but still needs a positive signal so
-    // unrelated same-date, same-amount transactions do not get linked.
+    // unrelated same-window, same-amount transactions do not get linked.
     private findSameRunTransferCounterparts({
         candidate,
+        matchWindowDays,
         targetTransactions,
     }: {
         candidate: TransferPlanningCandidate;
+        matchWindowDays: number;
         targetTransactions: MonMonTransaction[];
     }): MonMonTransaction[] {
         const sourceAmount = Math.round(candidate.transaction.amount * 100);
-        const candidateDate = format(
-            candidate.transaction.valueDate,
-            DATE_FORMAT
-        );
 
         return targetTransactions.filter((transaction) =>
             this.isMatchingTransferCounterpart({
@@ -1693,23 +1697,22 @@ class Importer {
                 transaction,
                 relaxedMatching: true,
                 sourceAmount,
-                candidateDate,
+                candidateDate: candidate.transaction.valueDate,
+                matchWindowDays,
             })
         );
     }
 
     private findHistoricalTransferCounterparts({
         candidate,
+        matchWindowDays,
         targetTransactions,
     }: {
         candidate: TransferPlanningCandidate;
+        matchWindowDays: number;
         targetTransactions: MonMonTransaction[];
     }): MonMonTransaction[] {
         const sourceAmount = Math.round(candidate.transaction.amount * 100);
-        const candidateDate = format(
-            candidate.transaction.valueDate,
-            DATE_FORMAT
-        );
 
         return targetTransactions.filter((transaction) =>
             this.isMatchingTransferCounterpart({
@@ -1717,7 +1720,8 @@ class Importer {
                 transaction,
                 relaxedMatching: false,
                 sourceAmount,
-                candidateDate,
+                candidateDate: candidate.transaction.valueDate,
+                matchWindowDays,
             })
         );
     }
@@ -1728,12 +1732,14 @@ class Importer {
         relaxedMatching,
         sourceAmount,
         candidateDate,
+        matchWindowDays,
     }: {
         candidate: TransferPlanningCandidate;
         transaction: MonMonTransaction;
         relaxedMatching: boolean;
         sourceAmount: number;
-        candidateDate: string;
+        candidateDate: Date;
+        matchWindowDays: number;
     }): boolean {
         const candidateImportedId =
             this.getIdForMoneyMoneyTransaction(transaction);
@@ -1746,6 +1752,7 @@ class Importer {
                 transaction,
                 sourceAmount,
                 candidateDate,
+                matchWindowDays,
             })
         ) {
             return false;
@@ -1769,14 +1776,18 @@ class Importer {
         transaction,
         sourceAmount,
         candidateDate,
+        matchWindowDays,
     }: {
         transaction: MonMonTransaction;
         sourceAmount: number;
-        candidateDate: string;
+        candidateDate: Date;
+        matchWindowDays: number;
     }): boolean {
         return (
             Math.round(transaction.amount * 100) === -sourceAmount &&
-            format(transaction.valueDate, DATE_FORMAT) === candidateDate
+            Math.abs(
+                differenceInCalendarDays(transaction.valueDate, candidateDate)
+            ) <= matchWindowDays
         );
     }
 
@@ -1882,10 +1893,15 @@ class Importer {
                 continue;
             }
 
-            const counterpartUpdate: Partial<UpdateTransaction> = {
+            const counterpartUpdate: Record<string, unknown> = {
+                id: transaction.transfer_id,
                 imported_id: plannedSeed.sameRunCounterpart.importedId,
                 imported_payee: plannedSeed.sameRunCounterpart.importedPayee,
                 notes: plannedSeed.sameRunCounterpart.notes ?? '',
+                date: format(
+                    plannedSeed.sameRunCounterpart.valueDate,
+                    DATE_FORMAT
+                ),
             };
 
             if (plannedSeed.sameRunCounterpart.cleared !== undefined) {
@@ -1893,10 +1909,10 @@ class Importer {
                     plannedSeed.sameRunCounterpart.cleared;
             }
 
-            await this.actualApi.updateTransaction(
-                transaction.transfer_id,
-                counterpartUpdate
-            );
+            await this.actualApi.batchUpdateTransactions({
+                updated: [counterpartUpdate],
+                runTransfers: false,
+            });
 
             this.logger.debug(
                 `Stamped generated transfer counterpart '${transaction.transfer_id}' in '${plannedSeed.targetActualAccountName}' with imported_id '${plannedSeed.sameRunCounterpart.importedId}'.`
@@ -1976,7 +1992,8 @@ class Importer {
             }
 
             try {
-                const counterpartUpdate: Partial<UpdateTransaction> = {
+                const counterpartUpdate: Record<string, unknown> = {
+                    id: transferId,
                     imported_id: conversion.sourceImportedId,
                     imported_payee: conversion.sourceImportedPayee,
                     date: format(transaction.valueDate, DATE_FORMAT),
@@ -1990,10 +2007,10 @@ class Importer {
                     counterpartUpdate.cleared = conversion.sourceCleared;
                 }
 
-                await this.actualApi.updateTransaction(
-                    transferId,
-                    counterpartUpdate
-                );
+                await this.actualApi.batchUpdateTransactions({
+                    updated: [counterpartUpdate],
+                    runTransfers: false,
+                });
             } catch (error) {
                 throw new Error(
                     `Failed to stamp auto-created transfer counterpart '${transferId}' for converted transaction '${conversion.existingCounterpartTransactionId}': ${error instanceof Error ? error.message : String(error)}`,
@@ -2059,7 +2076,7 @@ class Importer {
         const transactionNotes = this.buildTransactionNotes(transaction);
 
         const createTransaction: CreateTransaction = {
-            date: format(transaction.valueDate, 'yyyy-MM-dd'),
+            date: format(transaction.valueDate, DATE_FORMAT),
             amount: Math.round(transaction.amount * 100),
             imported_id: this.getIdForMoneyMoneyTransaction(transaction),
             imported_payee: transaction.name ?? '',

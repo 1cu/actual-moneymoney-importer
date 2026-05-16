@@ -30,6 +30,11 @@ categorySyncOnExisting = "ask" # ask|new|always
 importComments = false
 commentPrefix = "MoneyMoney Comment: "
 
+[import.transfers]
+enabled = false
+categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
+matchWindowDays = 0
+
 # Actual servers, you can add multiple servers
 [[actualServers]]
 serverUrl = "http://localhost:5006"
