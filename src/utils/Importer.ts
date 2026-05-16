@@ -1431,21 +1431,26 @@ class Importer {
                         exactSameRunCounterpart.valueDate,
                         candidate.transaction.valueDate
                     ) === 0;
-                const exactHistoricalCounterparts =
-                    sameRunCounterpartIsExactDate
-                        ? []
-                        : this.findHistoricalTransferCounterparts({
-                              candidate,
-                              matchWindowDays: 0,
-                              targetTransactions:
-                                  monMonTransactionMap[
-                                      candidate.targetMonMonAccount.uuid
-                                  ] ?? [],
-                          });
+                const exactHistoricalCounterpart = sameRunCounterpartIsExactDate
+                    ? undefined
+                    : this.findUsableHistoricalCounterpart({
+                          candidate,
+                          historicalCounterparts:
+                              this.findHistoricalTransferCounterparts({
+                                  candidate,
+                                  matchWindowDays: 0,
+                                  targetTransactions:
+                                      monMonTransactionMap[
+                                          candidate.targetMonMonAccount.uuid
+                                      ] ?? [],
+                              }),
+                          existingActualTransactionsByAccountId,
+                          claimedExistingCounterpartTransactionIds,
+                      });
 
                 if (
                     !sameRunCounterpartIsExactDate &&
-                    exactHistoricalCounterparts.length > 0
+                    exactHistoricalCounterpart
                 ) {
                     this.logger.debug(
                         `Skipping off-date same-run counterpart for '${candidate.importedId}' because an exact-date historical counterpart was found.`
@@ -1804,6 +1809,52 @@ class Importer {
         return exactDateCounterparts.length > 0
             ? exactDateCounterparts
             : counterparts;
+    }
+
+    private findUsableHistoricalCounterpart({
+        candidate,
+        historicalCounterparts,
+        existingActualTransactionsByAccountId,
+        claimedExistingCounterpartTransactionIds,
+    }: {
+        candidate: TransferPlanningCandidate;
+        historicalCounterparts: MonMonTransaction[];
+        existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
+        claimedExistingCounterpartTransactionIds: Set<string>;
+    }): ReadTransaction | undefined {
+        const preferredHistoricalCounterparts =
+            this.preferExactDateCounterparts({
+                counterparts: historicalCounterparts,
+                candidateDate: candidate.transaction.valueDate,
+            });
+
+        if (preferredHistoricalCounterparts.length !== 1) {
+            return undefined;
+        }
+
+        const exactHistoricalCounterpart = preferredHistoricalCounterparts[0]!;
+        const exactHistoricalCounterpartImportedId =
+            this.getIdForMoneyMoneyTransaction(exactHistoricalCounterpart);
+        const existingTargetTransactions =
+            existingActualTransactionsByAccountId.get(
+                candidate.targetActualAccount.id
+            ) ?? [];
+        const existingTargetTransaction = existingTargetTransactions.find(
+            (transaction) =>
+                transaction.imported_id === exactHistoricalCounterpartImportedId
+        );
+
+        if (
+            !existingTargetTransaction ||
+            existingTargetTransaction.transfer_id ||
+            claimedExistingCounterpartTransactionIds.has(
+                existingTargetTransaction.id
+            )
+        ) {
+            return undefined;
+        }
+
+        return existingTargetTransaction;
     }
 
     private hasMatchingTransferSignal({
