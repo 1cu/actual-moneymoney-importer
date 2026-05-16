@@ -13,111 +13,22 @@ import CategoryMap from './CategoryMap.js';
 import { ActualBudgetConfig, Config } from './config.js';
 import Logger from './Logger.js';
 import PayeeTransformer from './PayeeTransformer.js';
+import type {
+    CategoryUpdateClassification,
+    CategoryUpdatePlan,
+    DuplicateImportedIdGroup,
+    ExistingCategorySyncPolicy,
+    ExistingCategoryUpdate,
+    ExistingTransactionPair,
+    ImportRunMetrics,
+    PlannedExistingCounterpartConversion,
+    PlannedTransferSeed,
+    PromptDecision,
+    PromptState,
+    TransferPlan,
+    TransferPlanningCandidate,
+} from './Importer.types.js';
 import { DATE_FORMAT } from './shared.js';
-
-type ExistingCategorySyncPolicy = Config['import']['categorySyncOnExisting'];
-type CategoryUpdateClassification =
-    | { type: 'backfill'; targetCategoryId: string }
-    | {
-          type: 'conflict';
-          targetCategoryId: string;
-          currentCategoryId: string;
-      }
-    | { type: 'noop' };
-
-type ExistingTransactionPair = {
-    monMonTransaction: MonMonTransaction;
-    actualTransaction: ReadTransaction;
-};
-
-type ExistingCategoryUpdate = {
-    transactionId: string;
-    importedId: string;
-    fromCategoryId?: string;
-    toCategoryId: string;
-    reason: 'backfill' | 'conflict';
-    monMonTransaction: MonMonTransaction;
-};
-
-type PromptMode = 'prompt' | 'all' | 'none';
-type PromptDecision = boolean | 'all' | 'none' | 'quit';
-type PromptState = {
-    mode: PromptMode;
-    promptInterface?: ReturnType<typeof createInterface>;
-};
-type CategoryUpdatePlan = {
-    pendingUpdates: ExistingCategoryUpdate[];
-    backfillCount: number;
-    conflictCount: number;
-    skippedConflictCount: number;
-    transferLockedCount: number;
-};
-type ImportRunMetrics = {
-    accountsScanned: number;
-    accountsWithImportActivity: number;
-    accountsWithCategoryActivity: number;
-    accountsWithConflicts: number;
-    totalTransactionsAdded: number;
-    totalTransactionsUpdated: number;
-    totalCategoryUpdatesPlanned: number;
-    totalCategoryUpdatesApplied: number;
-    totalCategoryUpdatesDryRun: number;
-    totalBackfills: number;
-    totalConflicts: number;
-    totalSkippedConflicts: number;
-    totalUnmappedCategoryWarnings: number;
-    totalAutoRuleOverrides: number;
-};
-type DuplicateImportedIdGroup = {
-    importedId: string;
-    transactions: ReadTransaction[];
-    representativeTransaction: ReadTransaction;
-    normalizedPayee: string;
-    isLikelySplit: boolean;
-};
-type TransferPlan = {
-    seedByImportedId: Map<string, PlannedTransferSeed>;
-    suppressedImportedIds: Set<string>;
-    existingCounterpartConversionsByImportedId: Map<
-        string,
-        PlannedExistingCounterpartConversion
-    >;
-    resolvedTransferCategoryUuids: Set<string>;
-};
-type PlannedTransferSeed = {
-    importedId: string;
-    transferPayeeId: string;
-    targetActualAccountId: string;
-    targetActualAccountName: string;
-    sameRunCounterpart?: PlannedTransferCounterpart;
-};
-type PlannedTransferCounterpart = {
-    importedId: string;
-    importedPayee: string;
-    valueDate: Date;
-    notes?: string;
-    cleared?: boolean;
-};
-type PlannedExistingCounterpartConversion = {
-    existingCounterpartTransactionId: string;
-    existingCounterpartAccountId: string;
-    existingCounterpartAccountName: string;
-    sourceActualAccountName: string;
-    sourceTransferPayeeId: string;
-    sourceImportedId: string;
-    sourceImportedPayee: string;
-    sourceNotes?: string;
-    sourceCleared?: boolean;
-};
-type TransferPlanningCandidate = {
-    transaction: MonMonTransaction;
-    importedId: string;
-    sourceMonMonAccount: MonMonAccount;
-    sourceActualAccount: Account;
-    targetMonMonAccount: MonMonAccount;
-    targetActualAccount: Account;
-    transferPayeeId: string;
-};
 
 export const classifyCategoryUpdate = ({
     currentCategoryId,
@@ -1461,7 +1372,21 @@ class Importer {
             }
         }
 
-        candidates.sort((a, b) => a.importedId.localeCompare(b.importedId));
+        const rankedCandidates = candidates
+            .map((candidate) => ({
+                ...candidate,
+                hasExactDateCounterpart: this.hasExactDateCounterpart({
+                    candidate,
+                    newTransactionsByAccountUuid,
+                    monMonTransactionMap,
+                }),
+            }))
+            .sort(
+                (a, b) =>
+                    Number(b.hasExactDateCounterpart) -
+                        Number(a.hasExactDateCounterpart) ||
+                    a.importedId.localeCompare(b.importedId)
+            );
 
         const seedByImportedId = new Map<string, PlannedTransferSeed>();
         const suppressedImportedIds = new Set<string>();
@@ -1472,7 +1397,7 @@ class Importer {
             PlannedExistingCounterpartConversion
         >();
 
-        for (const candidate of candidates) {
+        for (const candidate of rankedCandidates) {
             if (suppressedImportedIds.has(candidate.importedId)) {
                 continue;
             }
@@ -1735,6 +1660,34 @@ class Importer {
                 candidateDate: candidate.transaction.valueDate,
                 matchWindowDays,
             })
+        );
+    }
+
+    private hasExactDateCounterpart({
+        candidate,
+        newTransactionsByAccountUuid,
+        monMonTransactionMap,
+    }: {
+        candidate: TransferPlanningCandidate;
+        newTransactionsByAccountUuid: Record<string, MonMonTransaction[]>;
+        monMonTransactionMap: Record<string, MonMonTransaction[]>;
+    }): boolean {
+        return (
+            this.findSameRunTransferCounterparts({
+                candidate,
+                matchWindowDays: 0,
+                targetTransactions:
+                    newTransactionsByAccountUuid[
+                        candidate.targetMonMonAccount.uuid
+                    ] ?? [],
+            }).length > 0 ||
+            this.findHistoricalTransferCounterparts({
+                candidate,
+                matchWindowDays: 0,
+                targetTransactions:
+                    monMonTransactionMap[candidate.targetMonMonAccount.uuid] ??
+                    [],
+            }).length > 0
         );
     }
 
