@@ -4,6 +4,10 @@ updates:
       directory: '/'
       schedule:
           interval: weekly
+      groups:
+          npm-dependencies:
+              patterns:
+                  - '*'
       commit-message:
           prefix: chore
           prefix-development: chore
