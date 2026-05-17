@@ -33,7 +33,11 @@ import type {
     PromptState,
     TransferPlan,
 } from './Importer.types.js';
-import { DATE_FORMAT } from './shared.js';
+import {
+    DATE_FORMAT,
+    buildTransactionNotes,
+    getIdForMoneyMoneyTransaction,
+} from './shared.js';
 
 export const classifyCategoryUpdate = ({
     currentCategoryId,
@@ -499,7 +503,7 @@ class Importer {
         const seedImportedIds = new Set(transferPlan.seedByImportedId.keys());
         const isSeedAccount = (state: (typeof accountStates)[number]) =>
             state.newMonMonTransactions.some((tx) =>
-                seedImportedIds.has(this.getIdForMoneyMoneyTransaction(tx))
+                seedImportedIds.has(getIdForMoneyMoneyTransaction(tx))
             );
         accountStates.sort((a, b) => {
             const aSeed = isSeedAccount(a) ? 0 : 1;
@@ -543,7 +547,7 @@ class Importer {
                 const intendedCategoryByImportedId = new Map<string, string>();
                 for (const transaction of newMonMonTransactions) {
                     const importedId =
-                        this.getIdForMoneyMoneyTransaction(transaction);
+                        getIdForMoneyMoneyTransaction(transaction);
                     if (transferPlan.suppressedImportedIds.has(importedId)) {
                         continue;
                     }
@@ -1134,7 +1138,7 @@ class Importer {
         const existingPairs: ExistingTransactionPair[] = [];
 
         for (const transaction of accountTransactions) {
-            const importedId = this.getIdForMoneyMoneyTransaction(transaction);
+            const importedId = getIdForMoneyMoneyTransaction(transaction);
             const existingTransaction = existingByImportedId.get(importedId);
 
             if (existingTransaction) {
@@ -1380,6 +1384,16 @@ class Importer {
             return;
         }
 
+        const counterpartUpdates: Record<string, unknown>[] = [];
+        const counterpartLogs: Array<{
+            transferId: string;
+            targetActualAccountName: string;
+            amount: number;
+            date: string;
+            notes: string | undefined;
+            importedId: string;
+        }> = [];
+
         for (const transaction of importedTransactions) {
             if (!transaction.imported_id) {
                 continue;
@@ -1391,12 +1405,6 @@ class Importer {
             if (!plannedSeed || !transaction.transfer_id) {
                 continue;
             }
-
-            const transactionNotes = transaction.notes || undefined;
-
-            this.logger.info(
-                `Created transfer from '${actualAccountName}' to '${plannedSeed.targetActualAccountName}' with amount ${(transaction.amount / 100).toFixed(2)} on ${transaction.date}${transactionNotes ? ` (${transactionNotes})` : ''}.`
-            );
 
             if (!plannedSeed.sameRunCounterpart) {
                 continue;
@@ -1418,13 +1426,33 @@ class Importer {
                     plannedSeed.sameRunCounterpart.cleared;
             }
 
-            await this.actualApi.batchUpdateTransactions({
-                updated: [counterpartUpdate],
-                runTransfers: false,
+            counterpartUpdates.push(counterpartUpdate);
+            counterpartLogs.push({
+                transferId: transaction.transfer_id,
+                targetActualAccountName: plannedSeed.targetActualAccountName,
+                amount: transaction.amount,
+                date: transaction.date,
+                notes: transaction.notes || undefined,
+                importedId: plannedSeed.sameRunCounterpart.importedId,
             });
+        }
+
+        if (counterpartUpdates.length === 0) {
+            return;
+        }
+
+        await this.actualApi.batchUpdateTransactions({
+            updated: counterpartUpdates,
+            runTransfers: false,
+        });
+
+        for (const logEntry of counterpartLogs) {
+            this.logger.info(
+                `Created transfer from '${actualAccountName}' to '${logEntry.targetActualAccountName}' with amount ${(logEntry.amount / 100).toFixed(2)} on ${logEntry.date}${logEntry.notes ? ` (${logEntry.notes})` : ''}.`
+            );
 
             this.logger.debug(
-                `Stamped generated transfer counterpart '${transaction.transfer_id}' in '${plannedSeed.targetActualAccountName}' with imported_id '${plannedSeed.sameRunCounterpart.importedId}'.`
+                `Stamped generated transfer counterpart '${logEntry.transferId}' in '${logEntry.targetActualAccountName}' with imported_id '${logEntry.importedId}'.`
             );
         }
     }
@@ -1437,7 +1465,7 @@ class Importer {
         transferPlan: TransferPlan;
     }) {
         for (const transaction of newMonMonTransactions) {
-            const importedId = this.getIdForMoneyMoneyTransaction(transaction);
+            const importedId = getIdForMoneyMoneyTransaction(transaction);
             const conversion =
                 transferPlan.existingCounterpartConversionsByImportedId.get(
                     importedId
@@ -1527,7 +1555,11 @@ class Importer {
                 );
             }
 
-            const transactionNotes = this.buildTransactionNotes(transaction);
+            const transactionNotes = buildTransactionNotes(
+                transaction,
+                this.config.import.importComments,
+                this.config.import.commentPrefix
+            );
 
             this.logger.info(
                 `Converted plain transaction in '${conversion.existingCounterpartAccountName}' to a transfer from '${conversion.sourceActualAccountName}' with amount ${transaction.amount.toFixed(2)} on ${format(transaction.valueDate, DATE_FORMAT)}${transactionNotes ? ` (${transactionNotes})` : ''}.`
@@ -1582,12 +1614,16 @@ class Importer {
         transaction: MonMonTransaction,
         plannedTransfer?: PlannedTransferSeed
     ): Promise<CreateTransaction> {
-        const transactionNotes = this.buildTransactionNotes(transaction);
+        const transactionNotes = buildTransactionNotes(
+            transaction,
+            this.config.import.importComments,
+            this.config.import.commentPrefix
+        );
 
         const createTransaction: CreateTransaction = {
             date: format(transaction.valueDate, DATE_FORMAT),
             amount: Math.round(transaction.amount * 100),
-            imported_id: this.getIdForMoneyMoneyTransaction(transaction),
+            imported_id: getIdForMoneyMoneyTransaction(transaction),
             imported_payee: transaction.name ?? '',
         };
 
@@ -1604,21 +1640,6 @@ class Importer {
         }
 
         return createTransaction;
-    }
-
-    private buildTransactionNotes(transaction: MonMonTransaction): string {
-        return [
-            transaction.purpose,
-            transaction.comment && this.config.import.importComments
-                ? `${this.config.import.commentPrefix}${transaction.comment}`
-                : undefined,
-        ]
-            .filter(Boolean)
-            .join(' | ');
-    }
-
-    private getIdForMoneyMoneyTransaction(transaction: MonMonTransaction) {
-        return `${transaction.accountUuid}-${transaction.id}`;
     }
 
     private parseImportedId(importedId: string) {
