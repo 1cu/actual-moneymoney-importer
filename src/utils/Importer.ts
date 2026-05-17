@@ -19,6 +19,7 @@ import CategoryMap from './CategoryMap.js';
 import { ActualBudgetConfig, Config } from './config.js';
 import Logger from './Logger.js';
 import PayeeTransformer from './PayeeTransformer.js';
+import TransferPlanner from './TransferPlanner.js';
 import type {
     CategoryUpdateClassification,
     CategoryUpdatePlan,
@@ -27,12 +28,10 @@ import type {
     ExistingCategoryUpdate,
     ExistingTransactionPair,
     ImportRunMetrics,
-    PlannedExistingCounterpartConversion,
     PlannedTransferSeed,
     PromptDecision,
     PromptState,
     TransferPlan,
-    TransferPlanningCandidate,
 } from './Importer.types.js';
 import { DATE_FORMAT } from './shared.js';
 
@@ -472,7 +471,7 @@ class Importer {
         );
 
         const transferPlan = transfersEnabled
-            ? this.buildTransferPlan({
+            ? this.buildTransferPlanViaPlanner({
                   fullAccountMapping: fullAccountMapping!,
                   accountStates,
                   monMonTransactionMap,
@@ -1338,7 +1337,7 @@ class Importer {
         );
     }
 
-    private buildTransferPlan({
+    private buildTransferPlanViaPlanner({
         fullAccountMapping,
         accountStates,
         monMonTransactionMap,
@@ -1355,6 +1354,49 @@ class Importer {
         existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
         transferPayeeIdByAccountId: Map<string, string>;
     }): TransferPlan {
+        const planner = new TransferPlanner(
+            this.config,
+            this.categoryMap,
+            this.logger
+        );
+
+        return planner.buildTransferPlan({
+            fullAccountMapping,
+            accountStates,
+            monMonTransactionMap,
+            existingActualTransactionsByAccountId,
+            transferPayeeIdByAccountId,
+        });
+    }
+
+    public buildTransferPlan({
+        fullAccountMapping,
+        accountStates,
+        monMonTransactionMap,
+        existingActualTransactionsByAccountId,
+        transferPayeeIdByAccountId,
+    }: {
+        fullAccountMapping: Map<MonMonAccount, Account>;
+        accountStates: Array<{
+            monMonAccount: MonMonAccount;
+            actualAccount: Account;
+            newMonMonTransactions: MonMonTransaction[];
+        }>;
+        monMonTransactionMap: Record<string, MonMonTransaction[]>;
+        existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
+        transferPayeeIdByAccountId: Map<string, string>;
+    }): TransferPlan {
+        return this.buildTransferPlanViaPlanner({
+            fullAccountMapping,
+            accountStates,
+            monMonTransactionMap,
+            existingActualTransactionsByAccountId,
+            transferPayeeIdByAccountId,
+        });
+    }
+
+    /*
+
         const emptyPlan: TransferPlan = {
             seedByImportedId: new Map<string, PlannedTransferSeed>(),
             suppressedImportedIds: new Set<string>(),
@@ -2076,6 +2118,8 @@ class Importer {
                 candidate.sourceMonMonAccount.accountNumber
         );
     }
+
+    */
 
     private async getExistingTransactionsForStartBalanceCheck({
         actualAccountId,
