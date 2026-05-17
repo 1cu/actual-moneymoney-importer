@@ -355,6 +355,13 @@ class Importer {
                 ...(toDate ? { toDate } : {}),
             });
 
+        if (requestedRangeMonMonTransactions.length === 0) {
+            this.logger.info(
+                `No transactions found in the requested import range ${format(importDate, DATE_FORMAT)}${toDate ? ` .. ${format(toDate, DATE_FORMAT)}` : ''}.`
+            );
+            return;
+        }
+
         this.logger.debug(
             `Found ${
                 monMonTransactions.length
