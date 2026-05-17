@@ -5,6 +5,7 @@ import Importer, {
     getTransferFetchWindow,
     isWithinRequestedImportRange,
 } from '../../dist/utils/Importer.js';
+import TransferPlanner from '../../dist/utils/TransferPlanner.js';
 
 const makeLogger = () => ({
     debugMessages: [],
@@ -125,6 +126,42 @@ const makeImporter = ({
     );
 };
 
+const makeTransferPlanner = ({
+    synchronizeClearedStatus = true,
+    importComments = true,
+    matchWindowDays = 0,
+    resolvedTransferCategoryUuids = new Set(['mm-transfer']),
+    invalidTransferRefs = [],
+    logger = makeLogger(),
+} = {}) => {
+    const categoryMap = {
+        resolveMoneyMoneyCategoryRefs: () => ({
+            resolvedUuids: resolvedTransferCategoryUuids,
+            invalidRefs: invalidTransferRefs,
+        }),
+        getActualCategoryPath: (categoryId) => categoryId,
+    };
+    const config = {
+        import: {
+            synchronizeClearedStatus,
+            synchronizeCategories: false,
+            categorySyncOnExisting: 'new',
+            importComments,
+            commentPrefix: 'Comment: ',
+            transfers: {
+                enabled: true,
+                categoryRefs: ['Transfer'],
+                matchWindowDays,
+            },
+        },
+        payeeTransformation: {
+            enabled: false,
+        },
+    };
+
+    return new TransferPlanner(config, categoryMap, logger);
+};
+
 test('getTransferFetchWindow pads the requested MoneyMoney range', () => {
     const fetchWindow = getTransferFetchWindow({
         importDate: new Date('2026-04-24'),
@@ -171,7 +208,7 @@ test('filterTransactionsForRequestedImportRange keeps only requested range trans
 });
 
 test('buildTransferPlan suppresses unique same-run counterpart and carries metadata', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -242,7 +279,7 @@ test('buildTransferPlan suppresses unique same-run counterpart and carries metad
 });
 
 test('buildTransferPlan prefers the exact same-date same-run counterpart over nearby distractors', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -318,7 +355,7 @@ test('buildTransferPlan prefers the exact same-date same-run counterpart over ne
 });
 
 test('buildTransferPlan suppresses same-run counterpart when source has hard target signal, even with different purpose', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -386,7 +423,7 @@ test('buildTransferPlan suppresses same-run counterpart when source has hard tar
 });
 
 test('buildTransferPlan rejects same-run counterpart with contradictory target IBAN', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -450,7 +487,7 @@ test('buildTransferPlan rejects same-run counterpart with contradictory target I
 });
 
 test('buildTransferPlan rejects unrelated same-run transactions without a positive signal', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -553,7 +590,9 @@ for (const tc of [
     },
 ]) {
     test(`buildTransferPlan ${tc.name}`, () => {
-        const importer = makeImporter({ matchWindowDays: tc.matchWindowDays });
+        const importer = makeTransferPlanner({
+            matchWindowDays: tc.matchWindowDays,
+        });
         const sourceMonMon = makeMonMonAccount({
             uuid: 'mm-source',
             name: 'Source',
@@ -642,7 +681,7 @@ for (const tc of [
 }
 
 test('buildTransferPlan skips same-run transfer beyond the date window', () => {
-    const importer = makeImporter({ matchWindowDays: 5 });
+    const importer = makeTransferPlanner({ matchWindowDays: 5 });
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -707,7 +746,7 @@ test('buildTransferPlan skips same-run transfer beyond the date window', () => {
 });
 
 test('buildTransferPlan prefers exact-date same-run candidates over earlier off-date fallbacks', () => {
-    const importer = makeImporter({ matchWindowDays: 5 });
+    const importer = makeTransferPlanner({ matchWindowDays: 5 });
     const sourceMonMonEarly = makeMonMonAccount({
         uuid: 'mm-source-early',
         name: 'Source Early',
@@ -808,7 +847,7 @@ test('buildTransferPlan prefers exact-date same-run candidates over earlier off-
 });
 
 test('buildTransferPlan prefers exact-date historical counterparts over earlier off-date fallbacks', () => {
-    const importer = makeImporter({ matchWindowDays: 5 });
+    const importer = makeTransferPlanner({ matchWindowDays: 5 });
     const sourceMonMonEarly = makeMonMonAccount({
         uuid: 'mm-source-early',
         name: 'Source Early',
@@ -918,7 +957,7 @@ test('buildTransferPlan prefers exact-date historical counterparts over earlier 
 });
 
 test('buildTransferPlan prefers exact-date historical matches before off-date same-run matches', () => {
-    const importer = makeImporter({ matchWindowDays: 5 });
+    const importer = makeTransferPlanner({ matchWindowDays: 5 });
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1003,7 +1042,7 @@ test('buildTransferPlan prefers exact-date historical matches before off-date sa
 });
 
 test('buildTransferPlan skips historical conversion when source and counterpart have different dates', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1072,7 +1111,7 @@ test('buildTransferPlan skips historical conversion when source and counterpart 
 });
 
 test('buildTransferPlan matches historical counterpart within the configured date window', () => {
-    const importer = makeImporter({ matchWindowDays: 5 });
+    const importer = makeTransferPlanner({ matchWindowDays: 5 });
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1141,7 +1180,7 @@ test('buildTransferPlan matches historical counterpart within the configured dat
 });
 
 test('buildTransferPlan prefers exact-date padded counterparts over off-date fallbacks', () => {
-    const importer = makeImporter({ matchWindowDays: 5 });
+    const importer = makeTransferPlanner({ matchWindowDays: 5 });
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1221,7 +1260,7 @@ test('buildTransferPlan prefers exact-date padded counterparts over off-date fal
 });
 
 test('buildTransferPlan keeps all usable exact matches when multiple transfer pairs exist', () => {
-    const importer = makeImporter({ matchWindowDays: 5 });
+    const importer = makeTransferPlanner({ matchWindowDays: 5 });
     const sourceMonMonEarly = makeMonMonAccount({
         uuid: 'mm-source-early',
         name: 'Source Early',
@@ -1337,7 +1376,7 @@ test('buildTransferPlan keeps all usable exact matches when multiple transfer pa
 });
 
 test('buildTransferPlan skips ambiguous same-run counterpart matches', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1404,7 +1443,7 @@ test('buildTransferPlan skips ambiguous same-run counterpart matches', () => {
 });
 
 test('buildTransferPlan plans conversion when counterpart already exists as plain transaction', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1496,7 +1535,7 @@ test('buildTransferPlan plans conversion when counterpart already exists as plai
 });
 
 test('buildTransferPlan prefers the exact same-date historical counterpart over nearby distractors', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1578,7 +1617,7 @@ test('buildTransferPlan prefers the exact same-date historical counterpart over 
 });
 
 test('buildTransferPlan claims a historical counterpart only once', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1662,7 +1701,7 @@ test('buildTransferPlan claims a historical counterpart only once', () => {
 });
 
 test('buildTransferPlan skips historical conversion when the counterpart is already part of a transfer', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -1736,7 +1775,7 @@ test('buildTransferPlan skips historical conversion when the counterpart is alre
 });
 
 test('buildTransferPlan does not let a missing transfer payee claim the historical counterpart', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMonA = makeMonMonAccount({
         uuid: 'mm-source-a',
         name: 'Source A',
@@ -1840,7 +1879,7 @@ test('buildTransferPlan does not let a missing transfer payee claim the historic
 });
 
 test('buildTransferPlan skips conversion when source lacks transfer payee', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
@@ -2207,7 +2246,7 @@ test('applyExistingCounterpartConversions throws when stamping the auto-created 
 });
 
 test('buildTransferPlan does not suppress delayed counterpart when source side is no longer new', () => {
-    const importer = makeImporter();
+    const importer = makeTransferPlanner();
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
         name: 'Source',
