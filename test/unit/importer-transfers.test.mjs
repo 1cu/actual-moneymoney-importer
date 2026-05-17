@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
 import Importer, {
+    filterTransactionsForRequestedImportRange,
     getTransferFetchWindow,
     isWithinRequestedImportRange,
 } from '../../dist/utils/Importer.js';
@@ -151,6 +152,21 @@ test('isWithinRequestedImportRange excludes padded boundary transactions', () =>
             toDate: new Date('2026-04-24'),
         }),
         true
+    );
+});
+
+test('filterTransactionsForRequestedImportRange keeps only requested range transactions', () => {
+    const filtered = filterTransactionsForRequestedImportRange({
+        transactions: [
+            makeTransaction({ id: '1', valueDate: '2026-04-19' }),
+            makeTransaction({ id: '2', valueDate: '2026-04-24' }),
+        ],
+        importDate: new Date('2026-04-24'),
+    });
+
+    assert.deepEqual(
+        filtered.map((transaction) => transaction.id),
+        ['2']
     );
 });
 

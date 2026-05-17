@@ -179,6 +179,23 @@ export const isWithinRequestedImportRange = ({
     return true;
 };
 
+export const filterTransactionsForRequestedImportRange = ({
+    transactions,
+    importDate,
+    toDate,
+}: {
+    transactions: MonMonTransaction[];
+    importDate: Date;
+    toDate?: Date;
+}): MonMonTransaction[] =>
+    transactions.filter((transaction) =>
+        isWithinRequestedImportRange({
+            transactionDate: transaction.valueDate,
+            importDate,
+            ...(toDate ? { toDate } : {}),
+        })
+    );
+
 const buildExistingCategoryUpdate = ({
     pair,
     targetCategoryId,
@@ -331,6 +348,13 @@ class Importer {
             });
         }
 
+        const requestedRangeMonMonTransactions =
+            filterTransactionsForRequestedImportRange({
+                transactions: monMonTransactions,
+                importDate,
+                ...(toDate ? { toDate } : {}),
+            });
+
         this.logger.debug(
             `Found ${
                 monMonTransactions.length
@@ -352,6 +376,20 @@ class Importer {
             },
             {} as Record<string, MonMonTransaction[]>
         );
+
+        const requestedRangeMonMonTransactionMap =
+            requestedRangeMonMonTransactions.reduce(
+                (acc, transaction) => {
+                    if (!acc[transaction.accountUuid]) {
+                        acc[transaction.accountUuid] = [];
+                    }
+
+                    acc[transaction.accountUuid]?.push(transaction);
+
+                    return acc;
+                },
+                {} as Record<string, MonMonTransaction[]>
+            );
 
         const fullAccountMapping = transfersEnabled
             ? this.accountMap.getMap()
@@ -400,7 +438,8 @@ class Importer {
         const accountStates = Array.from(accountMapping.entries()).map(
             ([monMonAccount, actualAccount]) => {
                 const accountTransactions =
-                    monMonTransactionMap[monMonAccount.uuid] ?? [];
+                    requestedRangeMonMonTransactionMap[monMonAccount.uuid] ??
+                    [];
                 const existingActualTransactions =
                     existingActualTransactionsByAccountId.get(
                         actualAccount.id
@@ -492,16 +531,6 @@ class Importer {
                     const importedId =
                         this.getIdForMoneyMoneyTransaction(transaction);
                     if (transferPlan.suppressedImportedIds.has(importedId)) {
-                        continue;
-                    }
-
-                    if (
-                        !isWithinRequestedImportRange({
-                            transactionDate: transaction.valueDate,
-                            importDate,
-                            ...(toDate ? { toDate } : {}),
-                        })
-                    ) {
                         continue;
                     }
 
