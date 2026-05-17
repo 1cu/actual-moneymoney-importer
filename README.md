@@ -81,6 +81,7 @@ commentPrefix = "MoneyMoney Comment: " # Optional: Set a prefix for MoneyMoney c
 [import.transfers]
 enabled = false
 categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
+matchWindowDays = 0
 
 # Actual servers, you can add multiple servers
 [[actualServers]]
@@ -138,31 +139,31 @@ The AI receives existing payees from your budget to prefer matching over creatin
 
 #### Automatic transfers
 
-Enable `[import.transfers]` to create native Actual transfers from MoneyMoney transactions when the source-side transaction carries a configured transfer category, its `accountNumber` points to another mapped MoneyMoney account, and both sides share the same value date.
+Enable `[import.transfers]` to create native Actual transfers from MoneyMoney transactions when the source-side transaction carries a configured transfer category, its `accountNumber` points to another mapped MoneyMoney account, and the counterpart falls within the configured match window.
 
-| Option         | Default | Description                                                     |
-| -------------- | ------- | --------------------------------------------------------------- |
-| `enabled`      | `false` | Enable automatic transfer handling                              |
-| `categoryRefs` | `[]`    | MoneyMoney transfer categories by UUID, full path, or leaf name |
+| Option            | Default | Description                                                                                                        |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `enabled`         | `false` | Enable automatic transfer handling                                                                                 |
+| `categoryRefs`    | `[]`    | MoneyMoney transfer categories by UUID, full path, or leaf name                                                    |
+| `matchWindowDays` | `0`     | Max day difference allowed when matching counterparts; also pads the MoneyMoney fetch window for transfer matching |
 
-Native Actual transfers are only created when both matched sides share the same value date.
-Matching is exact-date only for now; off-date candidates are ignored.
+Native Actual transfers preserve each side's date when created through the importer.
+With `matchWindowDays = 0`, matching stays exact-date only. When `matchWindowDays > 0`, the importer also fetches MoneyMoney transactions a few days before/after the requested import range so boundary transfers can still be matched, while only importing transactions that fall inside the requested range.
 
 Supported cases:
 
-- Same-run, same-date, unique match: the importer suppresses the second plain import and stamps the generated transfer counterpart with the second `imported_id`
-- Historical plain counterpart, same-date, unique match: the importer converts the existing plain booking into a transfer when the source side is later imported
+- Same-run, same-date or near-date, unique match: the importer suppresses the second plain import and stamps the generated transfer counterpart with the second `imported_id`
+- Historical plain counterpart, same-date or near-date, unique match: the importer converts the existing plain booking into a transfer when the source side is later imported
 
 Unsupported cases:
 
-- Different-date pairs: imported as two normal transactions so each side keeps its own date
-    - Reason: Actual mirrors transfer dates across linked sides, so a native transfer would not preserve independent value dates
+- Different-date pairs outside the configured window: imported as two normal transactions so each side keeps its own date
 - Counterparts already part of another transfer: left untouched
     - Reason: the importer cannot safely prove they belong to this source transaction
 - Ambiguous target mapping: imported normally
     - Reason: the importer only creates transfers when the target account can be identified uniquely
-- Single-sided delayed seeds: not auto-created as native transfers
-    - Reason: without the counterpart already visible, the importer cannot confirm the date safely
+- Single-sided delayed seeds outside the configured window: not auto-created as native transfers
+    - Reason: without a confident counterpart match, the importer cannot safely link the transfer
 - Ambiguous or weak matches: imported normally
     - Reason: avoid guessing and creating false positives
 

@@ -1,7 +1,27 @@
 import os from 'os';
 import path from 'path';
+import type { Transaction as MonMonTransaction } from 'moneymoney';
 
 export const DATE_FORMAT = 'yyyy-MM-dd';
+
+export const getIdForMoneyMoneyTransaction = (
+    transaction: Pick<MonMonTransaction, 'accountUuid' | 'id'>
+): string => `${transaction.accountUuid}-${transaction.id}`;
+
+export const buildTransactionNotes = (
+    transaction: MonMonTransaction,
+    importComments: boolean,
+    commentPrefix: string
+): string => {
+    return [
+        transaction.purpose,
+        transaction.comment && importComments
+            ? `${commentPrefix}${transaction.comment}`
+            : undefined,
+    ]
+        .filter(Boolean)
+        .join(' | ');
+};
 
 export const APPLICATION_DIRECTORY = path.resolve(os.homedir(), '.actually');
 
@@ -29,6 +49,11 @@ synchronizeCategories = false
 categorySyncOnExisting = "ask" # ask|new|always
 importComments = false
 commentPrefix = "MoneyMoney Comment: "
+
+[import.transfers]
+enabled = false
+categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
+matchWindowDays = 0
 
 # Actual servers, you can add multiple servers
 [[actualServers]]

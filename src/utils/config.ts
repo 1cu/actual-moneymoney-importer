@@ -55,6 +55,7 @@ const payeeTransformationSchema = z.object({
 const transferImportSchema = z.object({
     enabled: z.boolean().default(false),
     categoryRefs: z.array(z.string()).default([]),
+    matchWindowDays: z.number().int().nonnegative().default(0),
 });
 const defaultTransferImportConfig = transferImportSchema.parse({});
 
