@@ -1401,6 +1401,48 @@ class Importer {
                 newMonMonTransactions,
             ])
         ) as Record<string, MonMonTransaction[]>;
+        const mappedAccountByUuid = new Map(
+            mappedAccounts.map(({ monMonAccount, actualAccount }) => [
+                monMonAccount.uuid,
+                actualAccount,
+            ])
+        );
+        const paddedNewTransactionsByAccountUuid = Object.fromEntries(
+            Object.entries(monMonTransactionMap).map(
+                ([accountUuid, transactions]) => {
+                    const requestedImportedIds = new Set(
+                        newTransactionsByAccountUuid[accountUuid]?.map(
+                            (transaction) =>
+                                this.getIdForMoneyMoneyTransaction(transaction)
+                        ) ?? []
+                    );
+                    const existingImportedIds = new Set(
+                        (
+                            existingActualTransactionsByAccountId.get(
+                                mappedAccountByUuid.get(accountUuid)?.id ?? ''
+                            ) ?? []
+                        )
+                            .filter((transaction) => !!transaction.imported_id)
+                            .map(
+                                (transaction) =>
+                                    transaction.imported_id as string
+                            )
+                    );
+
+                    return [
+                        accountUuid,
+                        transactions.filter((transaction) => {
+                            const importedId =
+                                this.getIdForMoneyMoneyTransaction(transaction);
+                            return (
+                                !requestedImportedIds.has(importedId) &&
+                                !existingImportedIds.has(importedId)
+                            );
+                        }),
+                    ];
+                }
+            )
+        ) as Record<string, MonMonTransaction[]>;
         const mappedByAccountNumber = new Map<
             string,
             Array<{
@@ -1486,6 +1528,7 @@ class Importer {
                 hasExactDateCounterpart: this.hasExactDateCounterpart({
                     candidate,
                     newTransactionsByAccountUuid,
+                    paddedNewTransactionsByAccountUuid,
                     monMonTransactionMap,
                     existingActualTransactionsByAccountId,
                 }),
@@ -1514,10 +1557,14 @@ class Importer {
             const matchingCounterparts = this.findSameRunTransferCounterparts({
                 candidate,
                 matchWindowDays,
-                targetTransactions:
-                    newTransactionsByAccountUuid[
+                targetTransactions: [
+                    ...(newTransactionsByAccountUuid[
                         candidate.targetMonMonAccount.uuid
-                    ] ?? [],
+                    ] ?? []),
+                    ...(paddedNewTransactionsByAccountUuid[
+                        candidate.targetMonMonAccount.uuid
+                    ] ?? []),
+                ],
             });
             const preferredMatchingCounterparts =
                 this.preferExactDateCounterparts({
@@ -1810,11 +1857,13 @@ class Importer {
     private hasExactDateCounterpart({
         candidate,
         newTransactionsByAccountUuid,
+        paddedNewTransactionsByAccountUuid = {},
         monMonTransactionMap,
         existingActualTransactionsByAccountId,
     }: {
         candidate: TransferPlanningCandidate;
         newTransactionsByAccountUuid: Record<string, MonMonTransaction[]>;
+        paddedNewTransactionsByAccountUuid: Record<string, MonMonTransaction[]>;
         monMonTransactionMap: Record<string, MonMonTransaction[]>;
         existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
     }): boolean {
@@ -1840,10 +1889,14 @@ class Importer {
             this.findSameRunTransferCounterparts({
                 candidate,
                 matchWindowDays: 0,
-                targetTransactions:
-                    newTransactionsByAccountUuid[
+                targetTransactions: [
+                    ...(newTransactionsByAccountUuid[
                         candidate.targetMonMonAccount.uuid
-                    ] ?? [],
+                    ] ?? []),
+                    ...(paddedNewTransactionsByAccountUuid[
+                        candidate.targetMonMonAccount.uuid
+                    ] ?? []),
+                ],
             }).length > 0 || !!exactHistoricalCounterpart
         );
     }

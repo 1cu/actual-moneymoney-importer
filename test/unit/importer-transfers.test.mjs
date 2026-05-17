@@ -541,6 +541,16 @@ for (const tc of [
         targetPurpose: 'Ruecklagen',
         expectedSeeded: true,
     },
+    {
+        name: 'matches same-run transfer from a padded-only counterpart',
+        matchWindowDays: 5,
+        targetInNewMonMon: false,
+        targetValueDate: '2026-04-24',
+        sourcePurpose: 'Ruecklagen',
+        targetPurpose: 'Ruecklagen',
+        expectedSeeded: true,
+        expectedCounterpartValueDate: '2026-04-24',
+    },
 ]) {
     test(`buildTransferPlan ${tc.name}`, () => {
         const importer = makeImporter({ matchWindowDays: tc.matchWindowDays });
@@ -1130,7 +1140,7 @@ test('buildTransferPlan matches historical counterpart within the configured dat
     assert.equal(plan.existingCounterpartConversionsByImportedId.size, 1);
 });
 
-test('buildTransferPlan keeps an off-date same-run fallback when exact-date history is missing from Actual', () => {
+test('buildTransferPlan prefers exact-date padded counterparts over off-date fallbacks', () => {
     const importer = makeImporter({ matchWindowDays: 5 });
     const sourceMonMon = makeMonMonAccount({
         uuid: 'mm-source',
@@ -1205,12 +1215,12 @@ test('buildTransferPlan keeps an off-date same-run fallback when exact-date hist
     const counterpart =
         plan.seedByImportedId.get('mm-source-100')?.sameRunCounterpart;
     assert.equal(plan.seedByImportedId.size, 1);
-    assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-300']);
-    assert.equal(counterpart?.importedId, 'mm-target-300');
+    assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-200']);
+    assert.equal(counterpart?.importedId, 'mm-target-200');
     assert.equal(plan.existingCounterpartConversionsByImportedId.size, 0);
 });
 
-test('buildTransferPlan ranks usable same-run exact matches ahead of unusable historical exact matches', () => {
+test('buildTransferPlan keeps all usable exact matches when multiple transfer pairs exist', () => {
     const importer = makeImporter({ matchWindowDays: 5 });
     const sourceMonMonEarly = makeMonMonAccount({
         uuid: 'mm-source-early',
@@ -1311,13 +1321,19 @@ test('buildTransferPlan ranks usable same-run exact matches ahead of unusable hi
         ]),
     });
 
-    const counterpart = plan.seedByImportedId.get(
+    const exactCounterpart = plan.seedByImportedId.get(
         'mm-source-exact-200'
     )?.sameRunCounterpart;
-    assert.equal(plan.seedByImportedId.size, 1);
-    assert.deepEqual([...plan.suppressedImportedIds], ['mm-target-400']);
-    assert.equal(counterpart?.importedId, 'mm-target-400');
-    assert.equal(plan.seedByImportedId.has('mm-source-early-100'), false);
+    const earlyCounterpart = plan.seedByImportedId.get(
+        'mm-source-early-100'
+    )?.sameRunCounterpart;
+    assert.equal(plan.seedByImportedId.size, 2);
+    assert.deepEqual([...plan.suppressedImportedIds].sort(), [
+        'mm-target-300',
+        'mm-target-400',
+    ]);
+    assert.equal(exactCounterpart?.importedId, 'mm-target-400');
+    assert.equal(earlyCounterpart?.importedId, 'mm-target-300');
 });
 
 test('buildTransferPlan skips ambiguous same-run counterpart matches', () => {
