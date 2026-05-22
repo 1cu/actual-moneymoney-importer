@@ -148,7 +148,7 @@ class PayeeTransformer {
     ) {
         if (!config.openAiApiKey) {
             throw new Error(
-                'An OpenAPI API key is required for payee transformation. Please set the key in the configuration file.'
+                'An OpenAI API key is required for payee transformation. Please set the key in the configuration file.'
             );
         }
 
