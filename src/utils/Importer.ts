@@ -141,6 +141,37 @@ export const shouldEmitMappingConflictGuidance = ({
     accountsWithConflicts: number;
 }): boolean => totalUnmappedCategoryWarnings > 0 && accountsWithConflicts > 0;
 
+export const collectUniquePayeeNamesForTransformation = ({
+    accountStates,
+    transferPlan,
+}: {
+    accountStates: Array<{
+        newMonMonTransactions: MonMonTransaction[];
+    }>;
+    transferPlan: TransferPlan;
+}) => {
+    const payeeNames = new Set<string>();
+
+    for (const accountState of accountStates) {
+        for (const transaction of accountState.newMonMonTransactions) {
+            const importedId = getIdForMoneyMoneyTransaction(transaction);
+            if (
+                transferPlan.suppressedImportedIds.has(importedId) ||
+                transferPlan.seedByImportedId.has(importedId)
+            ) {
+                continue;
+            }
+
+            const payeeName = transaction.name?.trim();
+            if (payeeName) {
+                payeeNames.add(payeeName);
+            }
+        }
+    }
+
+    return [...payeeNames].sort((a, b) => a.localeCompare(b));
+};
+
 export const getTransferFetchWindow = ({
     importDate,
     toDate,
@@ -511,6 +542,42 @@ class Importer {
             return aSeed - bSeed;
         });
 
+        const shouldTransformPayees = !!this.payeeTransformer && !isDryRun;
+        let transformedPayeesByRawName: Record<string, string> | null = null;
+        const payeeTransformer = this.payeeTransformer;
+
+        if (shouldTransformPayees && payeeTransformer) {
+            const uniquePayeeNames = collectUniquePayeeNamesForTransformation({
+                accountStates,
+                transferPlan,
+            });
+
+            if (uniquePayeeNames.length > 0) {
+                const transformedPayees =
+                    await payeeTransformer.transformPayees(
+                        uniquePayeeNames,
+                        existingPayeeNames
+                    );
+
+                if (transformedPayees === null) {
+                    const onError =
+                        this.config.payeeTransformation.onTransformError;
+
+                    if (onError === 'fail') {
+                        throw new Error(
+                            'Payee transformation failed. Check the error messages above for details.'
+                        );
+                    }
+
+                    this.logger.warn(
+                        'Payee transformation failed. Using default payee names...'
+                    );
+                } else {
+                    transformedPayeesByRawName = transformedPayees;
+                }
+            }
+        }
+
         const unmappedCategoryWarnings = new Set<string>();
         const runMetrics: ImportRunMetrics = {
             accountsScanned: 0,
@@ -654,66 +721,19 @@ class Importer {
                         `Considering ${createTransactions.length} new transactions for Actual account '${actualAccount.name}'...`
                     );
 
-                    if (this.payeeTransformer && !isDryRun) {
-                        const transactionPayees = createTransactions
-                            .filter((t) => !t.payee)
-                            .map((t) => t.imported_payee as string);
-                        const uniquePayees = [
-                            ...new Set(transactionPayees),
-                        ].filter((p) => p && p.trim());
-
-                        this.logger.debug(
-                            `Cleaning up ${uniquePayees.length} unique payee names (from ${createTransactions.length} transactions) using OpenAI...`
-                        );
-
-                        const transformedPayees =
-                            await this.payeeTransformer.transformPayees(
-                                uniquePayees,
-                                existingPayeeNames
-                            );
-
-                        if (transformedPayees !== null) {
-                            createTransactions.forEach((t) => {
-                                if (t.payee) {
-                                    return;
-                                }
-                                t.payee_name =
-                                    transformedPayees[
-                                        t.imported_payee as string
-                                    ] ??
-                                    t.imported_payee ??
-                                    '';
-                            });
-                        } else {
-                            const onError =
-                                this.config.payeeTransformation
-                                    .onTransformError;
-
-                            if (onError === 'fail') {
-                                throw new Error(
-                                    'Payee transformation failed. Check the error messages above for details.'
-                                );
-                            }
-
-                            this.logger.warn(
-                                'Payee transformation failed. Using default payee names...'
-                            );
-
-                            createTransactions.forEach((t) => {
-                                if (t.payee) {
-                                    return;
-                                }
-                                t.payee_name = t.imported_payee ?? '';
-                            });
+                    createTransactions.forEach((t) => {
+                        if (t.payee) {
+                            return;
                         }
-                    } else {
-                        createTransactions.forEach((t) => {
-                            if (t.payee) {
-                                return;
-                            }
-                            t.payee_name = t.imported_payee ?? '';
-                        });
-                    }
+
+                        t.payee_name = shouldTransformPayees
+                            ? (transformedPayeesByRawName?.[
+                                  t.imported_payee as string
+                              ] ??
+                              t.imported_payee ??
+                              '')
+                            : (t.imported_payee ?? '');
+                    });
 
                     if (!isDryRun) {
                         const result = await this.actualApi.importTransactions(
@@ -1624,7 +1644,7 @@ class Importer {
             date: format(transaction.valueDate, DATE_FORMAT),
             amount: Math.round(transaction.amount * 100),
             imported_id: getIdForMoneyMoneyTransaction(transaction),
-            imported_payee: transaction.name ?? '',
+            imported_payee: transaction.name?.trim() ?? '',
         };
 
         if (plannedTransfer) {
