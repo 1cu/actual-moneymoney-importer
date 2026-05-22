@@ -113,7 +113,7 @@ password = ""
 
 ### Payee transformation
 
-Converts cryptic payee names to human-readable formats using OpenAI (e.g. "AMAZN S.A.R.L" to "Amazon"). Requires an API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+Converts cryptic payee names to human-readable formats using OpenAI (e.g. "AMAZN S.A.R.L" to "Amazon"). The importer also reuses existing budget payees with a bounded shortlist and snaps close matches back to canonical names. Requires an API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
 
 | Option             | Default      | Description                                                                     |
 | ------------------ | ------------ | ------------------------------------------------------------------------------- |
@@ -124,7 +124,7 @@ Converts cryptic payee names to human-readable formats using OpenAI (e.g. "AMAZN
 | `onTransformError` | `warn`       | Error handling: `warn` (use raw names) or `fail` (abort import)                 |
 | `prompt`           | built-in     | Custom transformation instructions (existing payees are appended automatically) |
 
-The AI receives existing payees from your budget to prefer matching over creating duplicates.
+The AI receives a bounded shortlist of existing payees from your budget to prefer matching over creating duplicates, and close matches are normalized back to existing payee names after the API call.
 
 ### Import settings
 
