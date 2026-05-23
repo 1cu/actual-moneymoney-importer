@@ -31,6 +31,7 @@
         "module": "nodenext" /* Specify what module code is generated. */,
         "baseUrl": ".",
         "ignoreDeprecations": "6.0",
+        "types": ["node"],
         "paths": {
             "@actual-app/api": ["src/types/actual-app__api.d.ts"]
         },

@@ -5,6 +5,27 @@ import { ArgumentsCamelCase } from 'yargs';
 import { z } from 'zod';
 import { DEFAULT_CONFIG_FILE } from './shared.js';
 
+const isValidCalendarDate = (dateString: string) => {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (!dateRegex.test(dateString)) {
+        return false;
+    }
+
+    const [yearString, monthString, dayString] = dateString.split('-');
+    const year = Number(yearString);
+    const month = Number(monthString);
+    const day = Number(dayString);
+
+    const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+    return (
+        parsedDate.getUTCFullYear() === year &&
+        parsedDate.getUTCMonth() === month - 1 &&
+        parsedDate.getUTCDate() === day
+    );
+};
+
 const budgetSchema = z
     .object({
         syncId: z.string(),
@@ -26,12 +47,12 @@ const budgetSchema = z
         }
 
         if (val.earliestImportDate) {
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-            if (!dateRegex.test(val.earliestImportDate)) {
+            if (!isValidCalendarDate(val.earliestImportDate)) {
                 ctx.addIssue({
                     code: 'custom',
+                    path: ['earliestImportDate'],
                     message:
-                        'Invalid earliest import date format (required format is YYYY-MM-DD)',
+                        'Invalid earliest import date (required format is YYYY-MM-DD and must be a real calendar date)',
                 });
             }
         }
@@ -117,6 +138,46 @@ export type ActualServerConfig = z.infer<typeof actualServerSchema>;
 export type ActualBudgetConfig = z.infer<typeof budgetSchema>;
 export type Config = z.infer<typeof configSchema>;
 
+const isLocalhostServerUrl = (serverUrl: string) => {
+    try {
+        const url = new URL(serverUrl);
+        const hostname = url.hostname.replace(/^\[|\]$/g, '');
+
+        return (
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            hostname === '::1'
+        );
+    } catch {
+        return false;
+    }
+};
+
+export const warnOnCleartextActualServers = (
+    actualServers: ActualServerConfig[]
+) => {
+    for (const server of actualServers) {
+        try {
+            const url = new URL(server.serverUrl);
+            if (url.protocol === 'http:' && !isLocalhostServerUrl(url.href)) {
+                console.error(
+                    `WARNING: Actual server '${server.serverUrl}' uses cleartext HTTP. Server passwords will be sent in plain text. Use HTTPS instead.`
+                );
+            }
+        } catch {
+            continue;
+        }
+    }
+};
+
+export const parseConfigData = (configData: unknown): Config => {
+    const config = configSchema.parse(configData);
+
+    warnOnCleartextActualServers(config.actualServers);
+
+    return config;
+};
+
 export const getConfigFile = (argv: ArgumentsCamelCase) => {
     if (argv.config) {
         const argvConfigFile = path.resolve(argv.config as string);
@@ -144,7 +205,7 @@ export const getConfig = async (argv: ArgumentsCamelCase) => {
 
     try {
         const configData = toml.parse(configContent);
-        return configSchema.parse(configData);
+        return parseConfigData(configData);
     } catch (e) {
         if (e instanceof Error && e.name === 'SyntaxError') {
             const line = 'line' in e ? e.line : -1;
@@ -154,6 +215,21 @@ export const getConfig = async (argv: ArgumentsCamelCase) => {
                 `Failed to parse configuration file: ${e.message} (line ${line}, column ${column})`,
                 { cause: e }
             );
+        }
+
+        if (e instanceof z.ZodError) {
+            const issues = e.issues
+                .map((issue) => {
+                    const pathLabel =
+                        issue.path.length > 0 ? issue.path.join('.') : '(root)';
+
+                    return `- ${pathLabel}: ${issue.message}`;
+                })
+                .join('\n');
+
+            throw new Error(`Invalid configuration file:\n${issues}`, {
+                cause: e,
+            });
         }
 
         throw new Error(

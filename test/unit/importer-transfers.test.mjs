@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
 import Importer, {
     filterTransactionsForRequestedImportRange,
+    getLatestTransactionValueDate,
     getTransferFetchWindow,
     isWithinRequestedImportRange,
 } from '../../dist/utils/Importer.js';
@@ -2380,6 +2381,52 @@ test('getExistingTransactionsForStartBalanceCheck does not refetch non-empty or 
     );
 
     assert.equal(getTransactions.mock.callCount(), 0);
+});
+
+test('getLatestTransactionValueDate picks the latest value date regardless of order', () => {
+    const latest = getLatestTransactionValueDate([
+        makeTransaction({ id: '1', valueDate: '2026-04-21' }),
+        makeTransaction({ id: '2', valueDate: '2026-04-24' }),
+        makeTransaction({ id: '3', valueDate: '2026-04-22' }),
+    ]);
+
+    assert.equal(latest?.toISOString().slice(0, 10), '2026-04-24');
+});
+
+test('emitImportRunSummary warns when row-level import errors are present', () => {
+    const logger = makeLogger();
+    const importer = makeImporter({ logger });
+    const emitImportRunSummary =
+        Object.getPrototypeOf(importer).emitImportRunSummary;
+
+    emitImportRunSummary.call(
+        importer,
+        {
+            accountsScanned: 1,
+            accountsWithImportActivity: 1,
+            accountsWithCategoryActivity: 0,
+            accountsWithConflicts: 0,
+            totalTransactionsAdded: 1,
+            totalTransactionsUpdated: 0,
+            totalCategoryUpdatesPlanned: 0,
+            totalCategoryUpdatesApplied: 0,
+            totalCategoryUpdatesDryRun: 0,
+            totalBackfills: 0,
+            totalConflicts: 0,
+            totalSkippedConflicts: 0,
+            totalUnmappedCategoryWarnings: 0,
+            totalAutoRuleOverrides: 0,
+            accountsWithImportErrors: 1,
+            totalImportErrors: 2,
+        },
+        false
+    );
+
+    assert.equal(
+        logger.warnMessages.at(-1),
+        'Import run completed with errors'
+    );
+    assert.equal(logger.infoMessages.length, 0);
 });
 
 test('convertToActualTransaction uses transfer payee for planned seed', async () => {
