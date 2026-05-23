@@ -1,10 +1,10 @@
 import toml from 'toml';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
-import { configSchema, getConfigFile } from '../utils/config.js';
+import { getConfigFile, parseConfigData } from '../utils/config.js';
 import fs from 'fs/promises';
 import path from 'path';
 import Logger, { LogLevel } from '../utils/Logger.js';
-import { z } from 'zod';
+import { ZodError } from 'zod';
 import { EXAMPLE_CONFIG } from '../utils/shared.js';
 
 const handleValidate = async (argv: ArgumentsCamelCase) => {
@@ -44,9 +44,9 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
             const configData = toml.parse(configContent);
 
             logger.debug(`Parsing configuration schema...`);
-            configSchema.parse(configData);
+            parseConfigData(configData);
         } catch (e) {
-            if (e instanceof z.core.$ZodError) {
+            if (e instanceof ZodError) {
                 logger.error('Configuration file is invalid:');
                 for (const error of e.issues) {
                     logger.error(
@@ -61,7 +61,7 @@ const handleValidate = async (argv: ArgumentsCamelCase) => {
                     `Failed to parse configuration file: ${e.message} (line ${line}, column ${column})`
                 );
             } else {
-                logger.error(`An unexpected error occured: ${e}`);
+                logger.error(`An unexpected error occurred: ${e}`);
             }
 
             process.exit(1);

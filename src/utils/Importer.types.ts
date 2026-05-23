@@ -63,6 +63,8 @@ export type ImportRunMetrics = {
     totalSkippedConflicts: number;
     totalUnmappedCategoryWarnings: number;
     totalAutoRuleOverrides: number;
+    accountsWithImportErrors: number;
+    totalImportErrors: number;
 };
 
 export type DuplicateImportedIdGroup = {
