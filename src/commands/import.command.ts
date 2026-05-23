@@ -12,6 +12,27 @@ import { withGlobalApiNoiseFilter } from '../utils/ActualApiLogControl.js';
 import { getConfig } from '../utils/config.js';
 import { DATE_FORMAT } from '../utils/shared.js';
 
+export const buildBudgetNameBySyncIdMap = async (
+    actualApi: Pick<ActualApi, 'getUserFiles'>,
+    serverUrl: string
+) => {
+    try {
+        const userFiles = await actualApi.getUserFiles();
+
+        return new Map(userFiles.map((file) => [file.fileId, file.name]));
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+
+        throw new Error(
+            `Failed to list Actual user files for server '${serverUrl}': ${reason}`,
+            { cause: error }
+        );
+    }
+};
+
+export const getImportExitCode = (encounteredImportErrors: boolean) =>
+    encounteredImportErrors ? 1 : 0;
+
 const handleCommand = async (argv: ArgumentsCamelCase) => {
     const config = await getConfig(argv);
 
@@ -103,6 +124,8 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
     logger.debug(`MoneyMoney database is accessible.`);
 
     await withGlobalApiNoiseFilter(logLevel < LogLevel.ACTUAL, async () => {
+        let encounteredImportErrors = false;
+
         for (const serverConfig of selectedServerConfigs) {
             const selectedBudgetConfigs = serverConfig.budgets.filter(
                 (budgetConfig) => includesRef(budgetRefs, budgetConfig.syncId)
@@ -126,14 +149,24 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
             logger.debug(`Initializing Actual API...`);
             await actualApi.init();
 
-            const userFiles = await actualApi
-                .getUserFiles()
-                .catch(() => [] as Array<{ fileId: string; name: string }>);
-            const budgetNameBySyncId = new Map(
-                userFiles.map((file) => [file.fileId, file.name])
-            );
-
             try {
+                let budgetNameBySyncId = new Map<string, string>();
+
+                try {
+                    budgetNameBySyncId = await buildBudgetNameBySyncIdMap(
+                        actualApi,
+                        serverConfig.serverUrl
+                    );
+                } catch (error) {
+                    const reason =
+                        error instanceof Error ? error.message : String(error);
+
+                    logger.warn(
+                        `Could not list Actual user files for server '${serverConfig.serverUrl}'. Continuing without budget names.`,
+                        reason
+                    );
+                }
+
                 for (const budgetConfig of selectedBudgetConfigs) {
                     const budgetName = budgetNameBySyncId.get(
                         budgetConfig.syncId
@@ -202,14 +235,15 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
                     }
 
                     await importer.importTransactions(importOptions);
+                    encounteredImportErrors ||= importer.hasImportErrors();
                 }
             } finally {
                 await actualApi.shutdown();
             }
         }
-    });
 
-    process.exit(0);
+        process.exit(getImportExitCode(encounteredImportErrors));
+    });
 };
 
 export default {

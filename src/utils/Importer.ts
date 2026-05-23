@@ -230,6 +230,20 @@ export const filterTransactionsForRequestedImportRange = ({
         })
     );
 
+export const getLatestTransactionValueDate = (
+    transactions: MonMonTransaction[]
+): Date | null => {
+    if (transactions.length === 0) {
+        return null;
+    }
+
+    return transactions.reduce(
+        (latest, transaction) =>
+            transaction.valueDate > latest ? transaction.valueDate : latest,
+        transactions[0]!.valueDate
+    );
+};
+
 const buildExistingCategoryUpdate = ({
     pair,
     targetCategoryId,
@@ -253,6 +267,7 @@ const buildExistingCategoryUpdate = ({
 
 class Importer {
     private readonly transferPlanner: TransferPlanner;
+    private hadImportErrors = false;
 
     constructor(
         private config: Config,
@@ -594,6 +609,8 @@ class Importer {
             totalSkippedConflicts: 0,
             totalUnmappedCategoryWarnings: 0,
             totalAutoRuleOverrides: 0,
+            accountsWithImportErrors: 0,
+            totalImportErrors: 0,
         };
 
         const promptState: PromptState = { mode: 'prompt' };
@@ -695,12 +712,12 @@ class Importer {
                     });
 
                 if (effectiveExistingActualTransactions.length === 0) {
+                    const latestTransactionDate =
+                        getLatestTransactionValueDate(accountTransactions);
+
                     const startTransaction: CreateTransaction = {
                         date: format(
-                            accountTransactions.length > 0
-                                ? (accountTransactions.at(-1)?.valueDate ??
-                                      new Date())
-                                : new Date(),
+                            latestTransactionDate ?? new Date(),
                             DATE_FORMAT
                         ),
                         amount: this.getStartingBalanceForAccount(
@@ -751,24 +768,40 @@ class Importer {
                             runMetrics.accountsWithImportActivity++;
                         }
 
-                        if (result.errors && result.errors.length > 0) {
+                        const importErrors = result.errors ?? [];
+                        const hadImportErrors = importErrors.length > 0;
+
+                        if (hadImportErrors) {
+                            this.hadImportErrors = true;
+                            runMetrics.accountsWithImportErrors++;
+                            runMetrics.totalImportErrors += importErrors.length;
                             this.logger.error(
                                 'Some errors occurred during import:'
                             );
-                            for (let i = 0; i < result.errors.length; i++) {
+                            for (let i = 0; i < importErrors.length; i++) {
                                 this.logger.error(
-                                    `Error ${i + 1}: ${result.errors[i]?.message ?? 'Unknown error'}`
+                                    `Error ${i + 1}: ${importErrors[i]?.message ?? 'Unknown error'}`
                                 );
                             }
                         }
 
-                        this.logger.info(
-                            `Transaction import to account '${actualAccount.name}' successful`,
-                            [
-                                `Added ${result.added.length} new transaction.`,
-                                `Updated ${result.updated.length} existing transaction.`,
-                            ]
-                        );
+                        if (hadImportErrors) {
+                            this.logger.warn(
+                                `Transaction import to account '${actualAccount.name}' completed with errors`,
+                                [
+                                    `Added ${result.added.length} new transaction.`,
+                                    `Updated ${result.updated.length} existing transaction.`,
+                                ]
+                            );
+                        } else {
+                            this.logger.info(
+                                `Transaction import to account '${actualAccount.name}' successful`,
+                                [
+                                    `Added ${result.added.length} new transaction.`,
+                                    `Updated ${result.updated.length} existing transaction.`,
+                                ]
+                            );
+                        }
 
                         const importedTransactions =
                             result.added.length > 0 || result.updated.length > 0
@@ -878,6 +911,10 @@ class Importer {
         }
     }
 
+    public hasImportErrors() {
+        return this.hadImportErrors;
+    }
+
     private logCategorySyncSummary({
         actualAccountName,
         existingPairsCount,
@@ -975,7 +1012,9 @@ class Importer {
             metrics.totalTransactionsAdded > 0 ||
             metrics.totalTransactionsUpdated > 0;
         const hasCategoryActivity = metrics.totalCategoryUpdatesPlanned > 0;
-        const hasNotableWarnings = metrics.totalUnmappedCategoryWarnings > 0;
+        const hasImportErrors = metrics.totalImportErrors > 0;
+        const hasNotableWarnings =
+            metrics.totalUnmappedCategoryWarnings > 0 || hasImportErrors;
 
         if (!hasImportActivity && !hasCategoryActivity && !hasNotableWarnings) {
             this.logger.info('Nothing to import.');
@@ -1042,7 +1081,14 @@ class Importer {
             );
         }
 
-        this.logger.info('Import run summary', hints);
+        if (hasImportErrors) {
+            hints.push(
+                `Import errors: ${metrics.totalImportErrors} row-level error(s) across ${metrics.accountsWithImportErrors} account(s)`
+            );
+            this.logger.warn('Import run completed with errors', hints);
+        } else {
+            this.logger.info('Import run summary', hints);
+        }
     }
 
     private buildAccountTransactionBuckets({

@@ -72,3 +72,38 @@ test('automatic transfers require at least one category ref when enabled', () =>
             )
     );
 });
+
+test('earliestImportDate rejects impossible calendar dates', () => {
+    assert.throws(
+        () =>
+            configSchema.parse({
+                payeeTransformation: {
+                    enabled: false,
+                },
+                import: {
+                    importUncheckedTransactions: true,
+                },
+                actualServers: [
+                    {
+                        serverUrl: 'http://localhost:5006',
+                        serverPassword: 'pw',
+                        budgets: [
+                            {
+                                syncId: 'budget-id',
+                                earliestImportDate: '2026-02-31',
+                                e2eEncryption: {
+                                    enabled: false,
+                                },
+                                accountMapping: {},
+                            },
+                        ],
+                    },
+                ],
+            }),
+        (error) =>
+            error instanceof ZodError &&
+            error.issues.some((issue) =>
+                issue.message.includes('real calendar date')
+            )
+    );
+});
