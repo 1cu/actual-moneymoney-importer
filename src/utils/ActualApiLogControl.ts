@@ -37,36 +37,36 @@ export async function withApiNoiseFilter<T>(
         }
     }
 
-    const originalLog = console.log;
+    const originalConsoleLog = console.log;
+    const originalStdoutWrite = process.stdout.write;
+
     console.log = ((...args: Parameters<ConsoleLog>) => {
         const firstArg = args[0];
         if (typeof firstArg === 'string' && isApiNoiseLine(firstArg)) {
             return;
         }
-        originalLog(...args);
+        originalConsoleLog(...args);
     }) as ConsoleLog;
-
-    const originalStdoutWrite = process.stdout.write.bind(
-        process.stdout
-    ) as typeof process.stdout.write;
 
     process.stdout.write = ((data: string | Uint8Array, ...rest: unknown[]) => {
         if (typeof data === 'string' && isApiNoiseLine(data)) {
             return true;
         }
         return (
-            originalStdoutWrite as (
-                d: string | Uint8Array,
-                ...r: unknown[]
+            originalStdoutWrite as unknown as (
+                data: string | Uint8Array,
+                ...rest: unknown[]
             ) => boolean
-        )(data, ...rest);
-    }) as typeof process.stdout.write as typeof process.stdout.write;
+        ).call(process.stdout, data, ...rest) as boolean;
+    }) as typeof process.stdout.write;
 
     try {
         return await callback();
     } finally {
-        console.log = originalLog;
-        process.stdout.write = originalStdoutWrite;
         noiseFilterDepth--;
+        if (noiseFilterDepth === 0) {
+            console.log = originalConsoleLog;
+            process.stdout.write = originalStdoutWrite;
+        }
     }
 }
