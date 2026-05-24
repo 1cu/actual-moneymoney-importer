@@ -38,22 +38,27 @@ const budgetSchema = z
         accountMapping: z.record(z.string(), z.string()),
         categoryMapping: z.record(z.string(), z.string()).optional(),
     })
-    .superRefine((val, ctx) => {
-        if (val.e2eEncryption.enabled && !val.e2eEncryption.password) {
-            ctx.addIssue({
+    .check((payload) => {
+        if (
+            payload.value.e2eEncryption.enabled &&
+            !payload.value.e2eEncryption.password
+        ) {
+            payload.issues.push({
                 code: 'custom',
                 message:
                     'Password must not be empty if end-to-end encryption is enabled',
+                input: payload.value,
             });
         }
 
-        if (val.earliestImportDate) {
-            if (!isValidCalendarDate(val.earliestImportDate)) {
-                ctx.addIssue({
+        if (payload.value.earliestImportDate) {
+            if (!isValidCalendarDate(payload.value.earliestImportDate)) {
+                payload.issues.push({
                     code: 'custom',
                     path: ['earliestImportDate'],
                     message:
                         'Invalid earliest import date (required format is YYYY-MM-DD and must be a real calendar date)',
+                    input: payload.value,
                 });
             }
         }
@@ -68,7 +73,7 @@ const actualServerSchema = z.object({
 const payeeTransformationSchema = z.object({
     enabled: z.boolean(),
     openAiApiKey: z.string().optional(),
-    openAiModel: z.string().optional().default('gpt-5-nano'),
+    openAiModel: z.string().optional().default('gpt-5.4-nano'),
     temperature: z.number().min(0).max(2).optional().default(1),
     onTransformError: z.enum(['warn', 'fail']).optional().default('warn'),
     prompt: z.string().optional(),
@@ -106,28 +111,30 @@ export const configSchema = z
         }),
         actualServers: z.array(actualServerSchema).min(1),
     })
-    .superRefine((val, ctx) => {
+    .check((payload) => {
         // Check openAI key if payeeTransformation is enabled
         if (
-            val.payeeTransformation.enabled &&
-            !val.payeeTransformation.openAiApiKey
+            payload.value.payeeTransformation.enabled &&
+            !payload.value.payeeTransformation.openAiApiKey
         ) {
-            ctx.addIssue({
+            payload.issues.push({
                 code: 'custom',
                 message:
                     'OpenAI key must not be empty if payeeTransformation is enabled',
+                input: payload.value,
             });
         }
 
         if (
-            val.import.transfers.enabled &&
-            val.import.transfers.categoryRefs.length === 0
+            payload.value.import.transfers.enabled &&
+            payload.value.import.transfers.categoryRefs.length === 0
         ) {
-            ctx.addIssue({
+            payload.issues.push({
                 code: 'custom',
                 message:
                     'At least one transfer category ref must be configured if automatic transfers are enabled',
                 path: ['import', 'transfers', 'categoryRefs'],
+                input: payload.value,
             });
         }
     });
