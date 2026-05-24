@@ -2,7 +2,7 @@
 
 Based on codebase assessment 2026-05-24.
 
-**Status:** PR 1 complete ✅ · PRs 2–5 pending
+**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PRs 3–5 pending
 
 ---
 
@@ -36,31 +36,27 @@ Based on codebase assessment 2026-05-24.
 
 ---
 
-## PR 2: Replace console monkey-patching
+## PR 2: Replace console monkey-patching ✅
 
-**Issue:** #4
+**Issue:** #4  
+**Delivered in:** [#242](https://github.com/1cu/actual-moneymoney-importer/pull/242) — merge two functions into one, drop process stream patching
 
-### What
+### What was done
 
-`src/utils/ActualApiLogControl.ts` has two functions:
+1. Merged `withApiLogControl` and `withGlobalApiNoiseFilter` into a single `withApiNoiseFilter` function
+2. Only patches `console.log` (was 6 globals: log/info/warn/error + stdout/stderr.write)
+3. Filters by known noise patterns (`Syncing since`, `Got messages`, `[Breadcrumb]`) instead of blanket suppression
+4. Dropped `process.stdout/stderr.write` patching entirely
+5. Nested-depth tracking preserved for concurrent async safety
+6. Callers now decide suppression at their level instead of the function accepting a boolean flag
+7. Checked `@actual-app/api` `InitConfig.verbose?: boolean` — static at init time, doesn't support dynamic log level switching
 
-- `withApiLogControl()`: suppresses **all** `console.log` during async callbacks (line 35: `console.log = () => {}`)
-- `withGlobalApiNoiseFilter()`: patches `console.*`, `process.stdout.write`, and `process.stderr.write` globally with nested depth tracking
+### Outcome
 
-### Why
-
-- Nested async overlap can restore globals early (outer call finishes before inner non-patching call)
-- `process.stdout.write` is restored to a bound function, not the original identity
-- `withApiLogControl` is too aggressive — it kills everything, not just Actual noise
-
-### Fix
-
-Check if `@actual-app/api` offers a logging level or quiet mode. If not, isolate filtering to a dedicated stream wrapper instead of patching process globals.
-
-### Expected outcome
-
-- No global monkey-patching of `console.*` or `process.std*`
-- API noise filtering still works for non-verbose log levels
+- `console.log` only patched during API noise filtering windows
+- Targeted noise-pattern filtering instead of blanket suppression
+- Zero process-stream monkey-patching
+- 141/141 tests pass, lint clean, zero TypeScript errors
 
 ---
 
@@ -158,7 +154,7 @@ const payeeMap = completion.choices[0]?.message?.parsed; // typed!
 
 ## Dependency ordering
 
-1 ✅ → 2 → 3 → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
+1 ✅ → 2 ✅ → 3 → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
 
 ## Verification
 
