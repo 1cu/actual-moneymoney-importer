@@ -2,7 +2,7 @@
 
 Based on codebase assessment 2026-05-24.
 
-**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PR 3 complete ✅ · PR 4 complete ✅ · PR 5 pending
+**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PR 3 complete ✅ · PR 4 complete ✅ · PR 5 complete ✅
 
 ---
 
@@ -105,25 +105,26 @@ Based on codebase assessment 2026-05-24.
 
 ---
 
-## PR 5: Housekeeping
+## PR 5: Housekeeping ✅
 
-**Issues:** #8–14 (independently small fixes, batched for efficiency)
+**Issues:** #8–14 (independently small fixes, batched for efficiency)  
+**Delivered in:** [#246](https://github.com/1cu/actual-moneymoney-importer/pull/246)
 
-| Issue                     | File                                                 | Fix                                         |
-| ------------------------- | ---------------------------------------------------- | ------------------------------------------- |
-| Remove unused `ts-node`   | `package.json`                                       | Remove from devDependencies                 |
-| Config URL validation     | `config.ts:62`                                       | `z.string()` → `z.string().url()`           |
-| Fetch timeout             | `ActualApi.ts:296`                                   | Add `AbortSignal.timeout()` to fetchJson    |
-| Non-atomic config writes  | `categories.command.ts:216`                          | Write to temp file → rename                 |
-| Date timezone consistency | `Importer.ts:305–312`                                | Parse config dates through `date-fns/parse` |
-| ZodError import style     | `config.ts`, `validate.command.ts`                   | Standardize on named `{ ZodError }` import  |
-| Shutdown error masking    | `import.command.ts:241`, `categories.command.ts:134` | Catch/log shutdown errors separately        |
+| Issue                     | File                                         | Fix                                         |
+| ------------------------- | -------------------------------------------- | ------------------------------------------- |
+| Remove unused `ts-node`   | `package.json`                               | Remove from devDependencies                 |
+| Config URL validation     | `config.ts`                                  | `z.string()` → `z.string().url()`           |
+| Fetch timeout             | `ActualApi.ts`                               | Add `AbortSignal.timeout()` to fetchJson    |
+| Non-atomic config writes  | `categories.command.ts`                      | Write to temp file → rename                 |
+| Date timezone consistency | `Importer.ts`                                | Parse config dates through `date-fns/parse` |
+| ZodError import style     | `config.ts`, `validate.command.ts`           | Standardize on named `{ ZodError }` import  |
+| Shutdown error masking    | `import.command.ts`, `categories.command.ts` | Catch/log shutdown errors separately        |
 
 ---
 
 ## Dependency ordering
 
-1 ✅ → 2 ✅ → 3 ✅ → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
+1 ✅ → 2 ✅ → 3 ✅ → 4 ✅ → 5 ✅ — all complete.
 
 ## Verification
 
