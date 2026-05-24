@@ -2,6 +2,7 @@ import {
     addDays,
     differenceInCalendarDays,
     format,
+    parse,
     subDays,
     subMonths,
 } from 'date-fns';
@@ -307,7 +308,11 @@ class Importer {
 
         const fromDate = from ?? subMonths(new Date(), 1);
         const earliestImportDate = this.budgetConfig.earliestImportDate
-            ? new Date(this.budgetConfig.earliestImportDate)
+            ? parse(
+                  this.budgetConfig.earliestImportDate,
+                  DATE_FORMAT,
+                  new Date()
+              )
             : null;
 
         const importDate =
