@@ -99,7 +99,7 @@ class ActualApi {
     async getAccounts() {
         await this.ensureInitialization();
         const accounts = await this.withLogControl(async () => {
-            return await actual.getAccounts();
+            return await this.actualApi.getAccounts();
         });
         return accounts;
     }
@@ -120,7 +120,7 @@ class ActualApi {
         this.logger.debug(`Loading budget with syncId ${budgetId}...`);
 
         await this.withLogControl(async () => {
-            await actual.downloadBudget(
+            await this.actualApi.downloadBudget(
                 budgetConfig.syncId,
                 budgetConfig.e2eEncryption.enabled
                     ? {
@@ -136,7 +136,7 @@ class ActualApi {
         transactions: ImportTransactionEntity[]
     ) {
         return this.withLogControl(() =>
-            actual.importTransactions(accountId, transactions, {
+            this.actualApi.importTransactions(accountId, transactions, {
                 defaultCleared: false,
             })
         );
@@ -173,7 +173,7 @@ class ActualApi {
     async getCategories(): Promise<APICategoryEntity[]> {
         await this.ensureInitialization();
         const categoryItems = await this.withLogControl(() =>
-            actual.getCategories()
+            this.actualApi.getCategories()
         );
 
         const categories = categoryItems.filter(
@@ -194,7 +194,9 @@ class ActualApi {
 
     async getCategoryGroups(): Promise<APICategoryGroupEntity[]> {
         await this.ensureInitialization();
-        return await this.withLogControl(() => actual.getCategoryGroups());
+        return await this.withLogControl(() =>
+            this.actualApi.getCategoryGroups()
+        );
     }
 
     async updateTransaction(
@@ -203,7 +205,7 @@ class ActualApi {
     ) {
         await this.ensureInitialization();
         return await this.withLogControl(() =>
-            actual.updateTransaction(transactionId, fields)
+            this.actualApi.updateTransaction(transactionId, fields)
         );
     }
 
@@ -222,19 +224,14 @@ class ActualApi {
                 'batchUpdateTransactions currently supports updated transactions only.'
             );
         }
-
-        const actualInternal =
-            this.actualInternal ??
-            (this.actualApi.internal as NonNullable<
-                typeof this.actualInternal
-            >);
-
-        if (!actualInternal) {
+        if (!this.actualInternal) {
             throw new Error('Actual API is not initialized.');
         }
 
+        const api = this.actualInternal;
+
         return await this.withLogControl(() =>
-            actualInternal.send('transactions-batch-update', {
+            api.send('transactions-batch-update', {
                 updated: updated.map(({ ...transaction }) => {
                     const { subtransactions: _subtransactions, ...clean } =
                         transaction as Record<string, unknown> & {
@@ -249,7 +246,7 @@ class ActualApi {
 
     async shutdown() {
         await this.ensureInitialization();
-        await this.withLogControl(() => actual.shutdown());
+        await this.withLogControl(() => this.actualApi.shutdown());
     }
 
     private async getUserToken() {

@@ -185,9 +185,8 @@ test('ActualApi.getUserFiles preserves non-JSON body errors', async () => {
 
 test('ActualApi.batchUpdateTransactions sends internal batch update with runTransfers disabled', async () => {
     const send = mock.fn(async () => 'ok');
-    const api = new ActualApi(makeServerConfig(), makeLogger(), {
-        internal: { send },
-    });
+    const api = new ActualApi(makeServerConfig(), makeLogger(), {});
+    api.actualInternal = { send };
     api.isInitialized = true;
 
     await api.batchUpdateTransactions({
