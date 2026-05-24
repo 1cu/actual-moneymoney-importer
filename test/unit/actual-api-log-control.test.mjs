@@ -156,3 +156,95 @@ test('withApiNoiseFilter recovers after nested error', async (t) => {
 
     assert.deepEqual(calls, ['keep outer', 'keep post recovery']);
 });
+
+test('withApiNoiseFilter suppresses known Actual noise from stdout.write', async (t) => {
+    const calls = [];
+    const originalWrite = process.stdout.write;
+
+    process.stdout.write = (data) => {
+        calls.push(
+            typeof data === 'string'
+                ? data
+                : Buffer.from(data).toString('utf-8')
+        );
+        return true;
+    };
+    t.after(() => {
+        process.stdout.write = originalWrite;
+    });
+
+    await withApiNoiseFilter(async () => {
+        process.stdout.write('Syncing since 2026-01-01\n');
+        process.stdout.write('Got messages from server 123\n');
+        process.stdout.write('keep this\n');
+    });
+
+    assert.deepEqual(calls, ['keep this\n']);
+});
+
+test('withApiNoiseFilter restores stdout.write after errors', async () => {
+    const originalWrite = process.stdout.write;
+
+    await assert.rejects(
+        () =>
+            withApiNoiseFilter(async () => {
+                process.stdout.write('Syncing since 2026-01-01\n');
+                throw new Error('boom');
+            }),
+        /boom/
+    );
+
+    assert.equal(process.stdout.write, originalWrite);
+});
+
+test('withApiNoiseFilter restores globals after overlapping calls where outer finishes first', async (t) => {
+    const calls = [];
+    const originalLog = console.log;
+
+    console.log = (...args) => {
+        calls.push(args[0]);
+    };
+    t.after(() => {
+        console.log = originalLog;
+    });
+
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    // Outer starts first, inner starts second, outer finishes first
+    const outer = withApiNoiseFilter(async () => {
+        console.log('outer before');
+        await delay(50); // shorter delay — outer finishes first
+        console.log('outer after');
+    });
+
+    const inner = withApiNoiseFilter(async () => {
+        console.log('Syncing since 2026-01-01');
+        await delay(200); // longer delay — inner finishes second
+    });
+
+    await outer; // finishes first
+    await inner; // finishes second
+
+    // After both complete, globals should be restored
+    console.log('post-restore');
+    assert.deepEqual(calls, ['outer before', 'outer after', 'post-restore']);
+});
+
+test('withApiNoiseFilter suppresses Loaded spreadsheet from cache noise', async (t) => {
+    const calls = [];
+    const originalLog = console.log;
+
+    console.log = (...args) => {
+        calls.push(args[0]);
+    };
+    t.after(() => {
+        console.log = originalLog;
+    });
+
+    await withApiNoiseFilter(async () => {
+        console.log('Loaded spreadsheet from cache /path/to/file');
+        console.log('keep this');
+    });
+
+    assert.deepEqual(calls, ['keep this']);
+});

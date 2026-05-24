@@ -1701,6 +1701,7 @@ class Importer {
         const createTransaction: ImportTransactionEntity = {
             account: actualAccountId,
             date: format(transaction.valueDate, DATE_FORMAT),
+            amount: Math.round(transaction.amount * 100),
             imported_id: getIdForMoneyMoneyTransaction(transaction),
             imported_payee: transaction.name?.trim() ?? '',
         };

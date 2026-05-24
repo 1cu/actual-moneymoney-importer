@@ -48,6 +48,7 @@ const budgetSchema = z
                 message:
                     'Password must not be empty if end-to-end encryption is enabled',
                 input: payload.value,
+                continue: true,
             });
         }
 
@@ -59,6 +60,7 @@ const budgetSchema = z
                     message:
                         'Invalid earliest import date (required format is YYYY-MM-DD and must be a real calendar date)',
                     input: payload.value,
+                    continue: true,
                 });
             }
         }
@@ -122,6 +124,7 @@ export const configSchema = z
                 message:
                     'OpenAI key must not be empty if payeeTransformation is enabled',
                 input: payload.value,
+                continue: true,
             });
         }
 
@@ -135,6 +138,7 @@ export const configSchema = z
                     'At least one transfer category ref must be configured if automatic transfers are enabled',
                 path: ['import', 'transfers', 'categoryRefs'],
                 input: payload.value,
+                continue: true,
             });
         }
     });

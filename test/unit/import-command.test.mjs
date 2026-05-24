@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import { buildBudgetNameBySyncIdMap } from '../../dist/commands/import.command.js';
+import {
+    buildBudgetNameBySyncIdMap,
+    getImportExitCode,
+} from '../../dist/commands/import.command.js';
 
 test('buildBudgetNameBySyncIdMap fails fast on user file lookup errors', async () => {
     const getUserFiles = mock.fn(async () => {
@@ -17,4 +20,9 @@ test('buildBudgetNameBySyncIdMap fails fast on user file lookup errors', async (
     );
 
     assert.equal(getUserFiles.mock.callCount(), 1);
+});
+
+test('getImportExitCode returns failure when import errors occurred', () => {
+    assert.equal(getImportExitCode(false), 0);
+    assert.equal(getImportExitCode(true), 1);
 });
