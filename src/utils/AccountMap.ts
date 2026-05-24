@@ -11,10 +11,10 @@ export class AccountMap {
         private actualApi: ActualApi
     ) {}
 
-    private moneyMoneyAccounts: Array<MonMonAccount>;
-    private actualAccounts: Array<APIAccountEntity>;
+    private moneyMoneyAccounts: Array<MonMonAccount> = [];
+    private actualAccounts: Array<APIAccountEntity> = [];
 
-    private mapping: Map<MonMonAccount, APIAccountEntity>;
+    private mapping: Map<MonMonAccount, APIAccountEntity> = new Map();
 
     public getMap(moneyMoneyAccountRefs?: Array<string>) {
         if (!moneyMoneyAccountRefs) return this.mapping;
@@ -96,7 +96,7 @@ export class AccountMap {
     }
 
     async loadFromConfig() {
-        if (this.mapping) {
+        if (this.mapping.size > 0) {
             this.logger.debug(
                 'Account mapping already loaded. Skipping re-load...'
             );

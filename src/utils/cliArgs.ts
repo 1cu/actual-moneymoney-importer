@@ -24,3 +24,10 @@ export const includesRef = (
 
     return refs.some((ref) => ref.toLowerCase() === value.toLowerCase());
 };
+
+/** Options shared across all commands (registered at top-level). */
+export type CommonArgs = {
+    config?: string;
+    logLevel?: number;
+    loglevel?: number;
+};

@@ -3,7 +3,7 @@ import { checkDatabaseUnlocked } from 'moneymoney';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
 import { AccountMap } from '../utils/AccountMap.js';
 import ActualApi from '../utils/ActualApi.js';
-import { includesRef, toRefList } from '../utils/cliArgs.js';
+import { includesRef, toRefList, CommonArgs } from '../utils/cliArgs.js';
 import CategoryMap from '../utils/CategoryMap.js';
 import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
@@ -33,12 +33,20 @@ export const buildBudgetNameBySyncIdMap = async (
 export const getImportExitCode = (encounteredImportErrors: boolean) =>
     encounteredImportErrors ? 1 : 0;
 
-const handleCommand = async (argv: ArgumentsCamelCase) => {
+type ImportArgs = CommonArgs & {
+    'dry-run'?: boolean;
+    account?: string | string[];
+    server?: string | string[];
+    budget?: string | string[];
+    'category-sync-on-existing'?: 'ask' | 'new' | 'always';
+    from?: string;
+    to?: string;
+};
+
+const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
     const config = await getConfig(argv);
 
-    const logLevel = (argv.logLevel ??
-        argv.loglevel ??
-        LogLevel.INFO) as number;
+    const logLevel = argv.logLevel ?? argv.loglevel ?? LogLevel.INFO;
     const logger = new Logger(logLevel);
 
     const payeeTransformer = config.payeeTransformation.enabled
@@ -51,28 +59,20 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
         );
     }
 
-    const isDryRun = (argv.dryRun as boolean) || false;
+    const isDryRun = argv.dryRun || false;
     const fromDate = argv.from
-        ? parse(argv.from as string, DATE_FORMAT, new Date())
+        ? parse(argv.from, DATE_FORMAT, new Date())
         : undefined;
     const toDate = argv.to
-        ? parse(argv.to as string, DATE_FORMAT, new Date())
+        ? parse(argv.to, DATE_FORMAT, new Date())
         : undefined;
 
-    const accountRefs = toRefList(
-        argv.account as string | string[] | undefined
-    );
-    const serverRefs = toRefList(argv.server as string | string[] | undefined);
-    const budgetRefs = toRefList(argv.budget as string | string[] | undefined);
-
-    const categorySyncOnExistingArg = argv.categorySyncOnExisting as
-        | 'ask'
-        | 'new'
-        | 'always'
-        | undefined;
+    const accountRefs = toRefList(argv.account);
+    const serverRefs = toRefList(argv.server);
+    const budgetRefs = toRefList(argv.budget);
 
     const categorySyncOnExisting =
-        categorySyncOnExistingArg ?? config.import.categorySyncOnExisting;
+        argv.categorySyncOnExisting ?? config.import.categorySyncOnExisting;
 
     if (
         config.import.synchronizeCategories &&

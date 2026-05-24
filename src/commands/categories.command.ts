@@ -3,7 +3,7 @@ import toml from 'toml';
 import { checkDatabaseUnlocked } from 'moneymoney';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
 import ActualApi from '../utils/ActualApi.js';
-import { includesRef, toRefList } from '../utils/cliArgs.js';
+import { includesRef, toRefList, CommonArgs } from '../utils/cliArgs.js';
 import CategoryMap, { CanonicalMappingEntry } from '../utils/CategoryMap.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import { renderTextTable, TableColumnConfig } from '../utils/textTable.js';
@@ -55,20 +55,26 @@ export const handleUnsafeWriteConfigFailure = (
     return 1 as const;
 };
 
-const handleMapCommand = async (argv: ArgumentsCamelCase) => {
+type CategoriesMapArgs = CommonArgs & {
+    server?: string | string[];
+    budget?: string | string[];
+    format?: string;
+    'write-config'?: boolean;
+};
+
+const handleMapCommand = async (
+    argv: ArgumentsCamelCase<CategoriesMapArgs>
+) => {
     const config = await getConfig(argv);
     const configPath = getConfigFile(argv);
 
-    const logLevel = (argv.logLevel ??
-        argv.loglevel ??
-        LogLevel.INFO) as number;
+    const logLevel = argv.logLevel ?? argv.loglevel ?? LogLevel.INFO;
     const logger = new Logger(logLevel);
 
-    const serverRefs = toRefList(argv.server as string | string[] | undefined);
-    const budgetRefs = toRefList(argv.budget as string | string[] | undefined);
-    const outputFormat = ((argv.format as string | undefined) ??
-        'table') as MapFormat;
-    const writeConfig = (argv.writeConfig as boolean | undefined) ?? false;
+    const serverRefs = toRefList(argv.server);
+    const budgetRefs = toRefList(argv.budget);
+    const outputFormat = (argv.format ?? 'table') as MapFormat;
+    const writeConfig = argv.writeConfig ?? false;
 
     const matchingTargets = selectTargets(
         config.actualServers,
