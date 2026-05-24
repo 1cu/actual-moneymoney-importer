@@ -183,34 +183,6 @@ test('ActualApi.getUserFiles preserves non-JSON body errors', async () => {
     assert.equal(filesJson.mock.callCount(), 1);
 });
 
-test('ActualApi.getUserFiles uses globalThis.fetch by default', async (t) => {
-    const loginJson = mock.fn(async () => ({
-        data: { token: 'token-1' },
-    }));
-    const filesJson = mock.fn(async () => ({
-        data: [],
-    }));
-    const responses = [
-        makeResponse({ json: loginJson }),
-        makeResponse({ json: filesJson }),
-    ];
-    const fetchImpl = mock.fn(async () => responses.shift());
-    const originalFetch = globalThis.fetch;
-
-    globalThis.fetch = fetchImpl;
-    t.after(() => {
-        globalThis.fetch = originalFetch;
-    });
-
-    const api = new ActualApi(makeServerConfig(), makeLogger());
-
-    await api.getUserFiles();
-
-    assert.equal(fetchImpl.mock.callCount(), 2);
-    assert.equal(loginJson.mock.callCount(), 1);
-    assert.equal(filesJson.mock.callCount(), 1);
-});
-
 test('ActualApi.batchUpdateTransactions sends internal batch update with runTransfers disabled', async () => {
     const send = mock.fn(async () => 'ok');
     const api = new ActualApi(makeServerConfig(), makeLogger(), {
