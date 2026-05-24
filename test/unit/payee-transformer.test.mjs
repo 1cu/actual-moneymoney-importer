@@ -13,27 +13,25 @@ const makeLogger = () => ({
     },
 });
 
-const makeOpenAIStub = ({ response, error, onCreate } = {}) => ({
+const makeOpenAIStub = ({ parsed, error, onCreate } = {}) => ({
     chat: {
         completions: {
-            create: async (options) => {
+            parse: async (options) => {
                 onCreate?.(options);
 
                 if (error) {
                     throw error;
                 }
 
-                return (
-                    response ?? {
-                        choices: [
-                            {
-                                message: {
-                                    content: '{}',
-                                },
+                return {
+                    choices: [
+                        {
+                            message: {
+                                parsed: parsed ?? {},
                             },
-                        ],
-                    }
-                );
+                        },
+                    ],
+                };
             },
         },
     },
@@ -100,16 +98,8 @@ test('transformPayees bounds the relevant existing-payee shortlist', async () =>
         makeConfig(),
         logger,
         makeOpenAIStub({
-            response: {
-                choices: [
-                    {
-                        message: {
-                            content: JSON.stringify({
-                                'Alpha Hyperstore': 'Alpha Market 001',
-                            }),
-                        },
-                    },
-                ],
+            parsed: {
+                'Alpha Hyperstore': 'Alpha Market 001',
             },
             onCreate: (options) => {
                 capturedOptions = options;
@@ -147,16 +137,8 @@ test('transformPayees snaps transformed payees back to existing names', async ()
         makeConfig(),
         logger,
         makeOpenAIStub({
-            response: {
-                choices: [
-                    {
-                        message: {
-                            content: JSON.stringify({
-                                'AMZN Mktp US*1234567890': 'Amazon.com',
-                            }),
-                        },
-                    },
-                ],
+            parsed: {
+                'AMZN Mktp US*1234567890': 'Amazon.com',
             },
             onCreate: (options) => {
                 capturedOptions = options;
@@ -178,29 +160,24 @@ test('transformPayees snaps transformed payees back to existing names', async ()
     });
 });
 
-test('transformPayees returns null for malformed JSON', async () => {
+test('transformPayees returns null on API errors', async () => {
     const logger = makeLogger();
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
         makeOpenAIStub({
-            response: {
-                choices: [
-                    {
-                        message: {
-                            content: 'not-json',
-                        },
-                    },
-                ],
-            },
+            error: new Error('Connection refused'),
         })
     );
 
     const result = await transformer.transformPayees(['Coffee Shop'], []);
 
     assert.equal(result, null);
-    assert.match(logger.errorMessages[0], /^Failed to parse JSON response:/);
-    assert.match(logger.debugMessages[1][0], /Raw response: not-json/);
+    assert.equal(logger.errorMessages.length, 1);
+    assert.match(
+        logger.errorMessages[0],
+        /^Error in payee transformation: Connection refused$/
+    );
 });
 
 test('transformPayees returns null when OpenAI fails', async () => {

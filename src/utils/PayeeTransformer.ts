@@ -1,32 +1,10 @@
 import OpenAI from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { z } from 'zod';
 import Logger from './Logger.js';
 import { PayeeTransformationConfig } from './config.js';
 
-type OpenAICompletionResponse = {
-    choices: Array<{
-        message?: {
-            content?: string | null;
-        };
-    }>;
-};
-
-type OpenAIClient = {
-    chat: {
-        completions: {
-            create: (options: {
-                model: string;
-                messages: Array<{
-                    role: 'system' | 'user';
-                    content: string;
-                }>;
-                response_format: {
-                    type: 'json_object';
-                };
-                temperature: number;
-            }) => Promise<OpenAICompletionResponse>;
-        };
-    };
-};
+const PayeeMap = z.record(z.string(), z.string());
 
 const MAX_EXISTING_PAYEES_IN_PROMPT = 100;
 const EXISTING_PAYEE_MATCH_THRESHOLD = 0.75;
@@ -139,12 +117,12 @@ const selectRelevantExistingPayees = (
 };
 
 class PayeeTransformer {
-    private openai: OpenAIClient;
+    private openai: OpenAI;
 
     constructor(
         private config: PayeeTransformationConfig,
         private logger: Logger,
-        openai?: OpenAIClient
+        openai?: OpenAI
     ) {
         if (!config.openAiApiKey) {
             throw new Error(
@@ -215,48 +193,22 @@ class PayeeTransformer {
                 `Model: ${this.config.openAiModel}`,
             ]);
 
-            const response = await this.openai.chat.completions.create({
+            const completion = await this.openai.chat.completions.parse({
                 model: this.config.openAiModel,
                 messages: [
                     { role: 'system', content: prompt },
                     { role: 'user', content: unresolvedPayees.join('\n') },
                 ],
-                response_format: {
-                    type: 'json_object',
-                },
+                response_format: zodResponseFormat(PayeeMap, 'payee_map'),
                 temperature: this.config.temperature,
             });
 
-            const output = response.choices[0]?.message?.content ?? '';
-            let parsed: unknown;
-
-            try {
-                parsed = JSON.parse(output);
-            } catch (parseError) {
-                this.logger.error(
-                    `Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`
-                );
-                this.logger.debug(`Raw response: ${output}`);
-                throw parseError;
-            }
-
-            if (
-                !parsed ||
-                typeof parsed !== 'object' ||
-                Array.isArray(parsed)
-            ) {
-                throw new Error('OpenAI response was not a JSON object.');
-            }
-
-            const transformedPayees = parsed as Record<string, unknown>;
+            const transformedPayees =
+                completion.choices[0]?.message?.parsed ?? {};
 
             for (const rawPayee of unresolvedPayees) {
-                const transformedPayee = transformedPayees[rawPayee];
-                const normalizedPayee =
-                    typeof transformedPayee === 'string' &&
-                    transformedPayee.trim()
-                        ? transformedPayee.trim()
-                        : rawPayee;
+                const transformedPayee = transformedPayees[rawPayee]?.trim();
+                const normalizedPayee = transformedPayee || rawPayee;
                 const bestExistingPayee = findBestExistingPayee(
                     normalizedPayee,
                     existingPayeeNames
