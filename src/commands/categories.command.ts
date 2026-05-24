@@ -93,6 +93,8 @@ const handleMapCommand = async (
         );
     }
 
+    let shutdownFailed = false;
+
     const reports: Array<{
         serverUrl: string;
         syncId: string;
@@ -140,6 +142,7 @@ const handleMapCommand = async (
             try {
                 await actualApi.shutdown();
             } catch (shutdownError) {
+                shutdownFailed = true;
                 logger.warn(
                     `Failed to shutdown Actual API: ${shutdownError instanceof Error ? shutdownError.message : String(shutdownError)}`
                 );
@@ -150,7 +153,7 @@ const handleMapCommand = async (
     printReports(reports, outputFormat);
 
     if (!writeConfig) {
-        process.exit(0);
+        process.exit(shutdownFailed ? 1 : 0);
     }
 
     if (matchingTargets.length !== 1 || reports.length !== 1) {
@@ -226,12 +229,14 @@ const handleMapCommand = async (
     }
 
     const tempPath = configPath + '.tmp';
+    const stat = await fs.stat(configPath);
     await fs.writeFile(tempPath, writeResult.content, 'utf8');
+    await fs.chmod(tempPath, stat.mode);
     await fs.rename(tempPath, configPath);
     logger.info(
         `Updated category mapping in ${configPath} (${report.canonicalMappingEntries.length} entries, annotated for readability).`
     );
-    process.exit(0);
+    process.exit(shutdownFailed ? 1 : 0);
 };
 
 const selectTargets = (

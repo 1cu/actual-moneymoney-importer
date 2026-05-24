@@ -27,7 +27,10 @@ const makeOpenAIStub = ({ parsed, error, onCreate } = {}) => ({
                     choices: [
                         {
                             message: {
-                                parsed: parsed ?? {},
+                                parsed:
+                                    parsed !== undefined
+                                        ? parsed
+                                        : { mappings: [] },
                             },
                         },
                     ],
@@ -99,7 +102,12 @@ test('transformPayees bounds the relevant existing-payee shortlist', async () =>
         logger,
         makeOpenAIStub({
             parsed: {
-                'Alpha Hyperstore': 'Alpha Market 001',
+                mappings: [
+                    {
+                        rawPayee: 'Alpha Hyperstore',
+                        cleanedPayee: 'Alpha Market 001',
+                    },
+                ],
             },
             onCreate: (options) => {
                 capturedOptions = options;
@@ -138,7 +146,12 @@ test('transformPayees snaps transformed payees back to existing names', async ()
         logger,
         makeOpenAIStub({
             parsed: {
-                'AMZN Mktp US*1234567890': 'Amazon.com',
+                mappings: [
+                    {
+                        rawPayee: 'AMZN Mktp US*1234567890',
+                        cleanedPayee: 'Amazon.com',
+                    },
+                ],
             },
             onCreate: (options) => {
                 capturedOptions = options;
@@ -197,5 +210,25 @@ test('transformPayees returns null when OpenAI fails', async () => {
     assert.match(
         logger.errorMessages[0],
         /OpenAI model 'gpt-5-nano' is unavailable/
+    );
+});
+
+test('transformPayees returns null when OpenAI returns null parsed content', async () => {
+    const logger = makeLogger();
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeOpenAIStub({
+            parsed: null,
+        })
+    );
+
+    const result = await transformer.transformPayees(['Coffee Shop'], []);
+
+    assert.equal(result, null);
+    assert.equal(logger.errorMessages.length, 1);
+    assert.match(
+        logger.errorMessages[0],
+        /OpenAI returned no payee transformation result/
     );
 });

@@ -4,7 +4,14 @@ import { z } from 'zod';
 import Logger from './Logger.js';
 import { PayeeTransformationConfig } from './config.js';
 
-const PayeeMap = z.record(z.string(), z.string());
+const PayeeMapSchema = z.object({
+    mappings: z.array(
+        z.object({
+            rawPayee: z.string(),
+            cleanedPayee: z.string(),
+        })
+    ),
+});
 
 const MAX_EXISTING_PAYEES_IN_PROMPT = 100;
 const EXISTING_PAYEE_MATCH_THRESHOLD = 0.75;
@@ -199,12 +206,25 @@ class PayeeTransformer {
                     { role: 'system', content: prompt },
                     { role: 'user', content: unresolvedPayees.join('\n') },
                 ],
-                response_format: zodResponseFormat(PayeeMap, 'payee_map'),
+                response_format: zodResponseFormat(PayeeMapSchema, 'payee_map'),
                 temperature: this.config.temperature,
             });
 
-            const transformedPayees =
-                completion.choices[0]?.message?.parsed ?? {};
+            const parsed = completion.choices[0]?.message?.parsed;
+            if (!parsed) {
+                throw new Error(
+                    'OpenAI returned no payee transformation result'
+                );
+            }
+
+            const transformedPayees = Object.fromEntries(
+                parsed.mappings.map(
+                    (entry: { rawPayee: string; cleanedPayee: string }) => [
+                        entry.rawPayee,
+                        entry.cleanedPayee,
+                    ]
+                )
+            );
 
             for (const rawPayee of unresolvedPayees) {
                 const transformedPayee = transformedPayees[rawPayee]?.trim();
@@ -257,25 +277,25 @@ class PayeeTransformer {
             return this.config.prompt + existingPayeesSection;
         }
 
-        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce a JSON object that maps each original string to a single cleaned, human-readable merchant name. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
+        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce a JSON object with a "mappings" array, where each entry has "rawPayee" (the original input string) and "cleanedPayee" (a single cleaned, human-readable merchant name). Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
 
 Examples (input separated by newline, output shown as JSON):
 
 Input:
 -
 Output:
-{}
+{"mappings": []}
 
 Input:
 AMZN Mktp US*1234567890
 Output:
-{"AMZN Mktp US*1234567890": "Amazon"}
+{"mappings": [{"rawPayee": "AMZN Mktp US*1234567890", "cleanedPayee": "Amazon"}]}
 
 Input:
 AMAZON.COM/BILLWA
 AMAZON.COM
 Output:
-{"AMAZON.COM/BILLWA":"Amazon", "AMAZON.COM":"Amazon"}`;
+{"mappings": [{"rawPayee": "AMAZON.COM/BILLWA", "cleanedPayee": "Amazon"}, {"rawPayee": "AMAZON.COM", "cleanedPayee": "Amazon"}]}`;
     }
 
     private describeTransformationError(error: unknown) {
