@@ -73,7 +73,7 @@ class ActualApi {
         );
 
         await this.withLogControl(async () => {
-            this.actualInternal = await actual.init({
+            this.actualInternal = await this.actualApi.init({
                 dataDir: actualDataDir,
                 serverURL: this.serverConfig.serverUrl,
                 password: this.serverConfig.serverPassword,

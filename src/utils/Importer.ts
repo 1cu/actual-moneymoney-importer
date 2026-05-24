@@ -1684,8 +1684,8 @@ class Importer {
 
     private async convertToActualTransaction(
         transaction: MonMonTransaction,
-        plannedTransfer?: PlannedTransferSeed,
-        actualAccountId?: string
+        plannedTransfer: PlannedTransferSeed | undefined,
+        actualAccountId: string
     ): Promise<ImportTransactionEntity> {
         const transactionNotes = buildTransactionNotes(
             transaction,
@@ -1694,7 +1694,7 @@ class Importer {
         );
 
         const createTransaction: ImportTransactionEntity = {
-            account: actualAccountId ?? '',
+            account: actualAccountId,
             date: format(transaction.valueDate, DATE_FORMAT),
             imported_id: getIdForMoneyMoneyTransaction(transaction),
             imported_payee: transaction.name?.trim() ?? '',
