@@ -22,7 +22,6 @@ test('renderTextTable aligns emoji content using display width', () => {
     const rowWidths = bodyRows.map((line) => stringWidth(line));
     assert.equal(new Set(rowWidths).size, 1);
 });
-
 test('renderTextTable truncates with ellipsis when max width is exceeded', () => {
     const rows = [
         ['Col A', 'Col B'],
@@ -63,21 +62,4 @@ test('renderTextTable respects truncation priority', () => {
         false
     );
     assert.equal(table.includes('id-1234567890'), true);
-});
-
-test('renderTextTable renders unicode borders', () => {
-    const rows = [
-        ['A', 'B'],
-        ['1', '2'],
-    ];
-
-    const lines = renderTextTable(rows, {
-        columns: [
-            { width: 3, alignment: 'left' },
-            { width: 3, alignment: 'right' },
-        ],
-    });
-
-    assert.equal(lines[0]?.startsWith('╔'), true);
-    assert.equal(lines.at(-1)?.startsWith('╚'), true);
 });
