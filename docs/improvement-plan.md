@@ -2,7 +2,7 @@
 
 Based on codebase assessment 2026-05-24.
 
-**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PR 3 complete ✅ · PRs 4–5 pending
+**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PR 3 complete ✅ · PR 4 complete ✅ · PR 5 pending
 
 ---
 
@@ -84,47 +84,24 @@ Based on codebase assessment 2026-05-24.
 
 ---
 
-## PR 4: OpenAI v6 modernisation
+## PR 4: OpenAI v6 modernisation ✅
 
-**Issue:** #7
+**Issue:** #7  
+**Delivered in:** [#244](https://github.com/1cu/actual-moneymoney-importer/pull/244)
 
-### What
+### What was done
 
-`PayeeTransformer.ts` uses `response_format: { type: 'json_object' }` (older JSON mode) with manual `JSON.parse()` and a custom `OpenAIClient` type alias.
+1. Removed custom `OpenAICompletionResponse` and `OpenAIClient` types — now uses `OpenAI` directly from the SDK
+2. Added `z.record(z.string(), z.string())` PayeeMap Zod schema for response validation
+3. Replaced `this.openai.chat.completions.create({ response_format: { type: 'json_object' } })` with `this.openai.chat.completions.parse({ response_format: zodResponseFormat(PayeeMap, 'payee_map') })`
+4. Eliminated manual `JSON.parse()` try/catch, null-checks, and `parsed as Record<string, unknown>` cast
+5. Simplified per-payee fallback to `transformedPayees[key]?.trim() || rawPayee`
 
-### Why
+### Outcome
 
-OpenAI v6 provides `client.chat.completions.parse()` with `zodResponseFormat()` for structured outputs. This eliminates:
-
-- The custom `OpenAIClient` type (use SDK types directly)
-- The manual `JSON.parse()` try/catch block
-- The `parsed as Record<string, unknown>` cast
-- The need to check `finish_reason` manually
-
-Current handling doesn't schema-validate the response and silently falls back to raw payee names for missing/non-string keys.
-
-### Fix
-
-```ts
-import { zodResponseFormat } from 'openai/helpers/zod';
-import { z } from 'zod';
-
-const PayeeMap = z.record(z.string());
-
-const completion = await this.openai.chat.completions.parse({
-    model: this.config.openAiModel,
-    messages: [...],
-    response_format: zodResponseFormat(PayeeMap, 'payee_map'),
-    temperature: this.config.temperature,
-});
-const payeeMap = completion.choices[0]?.message?.parsed; // typed!
-```
-
-### Expected outcome
-
-- End-to-end type safety from OpenAI response to application code
-- No manual JSON.parse or casting
-- Proper schema validation
+- End-to-end type safety: `choices[0].message.parsed` is typed `Record<string, string>`
+- No manual JSON.parse, no `as` casts, no weak validation
+- Proper Zod schema validation enforced by the SDK
 
 ---
 
