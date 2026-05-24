@@ -238,7 +238,13 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
                     encounteredImportErrors ||= importer.hasImportErrors();
                 }
             } finally {
-                await actualApi.shutdown();
+                try {
+                    await actualApi.shutdown();
+                } catch (shutdownError) {
+                    logger.error(
+                        `Failed to shutdown Actual API: ${shutdownError instanceof Error ? shutdownError.message : String(shutdownError)}`
+                    );
+                }
             }
         }
 

@@ -137,7 +137,13 @@ const handleMapCommand = async (
                 });
             }
         } finally {
-            await actualApi.shutdown();
+            try {
+                await actualApi.shutdown();
+            } catch (shutdownError) {
+                logger.warn(
+                    `Failed to shutdown Actual API: ${shutdownError instanceof Error ? shutdownError.message : String(shutdownError)}`
+                );
+            }
         }
     }
 
@@ -219,7 +225,9 @@ const handleMapCommand = async (
         );
     }
 
-    await fs.writeFile(configPath, writeResult.content, 'utf8');
+    const tempPath = configPath + '.tmp';
+    await fs.writeFile(tempPath, writeResult.content, 'utf8');
+    await fs.rename(tempPath, configPath);
     logger.info(
         `Updated category mapping in ${configPath} (${report.canonicalMappingEntries.length} entries, annotated for readability).`
     );

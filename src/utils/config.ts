@@ -3,7 +3,7 @@ import path from 'path';
 import toml from 'toml';
 import { ArgumentsCamelCase } from 'yargs';
 import { CommonArgs } from './cliArgs.js';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import { DEFAULT_CONFIG_FILE } from './shared.js';
 
 const isValidCalendarDate = (dateString: string) => {
@@ -60,7 +60,7 @@ const budgetSchema = z
     });
 
 const actualServerSchema = z.object({
-    serverUrl: z.string(),
+    serverUrl: z.string().url(),
     serverPassword: z.string(),
     budgets: z.array(budgetSchema).min(1),
 });
@@ -218,7 +218,7 @@ export const getConfig = async (argv: ArgumentsCamelCase<CommonArgs>) => {
             );
         }
 
-        if (e instanceof z.ZodError) {
+        if (e instanceof ZodError) {
             const issues = e.issues
                 .map((issue) => {
                     const pathLabel =

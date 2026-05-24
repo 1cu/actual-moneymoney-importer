@@ -295,10 +295,12 @@ class ActualApi {
 
     private async fetchJson<T>(
         url: string,
-        init: Parameters<typeof fetch>[1],
-        context: string
+        init: Parameters<typeof fetch>[1] = {},
+        context: string,
+        timeoutMs = 30_000
     ): Promise<T> {
-        const response = await this.fetchImpl(url, init);
+        const signal = init?.signal ?? AbortSignal.timeout(timeoutMs);
+        const response = await this.fetchImpl(url, { ...init, signal });
 
         if (!response.ok) {
             throw new Error(
