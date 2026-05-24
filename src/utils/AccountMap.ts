@@ -1,4 +1,5 @@
 import { Account as MonMonAccount, getAccounts } from 'moneymoney';
+import type { APIAccountEntity } from '@actual-app/api/models';
 import ActualApi from './ActualApi.js';
 import { ActualBudgetConfig } from './config.js';
 import Logger from './Logger.js';
@@ -11,14 +12,14 @@ export class AccountMap {
     ) {}
 
     private moneyMoneyAccounts: Array<MonMonAccount>;
-    private actualAccounts: Array<Account>;
+    private actualAccounts: Array<APIAccountEntity>;
 
-    private mapping: Map<MonMonAccount, Account>;
+    private mapping: Map<MonMonAccount, APIAccountEntity>;
 
     public getMap(moneyMoneyAccountRefs?: Array<string>) {
         if (!moneyMoneyAccountRefs) return this.mapping;
 
-        const customMap = new Map<MonMonAccount, Account>();
+        const customMap = new Map<MonMonAccount, APIAccountEntity>();
         for (const ref of moneyMoneyAccountRefs) {
             const monMonAccount = this.getMoneyMoneyAccountByRef(ref);
 
@@ -72,7 +73,7 @@ export class AccountMap {
         return matchingAccounts[0];
     }
 
-    private checkActualAccountRef(account: Account, ref: string) {
+    private checkActualAccountRef(account: APIAccountEntity, ref: string) {
         return account.id === ref || account.name === ref;
     }
 
@@ -104,7 +105,8 @@ export class AccountMap {
 
         const accountMapping = this.budgetConfig.accountMapping;
 
-        const parsedAccountMapping: Map<MonMonAccount, Account> = new Map();
+        const parsedAccountMapping: Map<MonMonAccount, APIAccountEntity> =
+            new Map();
 
         this.moneyMoneyAccounts = await getAccounts();
         this.logger.debug(

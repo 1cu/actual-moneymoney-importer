@@ -21,6 +21,10 @@ import Logger from './Logger.js';
 import PayeeTransformer from './PayeeTransformer.js';
 import TransferPlanner from './TransferPlanner.js';
 import type {
+    TransactionEntity,
+    ImportTransactionEntity,
+} from '@actual-app/core/types/models';
+import type {
     CategoryUpdateClassification,
     CategoryUpdatePlan,
     DuplicateImportedIdGroup,
@@ -257,7 +261,7 @@ const buildExistingCategoryUpdate = ({
 }): ExistingCategoryUpdate => {
     return {
         transactionId: pair.actualTransaction.id,
-        importedId: pair.actualTransaction.imported_id,
+        importedId: pair.actualTransaction.imported_id as string,
         ...(fromCategoryId ? { fromCategoryId } : {}),
         toCategoryId: targetCategoryId,
         reason,
@@ -463,7 +467,7 @@ class Importer {
             : (fullAccountMapping ?? this.accountMap.getMap());
         const existingActualTransactionsByAccountId = new Map<
             string,
-            ReadTransaction[]
+            TransactionEntity[]
         >();
 
         for (const [, actualAccount] of fullAccountMapping ?? accountMapping) {
@@ -626,7 +630,7 @@ class Importer {
             } of accountStates) {
                 runMetrics.accountsScanned++;
 
-                const createTransactions: CreateTransaction[] = [];
+                const createTransactions: ImportTransactionEntity[] = [];
                 // Maps imported_id → intended category ID (for auto-rule override detection).
                 const intendedCategoryByImportedId = new Map<string, string>();
                 for (const transaction of newMonMonTransactions) {
@@ -641,7 +645,8 @@ class Importer {
                     const createTransaction =
                         await this.convertToActualTransaction(
                             transaction,
-                            plannedTransfer
+                            plannedTransfer,
+                            actualAccount.id
                         );
 
                     if (shouldSyncCategories && !plannedTransfer) {
@@ -715,7 +720,8 @@ class Importer {
                     const latestTransactionDate =
                         getLatestTransactionValueDate(accountTransactions);
 
-                    const startTransaction: CreateTransaction = {
+                    const startTransaction: ImportTransactionEntity = {
+                        account: actualAccount.id,
                         date: format(
                             latestTransactionDate ?? new Date(),
                             DATE_FORMAT
@@ -972,7 +978,7 @@ class Importer {
     }: {
         actualAccountName: string;
         addedIds: string[];
-        importedTransactions: ReadTransaction[];
+        importedTransactions: TransactionEntity[];
         intendedCategoryByImportedId: Map<string, string>;
     }): Promise<number> {
         const addedIdSet = new Set(addedIds);
@@ -1100,11 +1106,11 @@ class Importer {
     }: {
         monMonAccount: MonMonAccount;
         accountTransactions: MonMonTransaction[];
-        existingActualTransactions: ReadTransaction[];
+        existingActualTransactions: TransactionEntity[];
         actualAccountName: string;
         shouldSyncCategories: boolean;
     }) {
-        const existingByImportedId = new Map<string, ReadTransaction>();
+        const existingByImportedId = new Map<string, TransactionEntity>();
         const duplicateImportedIds = new Set<string>();
 
         // Deterministic winner policy for duplicate imported_id values: latest by (date, id) wins.
@@ -1422,10 +1428,10 @@ class Importer {
         isDryRun,
     }: {
         actualAccountId: string;
-        existingActualTransactions: ReadTransaction[];
+        existingActualTransactions: TransactionEntity[];
         transfersEnabled: boolean;
         isDryRun: boolean;
-    }): Promise<ReadTransaction[]> {
+    }): Promise<TransactionEntity[]> {
         if (
             existingActualTransactions.length > 0 ||
             !transfersEnabled ||
@@ -1443,7 +1449,7 @@ class Importer {
         transferPlan,
     }: {
         actualAccountName: string;
-        importedTransactions: ReadTransaction[];
+        importedTransactions: TransactionEntity[];
         transferPlan: TransferPlan;
     }) {
         if (importedTransactions.length === 0) {
@@ -1678,17 +1684,18 @@ class Importer {
 
     private async convertToActualTransaction(
         transaction: MonMonTransaction,
-        plannedTransfer?: PlannedTransferSeed
-    ): Promise<CreateTransaction> {
+        plannedTransfer?: PlannedTransferSeed,
+        actualAccountId?: string
+    ): Promise<ImportTransactionEntity> {
         const transactionNotes = buildTransactionNotes(
             transaction,
             this.config.import.importComments,
             this.config.import.commentPrefix
         );
 
-        const createTransaction: CreateTransaction = {
+        const createTransaction: ImportTransactionEntity = {
+            account: actualAccountId ?? '',
             date: format(transaction.valueDate, DATE_FORMAT),
-            amount: Math.round(transaction.amount * 100),
             imported_id: getIdForMoneyMoneyTransaction(transaction),
             imported_payee: transaction.name?.trim() ?? '',
         };
@@ -1724,7 +1731,7 @@ class Importer {
     }
 
     private buildDuplicateImportedIdGroups(
-        sortedExistingTransactions: ReadTransaction[],
+        sortedExistingTransactions: TransactionEntity[],
         duplicateImportedIds: Set<string>
     ): DuplicateImportedIdGroup[] {
         const groups: DuplicateImportedIdGroup[] = [];
@@ -1768,7 +1775,7 @@ class Importer {
         return groups.sort((a, b) => a.importedId.localeCompare(b.importedId));
     }
 
-    private getNormalizedImportedPayee(transaction: ReadTransaction): string {
+    private getNormalizedImportedPayee(transaction: TransactionEntity): string {
         return (
             transaction.imported_payee?.trim() ||
             transaction.notes?.trim() ||

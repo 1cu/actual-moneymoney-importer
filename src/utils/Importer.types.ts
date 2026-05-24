@@ -1,3 +1,5 @@
+import type { APIAccountEntity } from '@actual-app/api/models';
+import type { TransactionEntity } from '@actual-app/core/types/models';
 import type {
     Account as MonMonAccount,
     Transaction as MonMonTransaction,
@@ -18,7 +20,7 @@ export type CategoryUpdateClassification =
 
 export type ExistingTransactionPair = {
     monMonTransaction: MonMonTransaction;
-    actualTransaction: ReadTransaction;
+    actualTransaction: TransactionEntity;
 };
 
 export type ExistingCategoryUpdate = {
@@ -69,8 +71,8 @@ export type ImportRunMetrics = {
 
 export type DuplicateImportedIdGroup = {
     importedId: string;
-    transactions: ReadTransaction[];
-    representativeTransaction: ReadTransaction;
+    transactions: TransactionEntity[];
+    representativeTransaction: TransactionEntity;
     normalizedPayee: string;
     isLikelySplit: boolean;
 };
@@ -117,8 +119,8 @@ export type TransferPlanningCandidate = {
     transaction: MonMonTransaction;
     importedId: string;
     sourceMonMonAccount: MonMonAccount;
-    sourceActualAccount: Account;
+    sourceActualAccount: APIAccountEntity;
     targetMonMonAccount: MonMonAccount;
-    targetActualAccount: Account;
+    targetActualAccount: APIAccountEntity;
     transferPayeeId: string;
 };

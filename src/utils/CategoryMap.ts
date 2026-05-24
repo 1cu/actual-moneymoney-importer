@@ -2,16 +2,13 @@ import {
     Category as MonMonCategory,
     getCategories as getMonMonCategories,
 } from 'moneymoney';
+import type {
+    APICategoryEntity,
+    APICategoryGroupEntity,
+} from '@actual-app/api/models';
 import ActualApi from './ActualApi.js';
 import { ActualBudgetConfig } from './config.js';
 import Logger from './Logger.js';
-
-type ActualCategoryGroup = {
-    id: string;
-    name: string;
-    is_income: boolean;
-    hidden?: boolean;
-};
 
 type MoneyMoneyCategoryInfo = {
     uuid: string;
@@ -107,8 +104,8 @@ class CategoryMap {
 
     loadFromData(
         monMonCategories: MonMonCategory[],
-        actualCategories: Category[],
-        actualGroups: ActualCategoryGroup[]
+        actualCategories: APICategoryEntity[],
+        actualGroups: APICategoryGroupEntity[]
     ) {
         this.resetState();
         this.isLoaded = true;
@@ -338,8 +335,8 @@ class CategoryMap {
     }
 
     private buildActualCategoryInfos(
-        categories: Category[],
-        groups: ActualCategoryGroup[]
+        categories: APICategoryEntity[],
+        groups: APICategoryGroupEntity[]
     ) {
         const groupNames = new Map(
             groups.map((group) => [group.id, group.name])

@@ -3,6 +3,8 @@ import {
     Account as MonMonAccount,
     Transaction as MonMonTransaction,
 } from 'moneymoney';
+import type { APIAccountEntity } from '@actual-app/api/models';
+import type { TransactionEntity } from '@actual-app/core/types/models';
 import CategoryMap from './CategoryMap.js';
 import Logger from './Logger.js';
 import { Config } from './config.js';
@@ -19,15 +21,15 @@ import type {
 
 type PlannerAccountState = {
     monMonAccount: MonMonAccount;
-    actualAccount: Account;
+    actualAccount: APIAccountEntity;
     newMonMonTransactions: MonMonTransaction[];
 };
 
 type BuildTransferPlanInput = {
-    fullAccountMapping: Map<MonMonAccount, Account>;
+    fullAccountMapping: Map<MonMonAccount, APIAccountEntity>;
     accountStates: PlannerAccountState[];
     monMonTransactionMap: Record<string, MonMonTransaction[]>;
-    existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
+    existingActualTransactionsByAccountId: Map<string, TransactionEntity[]>;
     transferPayeeIdByAccountId: Map<string, string>;
 };
 
@@ -137,7 +139,7 @@ export default class TransferPlanner {
             string,
             Array<{
                 monMonAccount: MonMonAccount;
-                actualAccount: Account;
+                actualAccount: APIAccountEntity;
             }>
         >();
         for (const entry of mappedAccounts) {
@@ -558,7 +560,7 @@ export default class TransferPlanner {
         newTransactionsByAccountUuid: Record<string, MonMonTransaction[]>;
         paddedNewTransactionsByAccountUuid: Record<string, MonMonTransaction[]>;
         monMonTransactionMap: Record<string, MonMonTransaction[]>;
-        existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
+        existingActualTransactionsByAccountId: Map<string, TransactionEntity[]>;
     }): boolean {
         const exactHistoricalCounterpart = this.findUsableHistoricalCounterpart(
             {
@@ -686,9 +688,9 @@ export default class TransferPlanner {
     }: {
         candidate: TransferPlanningCandidate;
         historicalCounterparts: MonMonTransaction[];
-        existingActualTransactionsByAccountId: Map<string, ReadTransaction[]>;
+        existingActualTransactionsByAccountId: Map<string, TransactionEntity[]>;
         claimedExistingCounterpartTransactionIds: Set<string>;
-    }): ReadTransaction | undefined {
+    }): TransactionEntity | undefined {
         const preferredHistoricalCounterparts =
             this.preferExactDateCounterparts({
                 counterparts: historicalCounterparts,

@@ -1,4 +1,12 @@
 import * as actual from '@actual-app/api';
+import type {
+    APICategoryEntity,
+    APICategoryGroupEntity,
+} from '@actual-app/api/models';
+import type {
+    ImportTransactionEntity,
+    TransactionEntity,
+} from '@actual-app/core/types/models';
 import { format } from 'date-fns';
 import fs from 'fs/promises';
 import { withApiLogControl } from './ActualApiLogControl.js';
@@ -34,12 +42,8 @@ const ACTUAL_TRANSACTION_HISTORY_START_DATE = format(
 
 class ActualApi {
     protected isInitialized = false;
-    private actualInternal: {
-        send: (
-            name: string,
-            payload: TransactionBatchUpdateChanges
-        ) => Promise<unknown>;
-    } | null = null;
+    private actualInternal: Awaited<ReturnType<typeof actual.init>> | null =
+        null;
     // private _api: typeof actual | null = null;
 
     constructor(
@@ -69,16 +73,11 @@ class ActualApi {
         );
 
         await this.withLogControl(async () => {
-            this.actualInternal = (await actual.init({
+            this.actualInternal = await actual.init({
                 dataDir: actualDataDir,
                 serverURL: this.serverConfig.serverUrl,
                 password: this.serverConfig.serverPassword,
-            })) as {
-                send: (
-                    name: string,
-                    payload: TransactionBatchUpdateChanges
-                ) => Promise<unknown>;
-            };
+            });
         });
 
         this.isInitialized = true;
@@ -93,7 +92,7 @@ class ActualApi {
     async sync() {
         await this.ensureInitialization();
         await this.withLogControl(async () => {
-            await actual.internal.send('sync');
+            await this.actualApi.sync();
         });
     }
 
@@ -132,7 +131,10 @@ class ActualApi {
         });
     }
 
-    importTransactions(accountId: string, transactions: CreateTransaction[]) {
+    importTransactions(
+        accountId: string,
+        transactions: ImportTransactionEntity[]
+    ) {
         return this.withLogControl(() =>
             actual.importTransactions(accountId, transactions, {
                 defaultCleared: false,
@@ -152,7 +154,7 @@ class ActualApi {
     async getTransactionsByIds(
         accountId: string,
         ids: string[]
-    ): Promise<ReadTransaction[]> {
+    ): Promise<TransactionEntity[]> {
         if (ids.length === 0) {
             return [];
         }
@@ -165,19 +167,20 @@ class ActualApi {
         Array<{ id: string; name: string; transfer_acct?: string }>
     > {
         await this.ensureInitialization();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return this.withLogControl(() => (actual as any).getPayees());
+        return this.withLogControl(() => this.actualApi.getPayees());
     }
 
-    async getCategories(): Promise<Category[]> {
+    async getCategories(): Promise<APICategoryEntity[]> {
         await this.ensureInitialization();
         const categoryItems = await this.withLogControl(() =>
             actual.getCategories()
         );
 
-        const categories = categoryItems.filter((item): item is Category => {
-            return 'group_id' in item;
-        });
+        const categories = categoryItems.filter(
+            (item): item is APICategoryEntity => {
+                return 'group_id' in item;
+            }
+        );
 
         const filteredOutCount = categoryItems.length - categories.length;
         if (filteredOutCount > 0) {
@@ -189,14 +192,14 @@ class ActualApi {
         return categories;
     }
 
-    async getCategoryGroups(): Promise<CategoryGroupPayload[]> {
+    async getCategoryGroups(): Promise<APICategoryGroupEntity[]> {
         await this.ensureInitialization();
         return await this.withLogControl(() => actual.getCategoryGroups());
     }
 
     async updateTransaction(
         transactionId: string,
-        fields: Partial<UpdateTransaction>
+        fields: Partial<TransactionEntity>
     ) {
         await this.ensureInitialization();
         return await this.withLogControl(() =>
