@@ -2,68 +2,61 @@
 
 Based on codebase assessment 2026-05-24.
 
-## PR 1: Fix Actual API types
-
-**Issues covered:** #1 (stale local type declaration), #2 (deprecated `actual.internal`), #3 (unused DI)
-
-### What
-
-`src/types/actual-app__api.d.ts` is an incomplete local declaration that overrides the official `@actual-app/api` types via `tsconfig.json` paths. The installed package already ships types at `node_modules/@actual-app/api/@types/`.
-
-### Why
-
-This forces:
-
-- `actual.init()` return value cast with `as` (ActualApi.ts L72–81)
-- `(actual as any).getPayees()` + eslint-disable (ActualApi.ts L169)
-- Fake exports (`doSomething`, `doSomethingElse`)
-- Fragile global type declarations (`Account`, `ReadTransaction`, etc.)
-
-The static import of `actual` is used inconsistently with the injected `this.actualApi`, making tests unreliable.
-
-Additionally, `actual.internal` is marked deprecated in the official types — prefer the `init()` return value and public API methods (`actual.sync()` exists).
-
-### Fix
-
-1. Remove `src/types/actual-app__api.d.ts`
-2. Remove the `paths` entry in `tsconfig.json`
-3. Replace all `actual.X()` calls with `this.actualApi.X()` (or remove the DI parameter entirely)
-4. Replace `actual.internal.send('sync')` with `actual.sync()` if available, or use `init()` return value
-5. Fix any resulting type errors from the official types (may need minor adjustments)
-
-### Expected outcome
-
-- No `as any` casts interacting with Actual API
-- No eslint-disable for `no-explicit-any` in ActualApi.ts
-- Consistent DI behavior
+**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PRs 3–5 pending
 
 ---
 
-## PR 2: Replace console monkey-patching
+## PR 1: Fix Actual API types ✅
 
-**Issue:** #4
+**Issues covered:** #1 (stale local type declaration), #2 (deprecated `actual.internal`), #3 (unused DI)  
+**Delivered in:**
 
-### What
+- [#240](https://github.com/1cu/actual-moneymoney-importer/pull/240) — remove stale `.d.ts`, adopt official types, `sync()` instead of `internal.send()`
+- [#241](https://github.com/1cu/actual-moneymoney-importer/pull/241) — complete DI consistency, remove deprecated `.internal` fallback entirely
 
-`src/utils/ActualApiLogControl.ts` has two functions:
+### What was done
 
-- `withApiLogControl()`: suppresses **all** `console.log` during async callbacks (line 35: `console.log = () => {}`)
-- `withGlobalApiNoiseFilter()`: patches `console.*`, `process.stdout.write`, and `process.stderr.write` globally with nested depth tracking
+1. Deleted `src/types/actual-app__api.d.ts` (359 lines of stale global type declarations)
+2. Removed `paths` override from `tsconfig.json`
+3. Added type imports from `@actual-app/api/models` (`APIAccountEntity`, `APICategoryEntity`, `APICategoryGroupEntity`) and `@actual-app/core/types/models` (`TransactionEntity`, `ImportTransactionEntity`)
+4. Replaced stale global types (`Account`, `ReadTransaction`, `Category`, `CategoryGroupPayload`, `CreateTransaction`, `UpdateTransaction`) with official equivalents across 9 files
+5. Replaced `actual.internal.send('sync')` with `this.actualApi.sync()` (public API exists in official types)
+6. Removed `(actual as any).getPayees()` + eslint-disable — official types include `getPayees()`
+7. All 7 method bodies in `ActualApi` now consistently use `this.actualApi.*` instead of module-level `actual.*`
+8. Removed `batchUpdateTransactions` fallback to deprecated `this.actualApi.internal` — zero `.internal` references remain in `src/`
+9. Removed `as` cast on `actual.init()` return value — official types properly type it
 
-### Why
+### Outcome
 
-- Nested async overlap can restore globals early (outer call finishes before inner non-patching call)
-- `process.stdout.write` is restored to a bound function, not the original identity
-- `withApiLogControl` is too aggressive — it kills everything, not just Actual noise
+- No `as any` casts interacting with Actual API
+- Zero eslint-disable for `no-explicit-any` in ActualApi.ts
+- Consistent DI behavior — constructor injection is effective everywhere
+- Zero `.internal` references in source code
+- 151/151 tests pass, lint clean, zero TypeScript errors
 
-### Fix
+---
 
-Check if `@actual-app/api` offers a logging level or quiet mode. If not, isolate filtering to a dedicated stream wrapper instead of patching process globals.
+## PR 2: Replace console monkey-patching ✅
 
-### Expected outcome
+**Issue:** #4  
+**Delivered in:** [#242](https://github.com/1cu/actual-moneymoney-importer/pull/242) — merge two functions into one, drop process stream patching
 
-- No global monkey-patching of `console.*` or `process.std*`
-- API noise filtering still works for non-verbose log levels
+### What was done
+
+1. Merged `withApiLogControl` and `withGlobalApiNoiseFilter` into a single `withApiNoiseFilter` function
+2. Only patches `console.log` (was 6 globals: log/info/warn/error + stdout/stderr.write)
+3. Filters by known noise patterns (`Syncing since`, `Got messages`, `[Breadcrumb]`) instead of blanket suppression
+4. Dropped `process.stdout/stderr.write` patching entirely
+5. Nested-depth tracking preserved for concurrent async safety
+6. Callers now decide suppression at their level instead of the function accepting a boolean flag
+7. Checked `@actual-app/api` `InitConfig.verbose?: boolean` — static at init time, doesn't support dynamic log level switching
+
+### Outcome
+
+- `console.log` only patched during API noise filtering windows
+- Targeted noise-pattern filtering instead of blanket suppression
+- Zero process-stream monkey-patching
+- 141/141 tests pass, lint clean, zero TypeScript errors
 
 ---
 
@@ -161,7 +154,7 @@ const payeeMap = completion.choices[0]?.message?.parsed; // typed!
 
 ## Dependency ordering
 
-1 → 2 → 3 → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
+1 ✅ → 2 ✅ → 3 → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
 
 ## Verification
 

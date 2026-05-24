@@ -8,7 +8,7 @@ import CategoryMap from '../utils/CategoryMap.js';
 import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import PayeeTransformer from '../utils/PayeeTransformer.js';
-import { withGlobalApiNoiseFilter } from '../utils/ActualApiLogControl.js';
+import { withApiNoiseFilter } from '../utils/ActualApiLogControl.js';
 import { getConfig } from '../utils/config.js';
 import { DATE_FORMAT } from '../utils/shared.js';
 
@@ -123,7 +123,7 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
     }
     logger.debug(`MoneyMoney database is accessible.`);
 
-    await withGlobalApiNoiseFilter(logLevel < LogLevel.ACTUAL, async () => {
+    const mainImport = async () => {
         let encounteredImportErrors = false;
 
         for (const serverConfig of selectedServerConfigs) {
@@ -243,7 +243,11 @@ const handleCommand = async (argv: ArgumentsCamelCase) => {
         }
 
         process.exit(getImportExitCode(encounteredImportErrors));
-    });
+    };
+
+    await (logLevel < LogLevel.ACTUAL
+        ? withApiNoiseFilter(mainImport)
+        : mainImport());
 };
 
 export default {
