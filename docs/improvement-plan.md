@@ -2,40 +2,37 @@
 
 Based on codebase assessment 2026-05-24.
 
-## PR 1: Fix Actual API types
+**Status:** PR 1 complete ✅ · PRs 2–5 pending
 
-**Issues covered:** #1 (stale local type declaration), #2 (deprecated `actual.internal`), #3 (unused DI)
+---
 
-### What
+## PR 1: Fix Actual API types ✅
 
-`src/types/actual-app__api.d.ts` is an incomplete local declaration that overrides the official `@actual-app/api` types via `tsconfig.json` paths. The installed package already ships types at `node_modules/@actual-app/api/@types/`.
+**Issues covered:** #1 (stale local type declaration), #2 (deprecated `actual.internal`), #3 (unused DI)  
+**Delivered in:**
 
-### Why
+- [#240](https://github.com/1cu/actual-moneymoney-importer/pull/240) — remove stale `.d.ts`, adopt official types, `sync()` instead of `internal.send()`
+- [#241](https://github.com/1cu/actual-moneymoney-importer/pull/241) — complete DI consistency, remove deprecated `.internal` fallback entirely
 
-This forces:
+### What was done
 
-- `actual.init()` return value cast with `as` (ActualApi.ts L72–81)
-- `(actual as any).getPayees()` + eslint-disable (ActualApi.ts L169)
-- Fake exports (`doSomething`, `doSomethingElse`)
-- Fragile global type declarations (`Account`, `ReadTransaction`, etc.)
+1. Deleted `src/types/actual-app__api.d.ts` (359 lines of stale global type declarations)
+2. Removed `paths` override from `tsconfig.json`
+3. Added type imports from `@actual-app/api/models` (`APIAccountEntity`, `APICategoryEntity`, `APICategoryGroupEntity`) and `@actual-app/core/types/models` (`TransactionEntity`, `ImportTransactionEntity`)
+4. Replaced stale global types (`Account`, `ReadTransaction`, `Category`, `CategoryGroupPayload`, `CreateTransaction`, `UpdateTransaction`) with official equivalents across 9 files
+5. Replaced `actual.internal.send('sync')` with `this.actualApi.sync()` (public API exists in official types)
+6. Removed `(actual as any).getPayees()` + eslint-disable — official types include `getPayees()`
+7. All 7 method bodies in `ActualApi` now consistently use `this.actualApi.*` instead of module-level `actual.*`
+8. Removed `batchUpdateTransactions` fallback to deprecated `this.actualApi.internal` — zero `.internal` references remain in `src/`
+9. Removed `as` cast on `actual.init()` return value — official types properly type it
 
-The static import of `actual` is used inconsistently with the injected `this.actualApi`, making tests unreliable.
-
-Additionally, `actual.internal` is marked deprecated in the official types — prefer the `init()` return value and public API methods (`actual.sync()` exists).
-
-### Fix
-
-1. Remove `src/types/actual-app__api.d.ts`
-2. Remove the `paths` entry in `tsconfig.json`
-3. Replace all `actual.X()` calls with `this.actualApi.X()` (or remove the DI parameter entirely)
-4. Replace `actual.internal.send('sync')` with `actual.sync()` if available, or use `init()` return value
-5. Fix any resulting type errors from the official types (may need minor adjustments)
-
-### Expected outcome
+### Outcome
 
 - No `as any` casts interacting with Actual API
-- No eslint-disable for `no-explicit-any` in ActualApi.ts
-- Consistent DI behavior
+- Zero eslint-disable for `no-explicit-any` in ActualApi.ts
+- Consistent DI behavior — constructor injection is effective everywhere
+- Zero `.internal` references in source code
+- 151/151 tests pass, lint clean, zero TypeScript errors
 
 ---
 
@@ -161,7 +158,7 @@ const payeeMap = completion.choices[0]?.message?.parsed; // typed!
 
 ## Dependency ordering
 
-1 → 2 → 3 → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
+1 ✅ → 2 → 3 → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
 
 ## Verification
 

@@ -9,7 +9,7 @@ import type {
 } from '@actual-app/core/types/models';
 import { format } from 'date-fns';
 import fs from 'fs/promises';
-import { withApiLogControl } from './ActualApiLogControl.js';
+import { withApiNoiseFilter } from './ActualApiLogControl.js';
 import { ActualServerConfig } from './config.js';
 import Logger, { LogLevel } from './Logger.js';
 import { DEFAULT_DATA_DIR } from './shared.js';
@@ -326,10 +326,10 @@ class ActualApi {
     }
 
     private async withLogControl<T>(callback: () => T | Promise<T>) {
-        return await withApiLogControl(
-            this.logger.logLevel >= LogLevel.ACTUAL,
-            callback
-        );
+        if (this.logger.logLevel >= LogLevel.ACTUAL) {
+            return await callback();
+        }
+        return await withApiNoiseFilter(callback);
     }
 }
 
