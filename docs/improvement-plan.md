@@ -2,7 +2,7 @@
 
 Based on codebase assessment 2026-05-24.
 
-**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PRs 3–5 pending
+**Status:** PR 1 complete ✅ · PR 2 complete ✅ · PR 3 complete ✅ · PRs 4–5 pending
 
 ---
 
@@ -60,35 +60,27 @@ Based on codebase assessment 2026-05-24.
 
 ---
 
-## PR 3: TypeScript hardening
+## PR 3: TypeScript hardening ✅
 
-**Issues:** #5 (`strictPropertyInitialization`), #6 (unparameterized `ArgumentsCamelCase`)
+**Issues:** #5 (`strictPropertyInitialization`), #6 (unparameterized `ArgumentsCamelCase`)  
+**Delivered in:** [#243](https://github.com/1cu/actual-moneymoney-importer/pull/243)
 
-### What
+### What was done
 
-`tsconfig.json` has `strictPropertyInitialization: false` because `AccountMap.ts` declares `moneyMoneyAccounts`, `actualAccounts`, and `mapping` without initializers, relying on `loadFromConfig()` to populate them. This weakens TypeScript checking globally.
+1. Initialized AccountMap fields with empty defaults (`[]`, `new Map()`) and updated the load-guard from truthiness to `mapping.size > 0`
+2. Re-enabled `strictPropertyInitialization: true` in `tsconfig.json` — no other uninitialized fields in the project
+3. Added `CommonArgs` shared type in `cliArgs.ts` (config?, logLevel?, loglevel?)
+4. Defined command-specific argv types:
+    - `ImportArgs` extending `CommonArgs` — eliminated 7 casts (logLevel as number, dryRun as boolean, from/to as string, account/server/budget as string[], categorySyncOnExisting as union)
+    - `CategoriesMapArgs` extending `CommonArgs` — eliminated 5 casts
+    - `validate.command.ts` uses `ArgumentsCamelCase<CommonArgs>` — eliminated 1 cast
+    - `config.ts` functions (`getConfigFile`, `getConfig`) parameterized on `CommonArgs` — eliminated 1 cast
 
-`ArgumentsCamelCase` is used unparameterized across all command handlers, forcing casts like `argv.from as string`, `argv.dryRun as boolean`.
-
-### Why
-
-- Calling `getMap()` before `loadFromConfig()` is a runtime hazard with no type-level guard
-- Parameterized argv types eliminate the need for casts and provide better IDE support
-
-### Fix
-
-1. Initialize AccountMap fields (`[]`, `new Map()`) or type them as `| undefined` with guards
-2. Re-enable `strictPropertyInitialization`
-3. Define command-specific argv types:
-    ```ts
-    type ImportArgs = { from?: string; to?: string; dryRun?: boolean; ... };
-    const handler = (argv: ArgumentsCamelCase<ImportArgs>) => { ... };
-    ```
-
-### Expected outcome
+### Outcome
 
 - TypeScript catches uninitialized property access at compile time
-- No `as string` / `as boolean` casts in command handlers
+- 14 `as string` / `as boolean` / `as number` casts removed from command handlers
+- Full IDE type-checking on all CLI arguments
 
 ---
 
@@ -154,7 +146,7 @@ const payeeMap = completion.choices[0]?.message?.parsed; // typed!
 
 ## Dependency ordering
 
-1 ✅ → 2 ✅ → 3 → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
+1 ✅ → 2 ✅ → 3 ✅ → 4 → 5 is natural (core types → behavior → type hardening → feature modernisation → cleanup), but **none strictly depend on others** — they touch different concerns and can ship in any order.
 
 ## Verification
 

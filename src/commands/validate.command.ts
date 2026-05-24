@@ -1,18 +1,17 @@
 import toml from 'toml';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
 import { getConfigFile, parseConfigData } from '../utils/config.js';
+import { CommonArgs } from '../utils/cliArgs.js';
 import fs from 'fs/promises';
 import path from 'path';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import { ZodError } from 'zod';
 import { EXAMPLE_CONFIG } from '../utils/shared.js';
 
-const handleValidate = async (argv: ArgumentsCamelCase) => {
+const handleValidate = async (argv: ArgumentsCamelCase<CommonArgs>) => {
     const configPath = await getConfigFile(argv);
 
-    const logLevel = (argv.logLevel ??
-        argv.loglevel ??
-        LogLevel.INFO) as number;
+    const logLevel = argv.logLevel ?? argv.loglevel ?? LogLevel.INFO;
     const logger = new Logger(logLevel);
 
     logger.info(`Current configuration file: ${configPath}`);

@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import toml from 'toml';
 import { ArgumentsCamelCase } from 'yargs';
+import { CommonArgs } from './cliArgs.js';
 import { z } from 'zod';
 import { DEFAULT_CONFIG_FILE } from './shared.js';
 
@@ -178,16 +179,16 @@ export const parseConfigData = (configData: unknown): Config => {
     return config;
 };
 
-export const getConfigFile = (argv: ArgumentsCamelCase) => {
+export const getConfigFile = (argv: ArgumentsCamelCase<CommonArgs>) => {
     if (argv.config) {
-        const argvConfigFile = path.resolve(argv.config as string);
+        const argvConfigFile = path.resolve(argv.config);
         return argvConfigFile;
     }
 
     return DEFAULT_CONFIG_FILE;
 };
 
-export const getConfig = async (argv: ArgumentsCamelCase) => {
+export const getConfig = async (argv: ArgumentsCamelCase<CommonArgs>) => {
     const configFile = getConfigFile(argv);
 
     const configFileExists = await fs
