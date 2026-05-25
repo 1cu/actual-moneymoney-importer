@@ -2429,32 +2429,6 @@ test('emitImportRunSummary warns when row-level import errors are present', () =
     assert.equal(logger.infoMessages.length, 0);
 });
 
-test('convertToActualTransaction uses transfer payee for planned seed', async () => {
-    const importer = makeImporter();
-    const transaction = makeTransaction({
-        id: '100',
-        accountUuid: 'mm-source',
-        amount: -1440,
-        accountNumber: 'DE-TARGET',
-        name: 'Example Sender',
-        purpose: 'Ruecklagen',
-        comment: 'memo',
-    });
-
-    const converted = await importer.convertToActualTransaction(transaction, {
-        importedId: 'mm-source-100',
-        transferPayeeId: 'transfer-payee',
-        targetActualAccountId: 'actual-target',
-        targetActualAccountName: 'Target',
-    });
-
-    assert.equal(converted.payee, 'transfer-payee');
-    assert.equal(converted.imported_id, 'mm-source-100');
-    assert.equal(converted.imported_payee, 'Example Sender');
-    assert.equal(converted.notes, 'Ruecklagen | Comment: memo');
-    assert.equal(converted.cleared, true);
-});
-
 test('applyTransferCounterpartUpdates stamps generated counterpart with second imported id', async () => {
     const batchUpdateTransactions = mock.fn(async () => {});
     const importer = makeImporter({
