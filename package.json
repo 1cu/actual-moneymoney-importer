@@ -58,7 +58,7 @@
         "zod": "^4.4.3"
     },
     "engines": {
-        "node": "25.x"
+        "node": ">=22"
     },
     "devDependencies": {
         "@commitlint/cli": "^21.0.0",

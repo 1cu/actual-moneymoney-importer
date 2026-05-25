@@ -263,7 +263,10 @@ export default {
     builder: (yargs) => {
         return yargs
             .boolean('dry-run')
-            .describe('dry-run', 'Do not import data')
+            .describe(
+                'dry-run',
+                'Preview what would be imported without making changes'
+            )
             .string('account')
             .alias('account', 'a')
             .describe(
