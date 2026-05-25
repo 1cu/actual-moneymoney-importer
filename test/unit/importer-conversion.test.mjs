@@ -9,7 +9,7 @@ const makeTransaction = (overrides = {}) => ({
     id: 'txn-1',
     accountUuid: 'acc-uuid-1',
     amount: -42.5,
-    valueDate: new Date('2025-06-15'),
+    valueDate: new Date(2025, 5, 15),
     booked: true,
     name: 'Coffee Shop',
     purpose: 'Morning coffee',
@@ -86,7 +86,7 @@ test('rounds amount correctly', () => {
 
 test('formats valueDate as yyyy-MM-dd', () => {
     const result = convertToActualTransaction(
-        makeTransaction({ valueDate: new Date('2025-06-15') }),
+        makeTransaction({ valueDate: new Date(2025, 5, 15) }),
         undefined,
         'a',
         makeOptions()
