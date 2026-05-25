@@ -32,6 +32,7 @@ test('ActualApi.getTransactions starts on 2000-01-01', async () => {
     const api = new ActualApi(makeServerConfig(), makeLogger(), {
         getTransactions,
     });
+    api.isInitialized = true;
 
     await api.getTransactions('acct-1');
 

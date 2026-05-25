@@ -23,7 +23,7 @@
 - 🗺️ **`categories map` CLI** – audit, plan, and write your category mapping from the terminal
 - ⚠️ **Auto-rule override detection** – get warned when Actual's rules silently change a synced category
 - 🔬 **Scoped imports** – filter by server, budget, or account with repeatable `-s`/`-b`/`-a` flags
-- 🤖 **AI payee transformation** – configurable prompt, latest OpenAI models (`gpt-5-nano` default), temperature, and error-handling policy
+- 🤖 **AI payee transformation** – configurable prompt, latest OpenAI models (`gpt-5.4-nano` default), temperature, and error-handling policy
 - 💬 **Comment import** – carry MoneyMoney transaction comments into Actual notes (with configurable prefix)
 
 ## Installation
@@ -64,8 +64,8 @@ A configuration document looks like this:
 [payeeTransformation]
 enabled = false
 openAiApiKey = "<openAiKey>"  # Your OpenAI API key
-openAiModel = "gpt-5-nano"  # Optional: Specify the OpenAI model to use (default: gpt-5-nano)
-temperature = 1  # Optional: Temperature for OpenAI API (0-2, default: 1). Note: gpt-5-nano only supports temperature=1
+openAiModel = "gpt-5.4-nano"  # Optional: Specify the OpenAI model to use (default: gpt-5.4-nano)
+temperature = 1  # Optional: Temperature for OpenAI API (0–2 inclusive, default: 1)
 onTransformError = "warn"  # Optional: How to handle transformation errors: "warn" (default) or "fail"
 prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
 
@@ -115,14 +115,14 @@ password = ""
 
 Converts cryptic payee names to human-readable formats using OpenAI (e.g. "AMAZN S.A.R.L" to "Amazon"). The importer also reuses existing budget payees with a bounded shortlist and snaps close matches back to canonical names. Requires an API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
 
-| Option             | Default      | Description                                                                     |
-| ------------------ | ------------ | ------------------------------------------------------------------------------- |
-| `enabled`          | `false`      | Enable/disable AI payee transformation                                          |
-| `openAiApiKey`     | —            | Your OpenAI API key (required if enabled)                                       |
-| `openAiModel`      | `gpt-5-nano` | OpenAI model to use                                                             |
-| `temperature`      | `1`          | Temperature for API calls (0–2). Note: some models only support `1`             |
-| `onTransformError` | `warn`       | Error handling: `warn` (use raw names) or `fail` (abort import)                 |
-| `prompt`           | built-in     | Custom transformation instructions (existing payees are appended automatically) |
+| Option             | Default        | Description                                                                                                                                    |
+| ------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | `false`        | Enable/disable AI payee transformation                                                                                                         |
+| `openAiApiKey`     | —              | Your OpenAI API key (required if enabled)                                                                                                      |
+| `openAiModel`      | `gpt-5.4-nano` | OpenAI model to use                                                                                                                            |
+| `temperature`      | `1`            | Temperature for API calls (0–2 inclusive; check [model docs](https://developers.openai.com/api/docs/models/gpt-5.4-nano) for per-model limits) |
+| `onTransformError` | `warn`         | Error handling: `warn` (use raw names) or `fail` (abort import)                                                                                |
+| `prompt`           | built-in       | Custom transformation instructions (existing payees are appended automatically)                                                                |
 
 The AI receives a bounded shortlist of existing payees from your budget to prefer matching over creating duplicates, and close matches are normalized back to existing payee names after the API call.
 
