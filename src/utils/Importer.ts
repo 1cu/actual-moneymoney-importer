@@ -270,6 +270,63 @@ const buildExistingCategoryUpdate = ({
     };
 };
 
+export const convertToActualTransaction = (
+    transaction: MonMonTransaction,
+    plannedTransfer: PlannedTransferSeed | undefined,
+    actualAccountId: string,
+    options: {
+        importComments: boolean;
+        commentPrefix: string;
+        synchronizeClearedStatus: boolean;
+    }
+): ImportTransactionEntity => {
+    const transactionNotes = buildTransactionNotes(
+        transaction,
+        options.importComments,
+        options.commentPrefix
+    );
+
+    const createTransaction: ImportTransactionEntity = {
+        account: actualAccountId,
+        date: format(transaction.valueDate, DATE_FORMAT),
+        amount: Math.round(transaction.amount * 100),
+        imported_id: getIdForMoneyMoneyTransaction(transaction),
+        imported_payee: transaction.name?.trim() ?? '',
+    };
+
+    if (plannedTransfer) {
+        createTransaction.payee = plannedTransfer.transferPayeeId;
+    }
+
+    if (options.synchronizeClearedStatus) {
+        createTransaction.cleared = transaction.booked;
+    }
+
+    if (transactionNotes) {
+        createTransaction.notes = transactionNotes;
+    }
+
+    return createTransaction;
+};
+
+export const getStartingBalanceForAccount = (
+    account: MonMonAccount,
+    transactions: MonMonTransaction[]
+): number => {
+    const monMonAccountBalance = account.balance[0]?.[0] ?? 0;
+    const totalExpenses = transactions.reduce(
+        (acc, transaction) =>
+            acc + (transaction.booked ? transaction.amount : 0),
+        0
+    );
+
+    const startingBalance = Math.round(
+        (monMonAccountBalance - totalExpenses) * 100
+    );
+
+    return startingBalance;
+};
+
 class Importer {
     private readonly transferPlanner: TransferPlanner;
     private hadImportErrors = false;
@@ -1692,33 +1749,17 @@ class Importer {
         plannedTransfer: PlannedTransferSeed | undefined,
         actualAccountId: string
     ): Promise<ImportTransactionEntity> {
-        const transactionNotes = buildTransactionNotes(
+        return convertToActualTransaction(
             transaction,
-            this.config.import.importComments,
-            this.config.import.commentPrefix
+            plannedTransfer,
+            actualAccountId,
+            {
+                importComments: this.config.import.importComments,
+                commentPrefix: this.config.import.commentPrefix,
+                synchronizeClearedStatus:
+                    this.config.import.synchronizeClearedStatus,
+            }
         );
-
-        const createTransaction: ImportTransactionEntity = {
-            account: actualAccountId,
-            date: format(transaction.valueDate, DATE_FORMAT),
-            amount: Math.round(transaction.amount * 100),
-            imported_id: getIdForMoneyMoneyTransaction(transaction),
-            imported_payee: transaction.name?.trim() ?? '',
-        };
-
-        if (plannedTransfer) {
-            createTransaction.payee = plannedTransfer.transferPayeeId;
-        }
-
-        if (this.config.import.synchronizeClearedStatus) {
-            createTransaction.cleared = transaction.booked;
-        }
-
-        if (transactionNotes) {
-            createTransaction.notes = transactionNotes;
-        }
-
-        return createTransaction;
     }
 
     private parseImportedId(importedId: string) {
@@ -1796,19 +1837,8 @@ class Importer {
     private getStartingBalanceForAccount(
         account: MonMonAccount,
         transactions: MonMonTransaction[]
-    ) {
-        const monMonAccountBalance = account.balance[0]?.[0] ?? 0;
-        const totalExpenses = transactions.reduce(
-            (acc, transaction) =>
-                acc + (transaction.booked ? transaction.amount : 0),
-            0
-        );
-
-        const startingBalance = Math.round(
-            (monMonAccountBalance - totalExpenses) * 100
-        );
-
-        return startingBalance;
+    ): number {
+        return getStartingBalanceForAccount(account, transactions);
     }
 }
 
