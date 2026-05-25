@@ -131,10 +131,11 @@ class ActualApi {
         });
     }
 
-    importTransactions(
+    async importTransactions(
         accountId: string,
         transactions: ImportTransactionEntity[]
     ) {
+        await this.ensureInitialization();
         return this.withLogControl(() =>
             this.actualApi.importTransactions(accountId, transactions, {
                 defaultCleared: false,
@@ -142,7 +143,8 @@ class ActualApi {
         );
     }
 
-    getTransactions(accountId: string) {
+    async getTransactions(accountId: string) {
+        await this.ensureInitialization();
         const startDate = ACTUAL_TRANSACTION_HISTORY_START_DATE;
         const endDate = format(new Date(), 'yyyy-MM-dd');
 
@@ -245,7 +247,9 @@ class ActualApi {
     }
 
     async shutdown() {
-        await this.ensureInitialization();
+        if (!this.isInitialized) {
+            return;
+        }
         await this.withLogControl(() => this.actualApi.shutdown());
     }
 

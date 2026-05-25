@@ -248,3 +248,59 @@ test('withApiNoiseFilter suppresses Loaded spreadsheet from cache noise', async 
 
     assert.deepEqual(calls, ['keep this']);
 });
+
+test('withApiNoiseFilter does not suppress standalone newline after a noise pattern on stdout (known gap)', async (t) => {
+    // When Actual splits "Syncing since ..." and "\n" across separate
+    // process.stdout.write calls, the standalone "\n" does not match a
+    // noise pattern and leaks as a blank line. Documenting this rather
+    // than fixing it here keeps the filter simple.
+    const calls = [];
+    const originalWrite = process.stdout.write;
+
+    process.stdout.write = (data) => {
+        calls.push(
+            typeof data === 'string'
+                ? data
+                : Buffer.from(data).toString('utf-8')
+        );
+        return true;
+    };
+    t.after(() => {
+        process.stdout.write = originalWrite;
+    });
+
+    await withApiNoiseFilter(async () => {
+        process.stdout.write('Syncing since 2026-01-01');
+        process.stdout.write('\n');
+    });
+
+    // The noise line is suppressed, but the "\n" leaks through.
+    assert.deepEqual(calls, ['\n']);
+});
+
+test('withApiNoiseFilter suppresses whole stdout chunk when it starts with noise', async (t) => {
+    // When a single write contains multiple newline-separated lines and
+    // the trimmed chunk starts with a noise pattern, the entire chunk
+    // is suppressed — including any non-noise lines after the first.
+    const calls = [];
+    const originalWrite = process.stdout.write;
+
+    process.stdout.write = (data) => {
+        calls.push(
+            typeof data === 'string'
+                ? data
+                : Buffer.from(data).toString('utf-8')
+        );
+        return true;
+    };
+    t.after(() => {
+        process.stdout.write = originalWrite;
+    });
+
+    await withApiNoiseFilter(async () => {
+        process.stdout.write('Syncing since 2026-01-01\nimportant output\n');
+    });
+
+    // Whole chunk suppressed because trimmed text starts with "Syncing since".
+    assert.deepEqual(calls, []);
+});
