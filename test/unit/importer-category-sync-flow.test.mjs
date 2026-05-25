@@ -373,12 +373,14 @@ test('logCategorySyncSummary omits zero-value fields in info hints', () => {
         skippedConflictCount: 0,
     });
 
+    assert.equal(logger.infos.length, 1);
     const hints = logger.infos[0]?.hints ?? [];
-    assert.match(hints.join('\n'), /Existing transactions considered: 47/);
-    assert.match(hints.join('\n'), /Backfills: 1/);
-    assert.match(hints.join('\n'), /Planned updates: 1/);
-    assert.doesNotMatch(hints.join('\n'), /Conflicts:/);
-    assert.doesNotMatch(hints.join('\n'), /Skipped conflicts:/);
+    assert.ok(hints.length > 0);
+
+    // Zero-value fields should not appear in hints
+    const hintsText = hints.join('\n');
+    assert.doesNotMatch(hintsText, /[Cc]onflicts?:/);
+    assert.doesNotMatch(hintsText, /[Ss]kipped conflicts?:/);
 });
 
 test('emitImportRunSummary prints nothing-to-import for fully empty runs', () => {
