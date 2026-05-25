@@ -40,6 +40,10 @@ export const EXAMPLE_CONFIG = `
 [payeeTransformation]
 enabled = false
 openAiApiKey = "<openAiKey>"
+# openAiModel = "gpt-4o-mini"  # Optional: OpenAI model (default: gpt-5.4-nano)
+# temperature = 1  # Optional: Temperature for OpenAI API (0–2 inclusive, default: 1)
+# onTransformError = "warn"  # Optional: "warn" (default) or "fail"
+# prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
 
 # Import settings
 [import]
@@ -55,6 +59,12 @@ enabled = false
 categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
 matchWindowDays = 0
 
+# Ignore patterns (optional)
+# [import.ignorePatterns]
+# commentPatterns = ["[actual-ignore]"]
+# payeePatterns = []
+# purposePatterns = []
+
 # Actual servers, you can add multiple servers
 [[actualServers]]
 serverUrl = "http://localhost:5006"
@@ -63,7 +73,7 @@ serverPassword = "<password>"
 # Budgets for the server, you can add multiple budgets
 [[actualServers.budgets]]
 syncId = "<syncId>" # Get this value from the Actual advanced settings
-# earliestImportDate = "2021-01-01" # Optional, only import transactions from this date
+# earliestImportDate = "2024-01-01" # Optional, only import transactions from this date
 
 # E2E encryption for the budget, if enabled
 [actualServers.budgets.e2eEncryption]

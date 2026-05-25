@@ -17,13 +17,15 @@
 
 > `actual-moneymoney-importer` started as a fork of [NikxDa/actual-moneymoney](https://github.com/NikxDa/actual-moneymoney) and is now actively maintained and published with added category sync, payee transformation, and richer import controls.
 
+Run `actual-mmi --help` at any time for a full list of commands and options. For per-command help, use `actual-mmi import --help` or `actual-mmi categories map --help`.
+
 ## Highlights
 
 - 🏷️ **Category sync** – map MoneyMoney categories to Actual automatically, with backfill and conflict resolution
 - 🗺️ **`categories map` CLI** – audit, plan, and write your category mapping from the terminal
 - ⚠️ **Auto-rule override detection** – get warned when Actual's rules silently change a synced category
 - 🔬 **Scoped imports** – filter by server, budget, or account with repeatable `-s`/`-b`/`-a` flags
-- 🤖 **AI payee transformation** – configurable prompt, latest OpenAI models (`gpt-5.4-nano` default), temperature, and error-handling policy
+- 🤖 **AI payee transformation** – configurable prompt, OpenAI models, temperature, and error-handling policy
 - 💬 **Comment import** – carry MoneyMoney transaction comments into Actual notes (with configurable prefix)
 
 ## Installation
@@ -32,7 +34,7 @@
 
 - macOS with [MoneyMoney](https://moneymoney-app.com) installed
 - An [Actual Budget](https://actualbudget.org) server and budget
-- Node.js 25.x
+- Node.js >= 22
 
 Install with NPM:
 
@@ -46,16 +48,15 @@ The installed CLI command is `actual-mmi`.
 
 1. Install the CLI.
 2. Run `actual-mmi validate` to create an example config and print its path.
-3. Fill in your Actual server, budget sync ID, and account mapping.
-4. Run `actual-mmi import --dry-run` to preview the import before making changes.
+3. Fill in your Actual server URL, budget sync ID (from Actual → Settings → Advanced), and account mapping.
+4. Run `actual-mmi validate` again to check your edits.
+5. Run `actual-mmi import --dry-run` to preview the import before making changes.
 
 ## Configuration
 
-Details on parameters are available by running `actual-mmi --help`.
-
 The application uses a TOML configuration file.
 Run `actual-mmi validate` to validate the configuration and, on first run, generate an example file and print its path.
-You can pass a custom configuration file with `--config`.
+You can pass a custom configuration file with `--config` (alias `-c`).
 
 A configuration document looks like this:
 
@@ -64,10 +65,10 @@ A configuration document looks like this:
 [payeeTransformation]
 enabled = false
 openAiApiKey = "<openAiKey>"  # Your OpenAI API key
-openAiModel = "gpt-5.4-nano"  # Optional: Specify the OpenAI model to use (default: gpt-5.4-nano)
-temperature = 1  # Optional: Temperature for OpenAI API (0–2 inclusive, default: 1)
-onTransformError = "warn"  # Optional: How to handle transformation errors: "warn" (default) or "fail"
-prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
+# openAiModel = "gpt-4o-mini"  # Optional: OpenAI model (default: gpt-5.4-nano)
+# temperature = 1  # Optional: Temperature for OpenAI API (0–2 inclusive, default: 1)
+# onTransformError = "warn"  # Optional: Error handling: "warn" (default) or "fail"
+# prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
 
 # Import settings
 [import]
@@ -83,6 +84,12 @@ enabled = false
 categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
 matchWindowDays = 0
 
+# Ignore patterns (optional)
+# [import.ignorePatterns]
+# commentPatterns = ["[actual-ignore]"]
+# payeePatterns = []
+# purposePatterns = []
+
 # Actual servers, you can add multiple servers
 [[actualServers]]
 serverUrl = "http://localhost:5006"
@@ -91,6 +98,7 @@ serverPassword = "<password>"
 # Budgets for the server, you can add multiple budgets
 [[actualServers.budgets]]
 syncId = "<syncId>" # Get this value from the Actual advanced settings
+# earliestImportDate = "2024-01-01" # Optional: only import transactions from this date
 
 # E2E encryption for the budget, if enabled
 [actualServers.budgets.e2eEncryption]
@@ -115,14 +123,14 @@ password = ""
 
 Converts cryptic payee names to human-readable formats using OpenAI (e.g. "AMAZN S.A.R.L" to "Amazon"). The importer also reuses existing budget payees with a bounded shortlist and snaps close matches back to canonical names. Requires an API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
 
-| Option             | Default        | Description                                                                                                                                    |
-| ------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`          | `false`        | Enable/disable AI payee transformation                                                                                                         |
-| `openAiApiKey`     | —              | Your OpenAI API key (required if enabled)                                                                                                      |
-| `openAiModel`      | `gpt-5.4-nano` | OpenAI model to use                                                                                                                            |
-| `temperature`      | `1`            | Temperature for API calls (0–2 inclusive; check [model docs](https://developers.openai.com/api/docs/models/gpt-5.4-nano) for per-model limits) |
-| `onTransformError` | `warn`         | Error handling: `warn` (use raw names) or `fail` (abort import)                                                                                |
-| `prompt`           | built-in       | Custom transformation instructions (existing payees are appended automatically)                                                                |
+| Option             | Default        | Description                                                                                                 |
+| ------------------ | -------------- | ----------------------------------------------------------------------------------------------------------- |
+| `enabled`          | `false`        | Enable/disable AI payee transformation                                                                      |
+| `openAiApiKey`     | —              | Your OpenAI API key (required if enabled)                                                                   |
+| `openAiModel`      | `gpt-5.4-nano` | OpenAI model to use. You may need to change this to a model available on your account (e.g. `gpt-4o-mini`). |
+| `temperature`      | `1`            | Temperature for API calls (0–2 inclusive)                                                                   |
+| `onTransformError` | `warn`         | Error handling: `warn` (use raw names) or `fail` (abort import)                                             |
+| `prompt`           | built-in       | Custom transformation instructions (existing payees are appended automatically)                             |
 
 The AI receives a bounded shortlist of existing payees from your budget to prefer matching over creating duplicates, and close matches are normalized back to existing payee names after the API call.
 
@@ -193,11 +201,11 @@ Once configured, run `actual-mmi validate` to verify the format.
 
 ## Usage
 
-Once configured, importing is as simple as running `actual-mmi import`. Make sure the Actual servers are running and MoneyMoney is unlocked. By default, the importer processes the last month of transactions. Use `--from=YYYY-MM-DD` and optionally `--to=YYYY-MM-DD` to import a specific date range.
+Once configured, importing is as simple as running `actual-mmi import`. Make sure the Actual servers are running and MoneyMoney is unlocked. By default, the importer processes the last month of transactions. Use `--from=YYYY-MM-DD` (alias `-f`) and optionally `--to=YYYY-MM-DD` (alias `-t`) to import a specific date range.
 
 The importer will not track previous imports, so if you wait more than one month between imports, you might need to manually specify the last import date. Running the importer twice in the same month is no problem, as duplicate transactions will automatically be detected and skipped.
 
-Imports can be scoped with `--server`, `--budget`, and `--account` options. Each flag is case-insensitive, can be repeated, and accepts comma-separated values.
+Imports can be scoped with `--server` (alias `-s`), `--budget` (alias `-b`), and `--account` (alias `-a`). Each flag is case-insensitive, can be repeated, and accepts comma-separated values. Server filtering matches against the **server URL** and budget filtering matches against the **sync ID** from your config.
 
 ```bash
 # Import specific accounts
@@ -205,10 +213,10 @@ actual-mmi import -a "DKB Giro" -a "DKB Visa"
 actual-mmi import -a "DKB Giro,DKB Visa"
 
 # Restrict to server and budget
-actual-mmi import -s myServerA -b HomeBudget
+actual-mmi import -s http://localhost:5006 -b <syncId>
 
 # Combine filters
-actual-mmi import -s myServerA -b HomeBudget -a "Groceries,Utilities"
+actual-mmi import -s http://localhost:5006 -b <syncId> -a "Groceries,Utilities"
 ```
 
 ### Dry run
@@ -217,6 +225,15 @@ Use `--dry-run` to preview what would be imported without making any changes:
 
 ```bash
 actual-mmi import --dry-run
+```
+
+### Verbose logging
+
+Use `--log-level` (alias `-l`) to control output verbosity. Levels range from 0 (errors only) to 4 (full API noise):
+
+```bash
+# Show debug output for troubleshooting
+actual-mmi import --dry-run -l 3
 ```
 
 ### Category Sync
@@ -243,6 +260,10 @@ Category mapping can be inspected and suggested with:
 ```bash
 actual-mmi categories map -s http://localhost:5006 -b <syncId>
 actual-mmi categories map -s http://localhost:5006 -b <syncId> --write-config
+
+# Output formats for scripting
+actual-mmi categories map -s http://localhost:5006 -b <syncId> --format json
+actual-mmi categories map -s http://localhost:5006 -b <syncId> --format toml
 ```
 
 The audit report includes these sections:
@@ -263,13 +284,17 @@ With `--write-config`, the tool rewrites your `[actualServers.budgets.categoryMa
 "7f5c..." = "8aa1..."
 ```
 
+### Validate command
+
+`actual-mmi validate` checks your config file's TOML syntax and schema (required fields, types, value ranges). It does **not** verify that your Actual server is reachable, sync IDs exist, accounts map correctly, or your OpenAI key is valid. To test the full import flow without making changes, use `actual-mmi import --dry-run`.
+
 ## Advanced Configuration
 
 The following configuration options are optional.
 
 ### Ignore patterns
 
-Ignore patterns let you specify payee names, comments, or purposes that should be ignored. Patterns are case-sensitive substring matches, not exact matches.
+Ignore patterns let you specify payee names, comments, or purposes that should be ignored. Patterns are **case-sensitive substring matches**, not exact matches. This means `"Amazon"` matches `"Amazon.com"` but not `"amazon"`.
 
 ```toml
 [import.ignorePatterns]
@@ -291,12 +316,33 @@ earliestImportDate = "2024-01-01" # Format is YYYY-MM-DD
 
 Note that the date is a string, not a TOML date.
 
+## Security
+
+The configuration file (default: `~/.actually/config.toml`) stores your Actual server password(s) and OpenAI API key in plaintext. To protect these secrets:
+
+- Keep the config file private: `chmod 600 ~/.actually/config.toml`
+- Prefer `https://` for remote Actual servers. The importer will warn if you use cleartext HTTP to a non-localhost server, since passwords would be sent in plaintext.
+- Avoid committing the config file to version control.
+
+## Troubleshooting
+
+| Problem                                                                                        | Likely cause / solution                                                                                                                       |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MoneyMoney database is locked`                                                                | Unlock MoneyMoney and try again. MoneyMoney must be running and unlocked during import.                                                       |
+| `Failed to connect to Actual server`                                                           | Ensure the Actual server is running and reachable at the configured `serverUrl`. Try `curl <serverUrl>` in a terminal.                        |
+| `No matching Actual servers found for --server filter`                                         | The `--server` / `-s` filter matches against the **exact URL** from your config (e.g. `http://localhost:5006`), not a nickname or label.      |
+| `No matching budgets found`                                                                    | The `--budget` / `-b` filter matches against the **sync ID** from your config, not the budget name.                                           |
+| `No matching MoneyMoney accounts found`                                                        | Make sure MoneyMoney is unlocked and the account is mapped in `[actualServers.budgets.accountMapping]`.                                       |
+| `Invalid configuration file`                                                                   | Run `actual-mmi validate` to see specific errors. Check that `syncId` is the budget sync ID (not the name) and `serverUrl` is a valid URL.    |
+| `E2E encryption password is required`                                                          | If your Actual budget uses end-to-end encryption, set `enabled = true` and provide the `password` in `[actualServers.budgets.e2eEncryption]`. |
+| OpenAPI model error (e.g. `model 'gpt-5.4-nano' is unavailable`)                               | Set `payeeTransformation.openAiModel` to a model available on your OpenAI account (e.g. `gpt-4o-mini`).                                       |
+| `Category sync policy 'ask' requires an interactive terminal`                                  | Use `-C=new` or `-C=always` when running in a non-interactive environment (CI, cron, launchd).                                                |
+| Auto-rule override warning: "Actual's rules changed the category of transaction X from Y to Z" | This is informational. Add a corresponding rule in Actual, or adjust the rule ordering so it doesn't conflict with the synced category.       |
+
 ## Bugs
 
 If you notice any bugs or issues, please file an issue.
 
 ## Maintenance Notes
 
-### Releases
-
-Stable releases are cut from `main` and published here on GitHub and npm under the `actual-moneymoney-importer` package name.
+Stable releases are cut from `main` and published on GitHub and npm under the `actual-moneymoney-importer` package name. See `.github/PULL_REQUEST_TEMPLATE.md` for contribution guidelines.
