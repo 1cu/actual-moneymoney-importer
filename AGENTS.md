@@ -36,7 +36,7 @@ npm run test
 
 ## Release & Publishing
 
-- Stable releases are automated from `main` via GitHub Actions and `semantic-release`.
+- Stable releases are published from `main` via a manual `semantic-release` workflow trigger.
 - Releases publish to both GitHub Releases and npm.
 - Do not manually bump `package.json` version or publish locally for routine releases.
 - Keep `package.json`, `README.md`, and release workflow/config files in sync when changing the package name, CLI name, install instructions, or release flow.
@@ -130,6 +130,20 @@ Every non-trivial code change must include verification evidence:
 - manual scenario checks for integrations that cannot be fully automated.
 
 Do not mark work as complete without reporting what was verified.
+
+## Branch & Pull Request Workflow
+
+**All changes must go through a pull request.** The `main` branch is protected — direct pushes are rejected. Work on a feature branch and open a PR targeting `main`.
+
+```bash
+# Create a branch, commit, push, and open a PR
+git checkout -b fix/your-change
+git add ... && git commit -m "fix: your change"
+git push origin fix/your-change
+gh pr create --base main --head fix/your-change --title "fix: your change" --body "..."
+```
+
+After review and CI passes, merge the PR. Releases are triggered manually from `main` afterward.
 
 ## Commit & Pull Request Guidelines
 
