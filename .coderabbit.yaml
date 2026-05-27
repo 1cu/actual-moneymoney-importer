@@ -1,10 +1,10 @@
 # CodeRabbit stays silent by default — reviews only on explicit
 # `@coderabbitai review` command. No auto-reviews, no status noise,
 # no finishing-touch checkboxes, no poems.
-auto_review:
-  enabled: false
-review_status: false
 reviews:
+  auto_review:
+    enabled: false
+  review_status: false
   poem: false
   finishing_touches:
     docstrings:

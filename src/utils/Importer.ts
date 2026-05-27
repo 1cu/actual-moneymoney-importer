@@ -581,6 +581,12 @@ class Importer {
                         existingActualTransactions,
                         actualAccountName: actualAccount.name,
                         shouldSyncCategories,
+                        duplicateScanWindow: {
+                            from: format(fetchWindow.from, DATE_FORMAT),
+                            ...(fetchWindow.to
+                                ? { to: format(fetchWindow.to, DATE_FORMAT) }
+                                : {}),
+                        },
                     });
 
                 return {
@@ -926,7 +932,7 @@ class Importer {
 
                 if (transferLockedCount > 0) {
                     this.logger.debug(
-                        `Skipped ${transferLockedCount} transfer-linked existing transaction(s) for category sync in '${actualAccount.name}' (Actual manages transfer categories).`
+                        `Category sync excluded ${transferLockedCount} transfer-linked existing transaction(s) in '${actualAccount.name}' (Actual manages transfer categories).`
                     );
                 }
 
@@ -1165,15 +1171,16 @@ class Importer {
         existingActualTransactions,
         actualAccountName,
         shouldSyncCategories,
+        duplicateScanWindow,
     }: {
         monMonAccount: MonMonAccount;
         accountTransactions: MonMonTransaction[];
         existingActualTransactions: TransactionEntity[];
         actualAccountName: string;
         shouldSyncCategories: boolean;
+        duplicateScanWindow?: { from: string; to?: string };
     }) {
         const existingByImportedId = new Map<string, TransactionEntity>();
-        const duplicateImportedIds = new Set<string>();
 
         // Deterministic winner policy for duplicate imported_id values: latest by (date, id) wins.
         const sortedExistingTransactions = [...existingActualTransactions]
@@ -1186,16 +1193,39 @@ class Importer {
                 return a.date.localeCompare(b.date);
             });
 
+        // Build the deduplication map from ALL existing transactions so
+        // that previously imported transactions are correctly recognised
+        // regardless of date.  Latest by (date, id) wins.
         for (const transaction of sortedExistingTransactions) {
             if (!transaction.imported_id) {
                 continue;
             }
+            existingByImportedId.set(transaction.imported_id, transaction);
+        }
 
-            if (existingByImportedId.has(transaction.imported_id)) {
+        // Only detect duplicate imported_ids within the scan window to
+        // avoid noisy diagnostics for transactions well outside the import
+        // range (e.g. a 2025 duplicate in a 2026 import run).
+        const duplicateImportedIds = new Set<string>();
+        const scanTransactions = duplicateScanWindow
+            ? sortedExistingTransactions.filter((tx) => {
+                  return (
+                      tx.date >= duplicateScanWindow.from &&
+                      (!duplicateScanWindow.to ||
+                          tx.date <= duplicateScanWindow.to)
+                  );
+              })
+            : sortedExistingTransactions;
+
+        const seenInWindow = new Set<string>();
+        for (const transaction of scanTransactions) {
+            if (!transaction.imported_id) {
+                continue;
+            }
+            if (seenInWindow.has(transaction.imported_id)) {
                 duplicateImportedIds.add(transaction.imported_id);
             }
-
-            existingByImportedId.set(transaction.imported_id, transaction);
+            seenInWindow.add(transaction.imported_id);
         }
 
         if (duplicateImportedIds.size > 0) {
