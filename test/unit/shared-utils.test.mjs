@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
     buildTransactionNotes,
     getIdForMoneyMoneyTransaction,
+    sanitizeString,
 } from '../../dist/utils/shared.js';
 
 const makeTxn = (overrides) => ({
@@ -90,4 +91,36 @@ test('buildTransactionNotes does not trim leading/trailing whitespace in comment
     const txn = makeTxn({ purpose: 'purpose', comment: '  spaced  ' });
     const result = buildTransactionNotes(txn, true, '# ');
     assert.strictEqual(result, 'purpose | #   spaced  ');
+});
+
+test('sanitizeString returns empty string for null/undefined/empty', () => {
+    assert.strictEqual(sanitizeString(null), '');
+    assert.strictEqual(sanitizeString(undefined), '');
+    assert.strictEqual(sanitizeString(''), '');
+});
+
+test('sanitizeString passes through clean NFC text unchanged', () => {
+    assert.strictEqual(sanitizeString('Hello World'), 'Hello World');
+    assert.strictEqual(sanitizeString('Überweisung 123'), 'Überweisung 123');
+    assert.strictEqual(
+        sanitizeString('Italien, Österreich & mehr'),
+        'Italien, Österreich & mehr'
+    );
+});
+
+test('sanitizeString applies NFC normalization', () => {
+    // e-acute as decomposed form (U+0065 U+0301) should become NFC é (U+00E9)
+    const decomposed = 'caf\u0065\u0301'; // caf + e + combining acute
+    const composed = 'caf\u00E9'; // caf + é (precomposed)
+    assert.strictEqual(sanitizeString(decomposed), composed);
+});
+
+test('sanitizeString strips control characters but keeps newlines/tabs/carriage returns', () => {
+    assert.strictEqual(sanitizeString('a\u0000b\u0008c'), 'abc');
+    assert.strictEqual(sanitizeString('a\tb\nc\rd'), 'a\tb\nc\rd');
+});
+
+test('sanitizeString trims surrounding whitespace', () => {
+    assert.strictEqual(sanitizeString('  hello  '), 'hello');
+    assert.strictEqual(sanitizeString('\t\nline\n\t'), 'line');
 });
