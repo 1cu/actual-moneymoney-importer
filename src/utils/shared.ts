@@ -25,27 +25,6 @@ export const buildTransactionNotes = (
 
 export const APPLICATION_DIRECTORY = path.resolve(os.homedir(), '.actually');
 
-/**
- * Defensively normalizes a string value from external sources (e.g., MoneyMoney
- * via AppleScript).  Applies Unicode NFC normalization and strips control
- * characters (except \n, \t, \r) to prevent encoding corruption from
- * propagating into imported data.
- */
-export const sanitizeString = (value: string | undefined | null): string => {
-    if (!value) return '';
-    const normalized = value.normalize('NFC');
-    let result = '';
-    for (let i = 0; i < normalized.length; i++) {
-        const code = normalized.charCodeAt(i);
-        // Keep tab (\t=9), newline (\n=10), carriage return (\r=13),
-        // and all printable/extended chars (>= 32, i.e. space and above)
-        if (code === 9 || code === 10 || code === 13 || code >= 32) {
-            result += normalized[i];
-        }
-    }
-    return result.trim();
-};
-
 export const DEFAULT_DATA_DIR = path.resolve(
     APPLICATION_DIRECTORY,
     'actual-data'

@@ -42,7 +42,6 @@ import {
     DATE_FORMAT,
     buildTransactionNotes,
     getIdForMoneyMoneyTransaction,
-    sanitizeString,
 } from './shared.js';
 
 export const classifyCategoryUpdate = ({
@@ -431,16 +430,6 @@ class Importer {
         }
 
         let monMonTransactions = await getTransactions(getTransactionsOptions);
-
-        // Defensive normalization: sanitize string fields that originate
-        // from MoneyMoney via AppleScript, which can suffer from encoding
-        // corruption (e.g., umlauts replaced with '?').
-        monMonTransactions = monMonTransactions.map((tx) => ({
-            ...tx,
-            name: sanitizeString(tx.name),
-            purpose: sanitizeString(tx.purpose),
-            comment: sanitizeString(tx.comment),
-        }));
 
         if (monMonTransactions.length === 0) {
             this.logger.info(
