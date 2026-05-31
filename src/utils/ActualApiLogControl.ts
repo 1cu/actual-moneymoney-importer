@@ -3,6 +3,8 @@ const API_NOISE_PATTERNS = [
     /^Got messages from server /,
     /^Loaded spreadsheet from cache /,
     /^\[Breadcrumb\]/,
+    /^Performing transaction reconciliation/,
+    /^Debug data for the operations:/,
 ];
 
 const isApiNoiseLine = (line: string): boolean =>
