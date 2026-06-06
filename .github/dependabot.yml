@@ -3,19 +3,11 @@ updates:
     - package-ecosystem: npm
       directory: '/'
       schedule:
-          interval: weekly
-      groups:
-          npm-dependencies:
-              patterns:
-                  - '*'
+          interval: daily
       commit-message:
           prefix: chore
           prefix-development: chore
           include: scope
-      ignore:
-          - dependency-name: zod
-            update-types: ['version-update:semver-major']
-            versions: ['>=4.0.0']
     - package-ecosystem: github-actions
       directory: '/'
       schedule:
