@@ -36,7 +36,7 @@ npm run test
 
 ## Release & Publishing
 
-- Stable releases are published from `main` via a manual `semantic-release` workflow trigger.
+- Stable releases are published automatically from `main` by the `semantic-release` workflow. The workflow can also be triggered manually when a rerun is needed.
 - Releases publish to both GitHub Releases and npm.
 - Do not manually bump `package.json` version or publish locally for routine releases.
 - Keep `package.json`, `README.md`, and release workflow/config files in sync when changing the package name, CLI name, install instructions, or release flow.
@@ -143,7 +143,7 @@ git push origin fix/your-change
 gh pr create --base main --head fix/your-change --title "fix: your change" --body "..."
 ```
 
-After review and CI passes, merge the PR. Releases are triggered manually from `main` afterward.
+After review and CI passes, merge the PR. Release publishing runs automatically from `main` afterward.
 
 ## Commit & Pull Request Guidelines
 
@@ -154,6 +154,18 @@ Commits must follow Conventional Commits (validated by commitlint), e.g.:
 - `feat: add budget filter for imports`
 - `fix: handle missing account mapping`
 - `chore(deps): update dependencies`
+
+Release versions are determined from commit messages by `semantic-release`:
+
+- `feat:` creates a minor release.
+- `fix:`, `perf:`, and `refactor:` create patch releases.
+- `!` or a `BREAKING CHANGE:` footer creates a major release.
+- Runtime dependency updates should use `fix(deps): ...` for patch releases.
+- Runtime dependency updates that intentionally require a minor release should use `feat(deps): ...`.
+- Runtime dependency updates that intentionally require a major release should use `fix(deps)!: ...` or include a `BREAKING CHANGE:` footer.
+- Dev dependency updates should use `chore(deps-dev): ...` and do not create releases by default.
+
+Dependabot is configured to use `fix(deps): ...` for runtime dependency PRs and `chore(deps-dev): ...` for dev dependency PRs. If an Actual API/Core dependency update needs to mirror an upstream major or minor version, edit the PR title or squash commit before merging so it uses the correct Conventional Commit type.
 
 PRs should include:
 
