@@ -36,7 +36,7 @@ npm run test
 
 ## Release & Publishing
 
-- Stable releases are published from `main` via a manual `semantic-release` workflow trigger.
+- Stable releases are published automatically from `main` by the `semantic-release` workflow. The workflow can also be triggered manually when a rerun is needed.
 - Releases publish to both GitHub Releases and npm.
 - Do not manually bump `package.json` version or publish locally for routine releases.
 - Keep `package.json`, `README.md`, and release workflow/config files in sync when changing the package name, CLI name, install instructions, or release flow.
@@ -143,7 +143,7 @@ git push origin fix/your-change
 gh pr create --base main --head fix/your-change --title "fix: your change" --body "..."
 ```
 
-After review and CI passes, merge the PR. Releases are triggered manually from `main` afterward.
+After review and CI passes, merge the PR. Release publishing runs automatically from `main` afterward.
 
 ## Commit & Pull Request Guidelines
 
