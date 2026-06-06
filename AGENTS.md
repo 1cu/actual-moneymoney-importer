@@ -155,6 +155,18 @@ Commits must follow Conventional Commits (validated by commitlint), e.g.:
 - `fix: handle missing account mapping`
 - `chore(deps): update dependencies`
 
+Release versions are determined from commit messages by `semantic-release`:
+
+- `feat:` creates a minor release.
+- `fix:`, `perf:`, and `refactor:` create patch releases.
+- `!` or a `BREAKING CHANGE:` footer creates a major release.
+- Runtime dependency updates should use `fix(deps): ...` for patch releases.
+- Runtime dependency updates that intentionally require a minor release should use `feat(deps): ...`.
+- Runtime dependency updates that intentionally require a major release should use `fix(deps)!: ...` or include a `BREAKING CHANGE:` footer.
+- Dev dependency updates should use `chore(deps-dev): ...` and do not create releases by default.
+
+Dependabot is configured to use `fix(deps): ...` for runtime dependency PRs and `chore(deps-dev): ...` for dev dependency PRs. If an Actual API/Core dependency update needs to mirror an upstream major or minor version, edit the PR title or squash commit before merging so it uses the correct Conventional Commit type.
+
 PRs should include:
 
 - Clear description of intent and scope

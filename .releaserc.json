@@ -6,9 +6,7 @@
             {
                 "releaseRules": [
                     {
-                        "type": "chore",
-                        "scope": "deps",
-                        "subject": "bump @actual-app/api from *",
+                        "type": "refactor",
                         "release": "patch"
                     }
                 ]
