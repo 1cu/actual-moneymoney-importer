@@ -150,22 +150,40 @@ export class OpenAIBackend implements TransformationBackend {
 // ---------------------------------------------------------------------------
 
 export class AppleIntelligenceBackend implements TransformationBackend {
+    // Lazy-initialised: model is created once and reused across calls.
+
+    private _sdkPromise?:
+        | Promise<{
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              SystemLanguageModel: any;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              LanguageModelSession: any;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              model: any;
+          }>
+        | undefined;
+
     constructor(_config: PayeeTransformationConfig) {
         // No API key needed – on-device processing
     }
 
-    async transformPayees(
-        prompt: string,
-        payees: string[],
-        temperature: number
-    ): Promise<Record<string, string>> {
-        // Dynamic import so tsfm-sdk is only loaded when this backend is used.
+    private async _getSdk() {
+        if (!this._sdkPromise) {
+            this._sdkPromise = this._initSdk();
+        }
+        return this._sdkPromise;
+    }
+
+    private async _initSdk() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let Client: any;
+        let SystemLanguageModel: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let LanguageModelSession: any;
 
         try {
-            const mod: { default: unknown } = await import('tsfm-sdk/chat');
-            Client = mod.default;
+            const mod = await import('tsfm-sdk');
+            SystemLanguageModel = mod.SystemLanguageModel;
+            LanguageModelSession = mod.LanguageModelSession;
         } catch (importError) {
             const cause =
                 importError instanceof Error
@@ -180,10 +198,10 @@ export class AppleIntelligenceBackend implements TransformationBackend {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let client: any;
+        let model: any;
 
         try {
-            client = new Client();
+            model = new SystemLanguageModel({ guardrails: 1 });
         } catch (clientError) {
             const cause =
                 clientError instanceof Error
@@ -197,40 +215,35 @@ export class AppleIntelligenceBackend implements TransformationBackend {
             );
         }
 
-        try {
-            const completion = (await client.chat.completions.create({
-                messages: [
-                    { role: 'system', content: prompt },
-                    { role: 'user', content: payees.join('\n') },
-                ],
-                response_format: {
-                    type: 'json_schema' as const,
-                    json_schema: {
-                        name: 'payee_map',
-                        schema: PAYEE_MAP_JSON_SCHEMA,
-                    },
-                },
-                temperature,
-            })) as {
-                choices: Array<{
-                    message?: { content?: string | null };
-                }>;
-            };
+        return { SystemLanguageModel, LanguageModelSession, model };
+    }
 
-            const content = completion.choices[0]?.message?.content;
-            if (!content) {
-                throw new Error(
-                    'Apple Intelligence returned no payee transformation result'
-                );
-            }
+    async transformPayees(
+        prompt: string,
+        payees: string[],
+        temperature: number
+    ): Promise<Record<string, string>> {
+        const { LanguageModelSession, model } = await this._getSdk();
+
+        const session = new LanguageModelSession({
+            instructions: prompt,
+            model,
+        });
+
+        try {
+            const content = await session.respondWithJsonSchema(
+                payees.join('\n'),
+                PAYEE_MAP_JSON_SCHEMA,
+                { options: { temperature } }
+            );
 
             let json: unknown;
             try {
-                json = JSON.parse(content);
+                json = JSON.parse(content.toJson());
             } catch {
                 throw new Error(
                     'Apple Intelligence returned invalid JSON. Raw response: ' +
-                        content.slice(0, 200)
+                        content.toJson().slice(0, 200)
                 );
             }
 
@@ -244,12 +257,25 @@ export class AppleIntelligenceBackend implements TransformationBackend {
 
             return mappingsToRecord(validationResult.data.mappings);
         } finally {
-            client?.close();
+            session.dispose();
         }
     }
 
     getLabel(): string {
         return 'Apple Intelligence (on-device)';
+    }
+
+    /** Release the underlying on-device model. Safe to call multiple times. */
+    async dispose() {
+        if (this._sdkPromise) {
+            try {
+                const { model } = await this._sdkPromise;
+                model?.dispose?.();
+            } catch {
+                // Best effort — the model may already be gone
+            }
+            this._sdkPromise = undefined;
+        }
     }
 
     isModelUnavailableError(error: Error): boolean {
