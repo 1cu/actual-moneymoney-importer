@@ -11,6 +11,7 @@
         "test:cli": "npm run build && node --test \"test/cli/**/*.test.mjs\"",
         "test:unit": "npm run build && node --test \"test/unit/**/*.test.mjs\"",
         "test:coverage": "npm run build && node --test --experimental-test-coverage \"test/cli/**/*.test.mjs\" \"test/unit/**/*.test.mjs\"",
+        "test:apple-intelligence": "npm run build && node --test test/unit/apple-intelligence.test.mjs",
         "lint:eslint": "eslint src test eslint.config.mjs commitlint.config.js",
         "lint:prettier": "prettier --check 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js'",
         "lint:fix": "eslint src test eslint.config.mjs commitlint.config.js --fix && prettier --write 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js'",
