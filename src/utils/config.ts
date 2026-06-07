@@ -74,6 +74,10 @@ const actualServerSchema = z.object({
 
 const payeeTransformationSchema = z.object({
     enabled: z.boolean(),
+    backend: z
+        .enum(['openai', 'apple-intelligence'])
+        .optional()
+        .default('openai'),
     openAiApiKey: z.string().optional(),
     openAiModel: z.string().optional().default('gpt-5.4-nano'),
     temperature: z.number().min(0).max(2).optional().default(1),
@@ -114,18 +118,22 @@ export const configSchema = z
         actualServers: z.array(actualServerSchema).min(1),
     })
     .check((payload) => {
-        // Check openAI key if payeeTransformation is enabled
+        // Check OpenAI key if payeeTransformation is enabled and using OpenAI backend
         if (
             payload.value.payeeTransformation.enabled &&
-            !payload.value.payeeTransformation.openAiApiKey
+            payload.value.payeeTransformation.backend === 'openai'
         ) {
-            payload.issues.push({
-                code: 'custom',
-                message:
-                    'OpenAI key must not be empty if payeeTransformation is enabled',
-                input: payload.value,
-                continue: true,
-            });
+            const apiKey = payload.value.payeeTransformation.openAiApiKey;
+            if (!apiKey || apiKey.trim().length === 0) {
+                payload.issues.push({
+                    code: 'custom',
+                    path: ['payeeTransformation', 'openAiApiKey'],
+                    message:
+                        'OpenAI key must not be empty if payeeTransformation is enabled with the openai backend',
+                    input: payload.value,
+                    continue: true,
+                });
+            }
         }
 
         if (

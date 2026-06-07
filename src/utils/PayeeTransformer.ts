@@ -1,17 +1,9 @@
-import OpenAI from 'openai';
-import { zodResponseFormat } from 'openai/helpers/zod';
-import { z } from 'zod';
 import Logger from './Logger.js';
 import { PayeeTransformationConfig } from './config.js';
-
-const PayeeMapSchema = z.object({
-    mappings: z.array(
-        z.object({
-            rawPayee: z.string(),
-            cleanedPayee: z.string(),
-        })
-    ),
-});
+import {
+    TransformationBackend,
+    createTransformationBackend,
+} from './TransformationBackend.js';
 
 const MAX_EXISTING_PAYEES_IN_PROMPT = 100;
 const EXISTING_PAYEE_MATCH_THRESHOLD = 0.75;
@@ -124,20 +116,18 @@ const selectRelevantExistingPayees = (
 };
 
 class PayeeTransformer {
-    private openai: OpenAI;
+    private backend: TransformationBackend;
 
     constructor(
         private config: PayeeTransformationConfig,
         private logger: Logger,
-        openai?: OpenAI
+        backend?: TransformationBackend
     ) {
-        if (!config.openAiApiKey) {
-            throw new Error(
-                'An OpenAI API key is required for payee transformation. Please set the key in the configuration file.'
-            );
-        }
-
-        this.openai = openai ?? new OpenAI({ apiKey: config.openAiApiKey });
+        this.backend = backend ?? createTransformationBackend(config);
+        this.logger.debug(`Payee transformation enabled`, [
+            `Backend: ${this.backend.getLabel()}`,
+            `Temperature: ${this.config.temperature}`,
+        ]);
     }
 
     public async transformPayees(
@@ -197,34 +187,18 @@ class PayeeTransformer {
                 `Payees: ${unresolvedPayees.length}`,
                 `Locally matched payees: ${resolvedPayees.size}`,
                 `Existing payees used in prompt: ${relevantExistingPayees.length}${existingPayeeNames.length > relevantExistingPayees.length ? ` of ${existingPayeeNames.length}` : ''}`,
-                `Model: ${this.config.openAiModel}`,
+                `Backend: ${this.backend.getLabel()}`,
             ]);
 
-            const completion = await this.openai.chat.completions.parse({
-                model: this.config.openAiModel,
-                messages: [
-                    { role: 'system', content: prompt },
-                    { role: 'user', content: unresolvedPayees.join('\n') },
-                ],
-                response_format: zodResponseFormat(PayeeMapSchema, 'payee_map'),
-                temperature: this.config.temperature,
-            });
-
-            const parsed = completion.choices[0]?.message?.parsed;
-            if (!parsed) {
-                throw new Error(
-                    'OpenAI returned no payee transformation result'
-                );
-            }
-
-            const transformedPayees = Object.fromEntries(
-                parsed.mappings.map(
-                    (entry: { rawPayee: string; cleanedPayee: string }) => [
-                        entry.rawPayee,
-                        entry.cleanedPayee,
-                    ]
-                )
+            const transformedPayees = await this.backend.transformPayees(
+                prompt,
+                unresolvedPayees,
+                this.config.temperature
             );
+
+            let snappedToExisting = 0;
+            let aiKeptAsNew = 0;
+            let keptRaw = 0;
 
             for (const rawPayee of unresolvedPayees) {
                 const transformedPayee = transformedPayees[rawPayee]?.trim();
@@ -234,15 +208,33 @@ class PayeeTransformer {
                     existingPayeeNames
                 );
 
-                resolvedPayees.set(
-                    rawPayee,
+                if (
                     bestExistingPayee &&
-                        bestExistingPayee.score >=
-                            EXISTING_PAYEE_MATCH_THRESHOLD
-                        ? bestExistingPayee.payeeName
-                        : normalizedPayee
-                );
+                    bestExistingPayee.score >= EXISTING_PAYEE_MATCH_THRESHOLD
+                ) {
+                    resolvedPayees.set(rawPayee, bestExistingPayee.payeeName);
+                    if (transformedPayee) {
+                        snappedToExisting++;
+                    } else {
+                        keptRaw++;
+                    }
+                } else {
+                    resolvedPayees.set(rawPayee, normalizedPayee);
+                    if (transformedPayee) {
+                        aiKeptAsNew++;
+                    } else {
+                        keptRaw++;
+                    }
+                }
             }
+
+            this.logger.debug(`Payee transformation results`, [
+                `Local Dice matches (no AI): ${resolvedPayees.size - unresolvedPayees.length}`,
+                `Sent to backend: ${unresolvedPayees.length}`,
+                `Snapped to existing: ${snappedToExisting}`,
+                `AI new names: ${aiKeptAsNew}`,
+                `Kept raw: ${keptRaw}`,
+            ]);
 
             return Object.fromEntries(resolvedPayees);
         } catch (error) {
@@ -303,29 +295,15 @@ Output:
             return `Error in payee transformation: ${String(error)}`;
         }
 
-        if (this.isModelUnavailableError(error)) {
-            return `OpenAI model '${this.config.openAiModel}' is unavailable. Set 'payeeTransformation.openAiModel' in your config to an available model and try again. Original error: ${error.message}`;
+        if (this.backend.isModelUnavailableError(error)) {
+            return `Model '${this.backend.getLabel()}' is unavailable. Ensure the model is accessible and try again. Original error: ${error.message}`;
         }
 
-        if (
-            error.message.includes('temperature') &&
-            error.message.includes('does not support')
-        ) {
-            return `Incompatible configuration: Model '${this.config.openAiModel}' does not support temperature=${this.config.temperature}. Please update the 'temperature' setting in your configuration file. Error: ${error.message}`;
+        if (this.backend.isTemperatureError(error)) {
+            return `Incompatible configuration: Model '${this.backend.getLabel()}' does not support temperature=${this.config.temperature}. Please update the 'temperature' setting in your configuration file. Error: ${error.message}`;
         }
 
         return `Error in payee transformation: ${error.message}`;
-    }
-
-    private isModelUnavailableError(error: Error) {
-        const message = error.message.toLowerCase();
-        return (
-            message.includes('model') &&
-            (message.includes('does not exist') ||
-                message.includes('not found') ||
-                message.includes('invalid model') ||
-                message.includes('unknown model'))
-        );
     }
 }
 
