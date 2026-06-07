@@ -120,8 +120,6 @@ export class AccountMap {
             `Found ${this.actualAccounts.length} accounts in Actual.`
         );
 
-        const debugPairs: string[] = [];
-
         for (const [moneyMoneyRef, actualRef] of Object.entries(
             accountMapping
         ) as [string, string][]) {
@@ -142,20 +140,7 @@ export class AccountMap {
                 continue;
             }
 
-            debugPairs.push(
-                `${moneyMoneyAccount.name} → ${actualAccount.name}`
-            );
-
             parsedAccountMapping.set(moneyMoneyAccount, actualAccount);
-        }
-
-        if (debugPairs.length > 0) {
-            this.logger.debug(
-                `Account mapping (${debugPairs.length} entries):`,
-                debugPairs
-            );
-        } else {
-            this.logger.debug(`Account mapping contains 0 entries.`);
         }
 
         this.logger.info('Parsed account mapping', [
