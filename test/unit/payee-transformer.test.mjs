@@ -228,7 +228,7 @@ test('OpenAIBackend constructs API call correctly', async () => {
                 parse: async (options) => {
                     capturedOptions.push(options);
                     return {
-                        choices: [{ message: { parsed: {} } }],
+                        choices: [{ message: { parsed: { mappings: [] } } }],
                     };
                 },
             },
@@ -267,8 +267,16 @@ test('OpenAIBackend returns mapped record from parsed response', async () => {
                         {
                             message: {
                                 parsed: {
-                                    'Netflix.com': 'Netflix',
-                                    'AMZN Mktp': 'Amazon',
+                                    mappings: [
+                                        {
+                                            rawPayee: 'Netflix.com',
+                                            cleanedPayee: 'Netflix',
+                                        },
+                                        {
+                                            rawPayee: 'AMZN Mktp',
+                                            cleanedPayee: 'Amazon',
+                                        },
+                                    ],
                                 },
                             },
                         },

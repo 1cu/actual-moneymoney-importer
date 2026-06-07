@@ -20,8 +20,29 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { PayeeTransformationConfig } from './config.js';
 
-export const PayeeMapSchema = z.record(z.string(), z.string());
+export const PayeeMapSchema = z.object({
+    mappings: z.array(
+        z.object({
+            rawPayee: z.string(),
+            cleanedPayee: z.string(),
+        })
+    ),
+});
 
+/**
+ * Flat payee map schema used by the Apple Intelligence backend.
+ *
+ * The on-device model's `respondWithJsonSchema` hangs with nested schemas
+ * (e.g., `{ mappings: [{ rawPayee, cleanedPayee }] }`). A flat record
+ * schema avoids this. OpenAI's strict structured output requires the
+ * nested version above.
+ */
+const FlatPayeeMapSchema = z.record(z.string(), z.string());
+
+/**
+ * Flat JSON schema matching FlatPayeeMapSchema. Used as the
+ * `jsonSchema` argument for Apple's `respondWithJsonSchema`.
+ */
 const PAYEE_MAP_JSON_SCHEMA = {
     type: 'object' as const,
     additionalProperties: { type: 'string' as const },
@@ -29,6 +50,13 @@ const PAYEE_MAP_JSON_SCHEMA = {
 
 // ---------------------------------------------------------------------------
 // Shared helpers
+// ---------------------------------------------------------------------------
+
+const mappingsToRecord = (
+    mappings: Array<{ rawPayee: string; cleanedPayee: string }>
+): Record<string, string> =>
+    Object.fromEntries(mappings.map((m) => [m.rawPayee, m.cleanedPayee]));
+
 // ---------------------------------------------------------------------------
 // Backend interface
 // ---------------------------------------------------------------------------
@@ -92,7 +120,7 @@ export class OpenAIBackend implements TransformationBackend {
             throw new Error('OpenAI returned no payee transformation result');
         }
 
-        return parsed;
+        return mappingsToRecord(parsed.mappings);
     }
 
     getLabel(): string {
@@ -220,7 +248,7 @@ export class AppleIntelligenceBackend implements TransformationBackend {
                 );
             }
 
-            const validationResult = PayeeMapSchema.safeParse(json);
+            const validationResult = FlatPayeeMapSchema.safeParse(json);
             if (!validationResult.success) {
                 throw new Error(
                     'Apple Intelligence returned unexpected response format: ' +

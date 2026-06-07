@@ -276,18 +276,18 @@ Examples (input separated by newline, output shown as JSON):
 Input:
 -
 Output:
-{}
+{"mappings": []}
 
 Input:
 AMZN Mktp US*1234567890
 Output:
-{"AMZN Mktp US*1234567890": "Amazon"}
+{"mappings": [{"rawPayee": "AMZN Mktp US*1234567890", "cleanedPayee": "Amazon"}]}
 
 Input:
 AMAZON.COM/BILLWA
 AMAZON.COM
 Output:
-{"AMAZON.COM/BILLWA": "Amazon", "AMAZON.COM": "Amazon"}`;
+{"mappings": [{"rawPayee": "AMAZON.COM/BILLWA", "cleanedPayee": "Amazon"}, {"rawPayee": "AMAZON.COM", "cleanedPayee": "Amazon"}]}`;
     }
 
     private describeTransformationError(error: unknown) {
