@@ -1047,7 +1047,9 @@ class Importer {
             return;
         }
 
-        categorySyncDebug.push(`'${actualAccountName}': no-op`);
+        categorySyncDebug.push(
+            `'${actualAccountName}': no-op (existing=${existingPairsCount})`
+        );
     }
 
     async detectAndWarnAutoRuleOverrides({

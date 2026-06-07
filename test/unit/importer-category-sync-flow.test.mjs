@@ -341,7 +341,7 @@ test('logCategorySyncSummary pushes no-op to debug array instead of logging', ()
     });
 
     assert.equal(debugArray.length, 1);
-    assert.match(debugArray[0], /'Noop Account': no-op/);
+    assert.match(debugArray[0], /'Noop Account': no-op \(existing=4\)/);
 });
 
 test('logCategorySyncSummary emits info for category activity', () => {
