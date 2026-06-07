@@ -686,6 +686,9 @@ class Importer {
         };
 
         const promptState: PromptState = { mode: 'prompt' };
+        const categorySyncDebug: string[] = [];
+
+        this.logger.phase('Prepare');
 
         try {
             for (const {
@@ -697,6 +700,7 @@ class Importer {
                 existingPairs,
             } of accountStates) {
                 runMetrics.accountsScanned++;
+                this.logger.phase(actualAccount.name);
 
                 const createTransactions: ImportTransactionEntity[] = [];
                 // Maps imported_id → intended category ID (for auto-rule override detection).
@@ -931,8 +935,8 @@ class Importer {
                 });
 
                 if (transferLockedCount > 0) {
-                    this.logger.debug(
-                        `Category sync excluded ${transferLockedCount} transfer-linked existing transaction(s) in '${actualAccount.name}' (Actual manages transfer categories).`
+                    categorySyncDebug.push(
+                        `'${actualAccount.name}': excluded ${transferLockedCount} transfer-linked`
                     );
                 }
 
@@ -954,6 +958,7 @@ class Importer {
                     conflictCount,
                     pendingUpdatesCount: pendingUpdates.length,
                     skippedConflictCount,
+                    categorySyncDebug,
                 });
 
                 if (pendingUpdates.length === 0) {
@@ -972,6 +977,13 @@ class Importer {
                     runMetrics.totalCategoryUpdatesApplied +=
                         pendingUpdates.length;
                 }
+            }
+
+            if (categorySyncDebug.length > 0) {
+                this.logger.debug(
+                    'Category sync (per-account):',
+                    categorySyncDebug
+                );
             }
 
             if (shouldEmitMappingConflictGuidance(runMetrics)) {
@@ -996,6 +1008,7 @@ class Importer {
         conflictCount,
         pendingUpdatesCount,
         skippedConflictCount,
+        categorySyncDebug,
     }: {
         actualAccountName: string;
         existingPairsCount: number;
@@ -1003,6 +1016,7 @@ class Importer {
         conflictCount: number;
         pendingUpdatesCount: number;
         skippedConflictCount: number;
+        categorySyncDebug: string[];
     }) {
         const hasCategoryActivity = backfillCount > 0 || conflictCount > 0;
         if (hasCategoryActivity) {
@@ -1033,8 +1047,8 @@ class Importer {
             return;
         }
 
-        this.logger.debug(
-            `Category sync no-op for account '${actualAccountName}': existing=${existingPairsCount}, backfills=${backfillCount}, conflicts=${conflictCount}, planned=${pendingUpdatesCount}, skipped=${skippedConflictCount}`
+        categorySyncDebug.push(
+            `'${actualAccountName}': no-op (existing=${existingPairsCount})`
         );
     }
 
@@ -1082,6 +1096,8 @@ class Importer {
     }
 
     private emitImportRunSummary(metrics: ImportRunMetrics, isDryRun: boolean) {
+        this.logger.phase('Summary');
+
         const hasImportActivity =
             metrics.totalTransactionsAdded > 0 ||
             metrics.totalTransactionsUpdated > 0;

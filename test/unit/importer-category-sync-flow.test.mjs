@@ -23,6 +23,7 @@ const makeLogger = () => {
         warn: (message, hint) =>
             warnings.push({ message, hints: toHintArray(hint) }),
         error: () => {},
+        phase: () => {},
     };
 };
 
@@ -325,8 +326,9 @@ test('buildAccountTransactionBuckets warns for suspicious duplicate groups', () 
     );
 });
 
-test('logCategorySyncSummary suppresses no-op info and emits debug marker', () => {
-    const { importer, logger } = makeImporter();
+test('logCategorySyncSummary pushes no-op to debug array instead of logging', () => {
+    const { importer } = makeImporter();
+    const debugArray = [];
 
     importer.logCategorySyncSummary({
         actualAccountName: 'Noop Account',
@@ -335,10 +337,11 @@ test('logCategorySyncSummary suppresses no-op info and emits debug marker', () =
         conflictCount: 0,
         pendingUpdatesCount: 0,
         skippedConflictCount: 0,
+        categorySyncDebug: debugArray,
     });
 
-    assert.equal(logger.infos.length, 0);
-    assert.equal(logger.debugs.length, 1);
+    assert.equal(debugArray.length, 1);
+    assert.match(debugArray[0], /'Noop Account': no-op \(existing=4\)/);
 });
 
 test('logCategorySyncSummary emits info for category activity', () => {
@@ -351,6 +354,7 @@ test('logCategorySyncSummary emits info for category activity', () => {
         conflictCount: 2,
         pendingUpdatesCount: 2,
         skippedConflictCount: 1,
+        categorySyncDebug: [],
     });
 
     assert.equal(logger.infos.length, 1);
@@ -371,6 +375,7 @@ test('logCategorySyncSummary omits zero-value fields in info hints', () => {
         conflictCount: 0,
         pendingUpdatesCount: 1,
         skippedConflictCount: 0,
+        categorySyncDebug: [],
     });
 
     assert.equal(logger.infos.length, 1);

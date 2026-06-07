@@ -120,10 +120,6 @@ export class AccountMap {
             `Found ${this.actualAccounts.length} accounts in Actual.`
         );
 
-        this.logger.debug(
-            `Account mapping contains ${Object.entries(accountMapping).length} entries.`
-        );
-
         for (const [moneyMoneyRef, actualRef] of Object.entries(
             accountMapping
         ) as [string, string][]) {
@@ -143,10 +139,6 @@ export class AccountMap {
                 );
                 continue;
             }
-
-            this.logger.debug(
-                `MoneyMoney account '${moneyMoneyAccount.name}' will import to Actual account '${actualAccount.name}'.`
-            );
 
             parsedAccountMapping.set(moneyMoneyAccount, actualAccount);
         }

@@ -49,6 +49,8 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
     const logLevel = argv.logLevel ?? argv.loglevel ?? LogLevel.INFO;
     const logger = new Logger(logLevel);
 
+    logger.phase('Initialize', { unconditional: true });
+
     const payeeTransformer = config.payeeTransformation.enabled
         ? new PayeeTransformer(config.payeeTransformation, logger)
         : undefined;
@@ -125,6 +127,7 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
 
     const mainImport = async () => {
         let encounteredImportErrors = false;
+        logger.phase('Setup');
 
         for (const serverConfig of selectedServerConfigs) {
             const selectedBudgetConfigs = serverConfig.budgets.filter(

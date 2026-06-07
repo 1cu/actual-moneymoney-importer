@@ -25,6 +25,7 @@ const makeLogger = () => ({
     error(message) {
         this.errorMessages.push(message);
     },
+    phase() {},
 });
 
 const makeMonMonAccount = ({ uuid, name, accountNumber }) => ({
