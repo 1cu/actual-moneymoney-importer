@@ -686,6 +686,7 @@ class Importer {
         };
 
         const promptState: PromptState = { mode: 'prompt' };
+        const categorySyncDebug: string[] = [];
 
         this.logger.phase('Prepare');
 
@@ -934,8 +935,8 @@ class Importer {
                 });
 
                 if (transferLockedCount > 0) {
-                    this.logger.debug(
-                        `Category sync excluded ${transferLockedCount} transfer-linked existing transaction(s) in '${actualAccount.name}' (Actual manages transfer categories).`
+                    categorySyncDebug.push(
+                        `'${actualAccount.name}': excluded ${transferLockedCount} transfer-linked`
                     );
                 }
 
@@ -957,6 +958,7 @@ class Importer {
                     conflictCount,
                     pendingUpdatesCount: pendingUpdates.length,
                     skippedConflictCount,
+                    categorySyncDebug,
                 });
 
                 if (pendingUpdates.length === 0) {
@@ -975,6 +977,13 @@ class Importer {
                     runMetrics.totalCategoryUpdatesApplied +=
                         pendingUpdates.length;
                 }
+            }
+
+            if (categorySyncDebug.length > 0) {
+                this.logger.debug(
+                    'Category sync (per-account):',
+                    categorySyncDebug
+                );
             }
 
             if (shouldEmitMappingConflictGuidance(runMetrics)) {
@@ -999,6 +1008,7 @@ class Importer {
         conflictCount,
         pendingUpdatesCount,
         skippedConflictCount,
+        categorySyncDebug,
     }: {
         actualAccountName: string;
         existingPairsCount: number;
@@ -1006,6 +1016,7 @@ class Importer {
         conflictCount: number;
         pendingUpdatesCount: number;
         skippedConflictCount: number;
+        categorySyncDebug: string[];
     }) {
         const hasCategoryActivity = backfillCount > 0 || conflictCount > 0;
         if (hasCategoryActivity) {
@@ -1036,9 +1047,7 @@ class Importer {
             return;
         }
 
-        this.logger.debug(
-            `Category sync no-op for account '${actualAccountName}': existing=${existingPairsCount}, backfills=${backfillCount}, conflicts=${conflictCount}, planned=${pendingUpdatesCount}, skipped=${skippedConflictCount}`
-        );
+        categorySyncDebug.push(`'${actualAccountName}': no-op`);
     }
 
     async detectAndWarnAutoRuleOverrides({
