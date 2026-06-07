@@ -687,6 +687,8 @@ class Importer {
 
         const promptState: PromptState = { mode: 'prompt' };
 
+        this.logger.phase('Prepare');
+
         try {
             for (const {
                 monMonAccount,
@@ -697,6 +699,7 @@ class Importer {
                 existingPairs,
             } of accountStates) {
                 runMetrics.accountsScanned++;
+                this.logger.phase(actualAccount.name);
 
                 const createTransactions: ImportTransactionEntity[] = [];
                 // Maps imported_id → intended category ID (for auto-rule override detection).
@@ -1082,6 +1085,8 @@ class Importer {
     }
 
     private emitImportRunSummary(metrics: ImportRunMetrics, isDryRun: boolean) {
+        this.logger.phase('Summary');
+
         const hasImportActivity =
             metrics.totalTransactionsAdded > 0 ||
             metrics.totalTransactionsUpdated > 0;

@@ -23,6 +23,7 @@ const makeLogger = () => {
         warn: (message, hint) =>
             warnings.push({ message, hints: toHintArray(hint) }),
         error: () => {},
+        phase: () => {},
     };
 };
 
