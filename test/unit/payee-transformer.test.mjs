@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import PayeeTransformer from '../../dist/utils/PayeeTransformer.js';
+import {
+    OpenAIBackend,
+    PayeeMapSchema,
+} from '../../dist/utils/TransformationBackend.js';
+import { zodResponseFormat } from 'openai/helpers/zod';
 
 const makeLogger = () => ({
     debugMessages: [],
@@ -13,35 +18,35 @@ const makeLogger = () => ({
     },
 });
 
-const makeOpenAIStub = ({ parsed, error, onCreate } = {}) => ({
-    chat: {
-        completions: {
-            parse: async (options) => {
-                onCreate?.(options);
+const makeBackendStub = ({ mappings, error, onCreate } = {}) => ({
+    transformPayees: async (_prompt, _payees, _temperature) => {
+        onCreate?.(_prompt, _payees, _temperature);
 
-                if (error) {
-                    throw error;
-                }
+        if (error) {
+            throw error;
+        }
 
-                return {
-                    choices: [
-                        {
-                            message: {
-                                parsed:
-                                    parsed !== undefined
-                                        ? parsed
-                                        : { mappings: [] },
-                            },
-                        },
-                    ],
-                };
-            },
-        },
+        const resolved =
+            mappings !== undefined
+                ? Object.fromEntries(
+                      mappings.map((m) => [m.rawPayee, m.cleanedPayee])
+                  )
+                : {};
+        return resolved;
     },
+    getLabel: () => 'test-model',
+    isModelUnavailableError: (error) =>
+        error.message.toLowerCase().includes('model') &&
+        (error.message.toLowerCase().includes('does not exist') ||
+            error.message.toLowerCase().includes('not found')),
+    isTemperatureError: (error) =>
+        error.message.includes('temperature') &&
+        error.message.includes('does not support'),
 });
 
 const makeConfig = () => ({
     enabled: true,
+    backend: 'openai',
     openAiApiKey: 'test-key',
     openAiModel: 'gpt-5-nano',
     temperature: 1,
@@ -54,7 +59,7 @@ test('transformPayees returns an empty object for no payees', async () => {
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
-        makeOpenAIStub({
+        makeBackendStub({
             onCreate: () => {
                 createCalls++;
             },
@@ -67,13 +72,13 @@ test('transformPayees returns an empty object for no payees', async () => {
     assert.equal(createCalls, 0);
 });
 
-test('transformPayees skips OpenAI for local existing-payee matches', async () => {
+test('transformPayees skips AI for local existing-payee matches', async () => {
     const logger = makeLogger();
     let createCalls = 0;
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
-        makeOpenAIStub({
+        makeBackendStub({
             onCreate: () => {
                 createCalls++;
             },
@@ -93,24 +98,26 @@ test('transformPayees skips OpenAI for local existing-payee matches', async () =
 
 test('transformPayees bounds the relevant existing-payee shortlist', async () => {
     const logger = makeLogger();
-    let capturedOptions;
+    let capturedPrompt;
+    let capturedPayees;
+    let capturedTemperature;
     const existingPayees = Array.from({ length: 150 }, (_, index) => {
         return `Alpha Market ${String(index + 1).padStart(3, '0')}`;
     });
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
-        makeOpenAIStub({
-            parsed: {
-                mappings: [
-                    {
-                        rawPayee: 'Alpha Hyperstore',
-                        cleanedPayee: 'Alpha Market 001',
-                    },
-                ],
-            },
-            onCreate: (options) => {
-                capturedOptions = options;
+        makeBackendStub({
+            mappings: [
+                {
+                    rawPayee: 'Alpha Hyperstore',
+                    cleanedPayee: 'Alpha Market 001',
+                },
+            ],
+            onCreate: (prompt, payees, temperature) => {
+                capturedPrompt = prompt;
+                capturedPayees = payees;
+                capturedTemperature = temperature;
             },
         })
     );
@@ -120,15 +127,14 @@ test('transformPayees bounds the relevant existing-payee shortlist', async () =>
         existingPayees
     );
 
-    assert.equal(capturedOptions.model, 'gpt-5-nano');
-    assert.equal(capturedOptions.temperature, 1);
-    assert.equal(capturedOptions.messages[1].content, 'Alpha Hyperstore');
+    assert.equal(capturedTemperature, 1);
+    assert.deepEqual(capturedPayees, ['Alpha Hyperstore']);
     assert.match(
-        capturedOptions.messages[0].content,
+        capturedPrompt,
         /Showing 100 relevant existing payees out of 150\./
     );
     assert.equal(
-        capturedOptions.messages[0].content
+        capturedPrompt
             .split('\n')
             .filter((line) => line.trim().startsWith('Alpha Market ')).length,
         100
@@ -140,21 +146,19 @@ test('transformPayees bounds the relevant existing-payee shortlist', async () =>
 
 test('transformPayees snaps transformed payees back to existing names', async () => {
     const logger = makeLogger();
-    let capturedOptions;
+    let capturedPayees;
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
-        makeOpenAIStub({
-            parsed: {
-                mappings: [
-                    {
-                        rawPayee: 'AMZN Mktp US*1234567890',
-                        cleanedPayee: 'Amazon.com',
-                    },
-                ],
-            },
-            onCreate: (options) => {
-                capturedOptions = options;
+        makeBackendStub({
+            mappings: [
+                {
+                    rawPayee: 'AMZN Mktp US*1234567890',
+                    cleanedPayee: 'Amazon.com',
+                },
+            ],
+            onCreate: (_prompt, payees) => {
+                capturedPayees = payees;
             },
         })
     );
@@ -164,10 +168,7 @@ test('transformPayees snaps transformed payees back to existing names', async ()
         ['Amazon']
     );
 
-    assert.equal(
-        capturedOptions.messages[1].content,
-        'AMZN Mktp US*1234567890'
-    );
+    assert.deepEqual(capturedPayees, ['AMZN Mktp US*1234567890']);
     assert.deepEqual(result, {
         'AMZN Mktp US*1234567890': 'Amazon',
     });
@@ -178,7 +179,7 @@ test('transformPayees returns null on API errors', async () => {
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
-        makeOpenAIStub({
+        makeBackendStub({
             error: new Error('Connection refused'),
         })
     );
@@ -193,12 +194,12 @@ test('transformPayees returns null on API errors', async () => {
     );
 });
 
-test('transformPayees returns null when OpenAI fails', async () => {
+test('transformPayees returns null when model is unavailable', async () => {
     const logger = makeLogger();
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
-        makeOpenAIStub({
+        makeBackendStub({
             error: new Error('The model does not exist'),
         })
     );
@@ -207,28 +208,125 @@ test('transformPayees returns null when OpenAI fails', async () => {
 
     assert.equal(result, null);
     assert.equal(logger.errorMessages.length, 1);
-    assert.match(
-        logger.errorMessages[0],
-        /OpenAI model 'gpt-5-nano' is unavailable/
-    );
+    assert.match(logger.errorMessages[0], /Model 'test-model' is unavailable/);
 });
 
-test('transformPayees returns null when OpenAI returns null parsed content', async () => {
+test('transformPayees returns raw payee names when backend returns no mappings', async () => {
     const logger = makeLogger();
     const transformer = new PayeeTransformer(
         makeConfig(),
         logger,
-        makeOpenAIStub({
-            parsed: null,
+        makeBackendStub({
+            mappings: undefined,
         })
     );
 
     const result = await transformer.transformPayees(['Coffee Shop'], []);
 
-    assert.equal(result, null);
-    assert.equal(logger.errorMessages.length, 1);
-    assert.match(
-        logger.errorMessages[0],
-        /OpenAI returned no payee transformation result/
+    assert.deepEqual(result, { 'Coffee Shop': 'Coffee Shop' });
+    assert.equal(logger.errorMessages.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// OpenAIBackend unit tests
+// ---------------------------------------------------------------------------
+
+test('OpenAIBackend constructs API call correctly', async () => {
+    const capturedOptions = [];
+    const stubClient = {
+        chat: {
+            completions: {
+                parse: async (options) => {
+                    capturedOptions.push(options);
+                    return {
+                        choices: [{ message: { parsed: { mappings: [] } } }],
+                    };
+                },
+            },
+        },
+    };
+
+    const config = makeConfig();
+    const backend = new OpenAIBackend(config, stubClient);
+
+    const prompt = 'Clean up these payee names';
+    const payees = ['Netflix.com', 'AMZN Mktp'];
+    const temperature = 0.7;
+
+    await backend.transformPayees(prompt, payees, temperature);
+
+    assert.equal(capturedOptions.length, 1);
+    const opts = capturedOptions[0];
+    assert.equal(opts.model, 'gpt-5-nano');
+    assert.deepEqual(opts.messages, [
+        { role: 'system', content: prompt },
+        { role: 'user', content: 'Netflix.com\nAMZN Mktp' },
+    ]);
+    assert.deepEqual(
+        opts.response_format,
+        zodResponseFormat(PayeeMapSchema, 'payee_map')
+    );
+    assert.equal(opts.temperature, 0.7);
+});
+
+test('OpenAIBackend returns mapped record from parsed response', async () => {
+    const stubClient = {
+        chat: {
+            completions: {
+                parse: async () => ({
+                    choices: [
+                        {
+                            message: {
+                                parsed: {
+                                    mappings: [
+                                        {
+                                            rawPayee: 'Netflix.com',
+                                            cleanedPayee: 'Netflix',
+                                        },
+                                        {
+                                            rawPayee: 'AMZN Mktp',
+                                            cleanedPayee: 'Amazon',
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                }),
+            },
+        },
+    };
+
+    const config = makeConfig();
+    const backend = new OpenAIBackend(config, stubClient);
+    const result = await backend.transformPayees(
+        'prompt',
+        ['Netflix.com', 'AMZN Mktp'],
+        0.5
+    );
+
+    assert.deepEqual(result, {
+        'Netflix.com': 'Netflix',
+        'AMZN Mktp': 'Amazon',
+    });
+});
+
+test('OpenAIBackend throws when parsed content is null', async () => {
+    const stubClient = {
+        chat: {
+            completions: {
+                parse: async () => ({
+                    choices: [{ message: { parsed: null } }],
+                }),
+            },
+        },
+    };
+
+    const config = makeConfig();
+    const backend = new OpenAIBackend(config, stubClient);
+
+    await assert.rejects(
+        () => backend.transformPayees('prompt', ['Netflix.com'], 0.5),
+        { message: 'OpenAI returned no payee transformation result' }
     );
 });

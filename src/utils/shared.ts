@@ -39,9 +39,14 @@ export const EXAMPLE_CONFIG = `
 # Payee transformation
 [payeeTransformation]
 enabled = false
-openAiApiKey = "<openAiKey>"
+# backend = "openai"  # Optional: "openai" (default) or "apple-intelligence"
+#                     # "apple-intelligence" provides on-device processing
+#                     # via Apple's Foundation Models. Requires macOS 26+ (Tahoe),
+#                     # Apple Silicon, and Apple Intelligence enabled in System Settings.
+#                     # No API key needed; all data stays local.
+openAiApiKey = "<openAiKey>"  # Required only with backend = "openai"
 # openAiModel = "gpt-4o-mini"  # Optional: OpenAI model (default: gpt-5.4-nano)
-# temperature = 1  # Optional: Temperature for OpenAI API (0–2 inclusive, default: 1)
+# temperature = 1  # Optional: Temperature (0–2 inclusive, default: 1)
 # onTransformError = "warn"  # Optional: "warn" (default) or "fail"
 # prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
 

@@ -25,7 +25,7 @@ Run `actual-mmi --help` at any time for a full list of commands and options. For
 - 🗺️ **`categories map` CLI** – audit, plan, and write your category mapping from the terminal
 - ⚠️ **Auto-rule override detection** – get warned when Actual's rules silently change a synced category
 - 🔬 **Scoped imports** – filter by server, budget, or account with repeatable `-s`/`-b`/`-a` flags
-- 🤖 **AI payee transformation** – configurable prompt, OpenAI models, temperature, and error-handling policy
+- 🤖 **AI payee transformation** – configurable prompt, OpenAI or on-device Apple Intelligence, temperature, and error-handling policy
 - 💬 **Comment import** – carry MoneyMoney transaction comments into Actual notes (with configurable prefix)
 
 ## Installation
@@ -121,12 +121,22 @@ password = ""
 
 ### Payee transformation
 
-Converts cryptic payee names to human-readable formats using OpenAI (e.g. "AMAZN S.A.R.L" to "Amazon"). The importer also reuses existing budget payees with a bounded shortlist and snaps close matches back to canonical names. Requires an API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+**This feature is macOS-only** and converts cryptic payee names to human-readable formats (e.g. "AMAZN S.A.R.L" to "Amazon"). The importer also reuses existing budget payees with a bounded shortlist and snaps close matches back to canonical names.
+
+Two backends are available:
+
+| Backend              | Processing | API Key Required | Requirements                                                      |
+| -------------------- | ---------- | ---------------- | ----------------------------------------------------------------- |
+| `openai` (default)   | Cloud      | Yes              | OpenAI account ([api keys](https://platform.openai.com/api-keys)) |
+| `apple-intelligence` | On-device  | No               | macOS 26+ (Tahoe), Apple Silicon, Apple Intelligence enabled      |
+
+With `apple-intelligence`, all payee data is processed locally on your Mac. Nothing is sent to any cloud service. You need the `tsfm-sdk` npm package installed (`npm install tsfm-sdk`). No API key or network access is required beyond the initial package install.
 
 | Option             | Default        | Description                                                                                                 |
 | ------------------ | -------------- | ----------------------------------------------------------------------------------------------------------- |
 | `enabled`          | `false`        | Enable/disable AI payee transformation                                                                      |
-| `openAiApiKey`     | —              | Your OpenAI API key (required if enabled)                                                                   |
+| `backend`          | `openai`       | Backend to use: `openai` or `apple-intelligence`                                                            |
+| `openAiApiKey`     | —              | Your OpenAI API key (required only with `backend = "openai"`)                                               |
 | `openAiModel`      | `gpt-5.4-nano` | OpenAI model to use. You may need to change this to a model available on your account (e.g. `gpt-4o-mini`). |
 | `temperature`      | `1`            | Temperature for API calls (0–2 inclusive)                                                                   |
 | `onTransformError` | `warn`         | Error handling: `warn` (use raw names) or `fail` (abort import)                                             |
@@ -286,7 +296,7 @@ With `--write-config`, the tool rewrites your `[actualServers.budgets.categoryMa
 
 ### Validate command
 
-`actual-mmi validate` checks your config file's TOML syntax and schema (required fields, types, value ranges). It does **not** verify that your Actual server is reachable, sync IDs exist, accounts map correctly, or your OpenAI key is valid. To test the full import flow without making changes, use `actual-mmi import --dry-run`.
+`actual-mmi validate` checks your config file's TOML syntax and schema (required fields, types, value ranges). It does **not** verify that your Actual server is reachable, sync IDs exist, accounts map correctly, or your OpenAI key / Apple Intelligence is available. To test the full import flow without making changes, use `actual-mmi import --dry-run`.
 
 ## Advanced Configuration
 
@@ -318,7 +328,7 @@ Note that the date is a string, not a TOML date.
 
 ## Security
 
-The configuration file (default: `~/.actually/config.toml`) stores your Actual server password(s) and OpenAI API key in plaintext. To protect these secrets:
+The configuration file (default: `~/.actually/config.toml`) stores your Actual server password(s) and, if using the OpenAI backend, your OpenAI API key in plaintext. The Apple Intelligence backend keeps all data on-device and requires no secrets. To protect your secrets:
 
 - Keep the config file private: `chmod 600 ~/.actually/config.toml`
 - Prefer `https://` for remote Actual servers. The importer will warn if you use cleartext HTTP to a non-localhost server, since passwords would be sent in plaintext.
@@ -326,18 +336,19 @@ The configuration file (default: `~/.actually/config.toml`) stores your Actual s
 
 ## Troubleshooting
 
-| Problem                                                                                        | Likely cause / solution                                                                                                                       |
-| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MoneyMoney database is locked`                                                                | Unlock MoneyMoney and try again. MoneyMoney must be running and unlocked during import.                                                       |
-| `Failed to connect to Actual server`                                                           | Ensure the Actual server is running and reachable at the configured `serverUrl`. Try `curl <serverUrl>` in a terminal.                        |
-| `No matching Actual servers found for --server filter`                                         | The `--server` / `-s` filter matches against the **exact URL** from your config (e.g. `http://localhost:5006`), not a nickname or label.      |
-| `No matching budgets found`                                                                    | The `--budget` / `-b` filter matches against the **sync ID** from your config, not the budget name.                                           |
-| `No matching MoneyMoney accounts found`                                                        | Make sure MoneyMoney is unlocked and the account is mapped in `[actualServers.budgets.accountMapping]`.                                       |
-| `Invalid configuration file`                                                                   | Run `actual-mmi validate` to see specific errors. Check that `syncId` is the budget sync ID (not the name) and `serverUrl` is a valid URL.    |
-| `E2E encryption password is required`                                                          | If your Actual budget uses end-to-end encryption, set `enabled = true` and provide the `password` in `[actualServers.budgets.e2eEncryption]`. |
-| OpenAPI model error (e.g. `model 'gpt-5.4-nano' is unavailable`)                               | Set `payeeTransformation.openAiModel` to a model available on your OpenAI account (e.g. `gpt-4o-mini`).                                       |
-| `Category sync policy 'ask' requires an interactive terminal`                                  | Use `-C=new` or `-C=always` when running in a non-interactive environment (CI, cron, launchd).                                                |
-| Auto-rule override warning: "Actual's rules changed the category of transaction X from Y to Z" | This is informational. Add a corresponding rule in Actual, or adjust the rule ordering so it doesn't conflict with the synced category.       |
+| Problem                                                                                        | Likely cause / solution                                                                                                                          |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MoneyMoney database is locked`                                                                | Unlock MoneyMoney and try again. MoneyMoney must be running and unlocked during import.                                                          |
+| `Failed to connect to Actual server`                                                           | Ensure the Actual server is running and reachable at the configured `serverUrl`. Try `curl <serverUrl>` in a terminal.                           |
+| `No matching Actual servers found for --server filter`                                         | The `--server` / `-s` filter matches against the **exact URL** from your config (e.g. `http://localhost:5006`), not a nickname or label.         |
+| `No matching budgets found`                                                                    | The `--budget` / `-b` filter matches against the **sync ID** from your config, not the budget name.                                              |
+| `No matching MoneyMoney accounts found`                                                        | Make sure MoneyMoney is unlocked and the account is mapped in `[actualServers.budgets.accountMapping]`.                                          |
+| `Invalid configuration file`                                                                   | Run `actual-mmi validate` to see specific errors. Check that `syncId` is the budget sync ID (not the name) and `serverUrl` is a valid URL.       |
+| `E2E encryption password is required`                                                          | If your Actual budget uses end-to-end encryption, set `enabled = true` and provide the `password` in `[actualServers.budgets.e2eEncryption]`.    |
+| OpenAI model error (e.g. `model 'gpt-5.4-nano' is unavailable`)                                | Set `payeeTransformation.openAiModel` to a model available on your OpenAI account (e.g. `gpt-4o-mini`).                                          |
+| `Apple Intelligence backend is unavailable`                                                    | Requires macOS 26+ (Tahoe), Apple Silicon (M1 or later), and Apple Intelligence enabled in System Settings. Also ensure `tsfm-sdk` is installed. |
+| `Category sync policy 'ask' requires an interactive terminal`                                  | Use `-C=new` or `-C=always` when running in a non-interactive environment (CI, cron, launchd).                                                   |
+| Auto-rule override warning: "Actual's rules changed the category of transaction X from Y to Z" | This is informational. Add a corresponding rule in Actual, or adjust the rule ordering so it doesn't conflict with the synced category.          |
 
 ## Bugs
 

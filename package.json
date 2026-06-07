@@ -63,8 +63,8 @@
     "devDependencies": {
         "@commitlint/cli": "^21.0.0",
         "@commitlint/config-conventional": "^21.0.0",
-        "@types/node": "^25.0.0",
         "@eslint/js": "^10.0.1",
+        "@types/node": "^25.0.0",
         "@types/yargs": "^17.0.35",
         "eslint": "^10.4.0",
         "globals": "^17.6.0",
@@ -110,5 +110,8 @@
             "eslint --fix",
             "prettier --write"
         ]
+    },
+    "optionalDependencies": {
+        "tsfm-sdk": "^0.3.1"
     }
 }
