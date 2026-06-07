@@ -20,42 +20,15 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { PayeeTransformationConfig } from './config.js';
 
-export const PayeeMapSchema = z.object({
-    mappings: z.array(
-        z.object({
-            rawPayee: z.string(),
-            cleanedPayee: z.string(),
-        })
-    ),
-});
+export const PayeeMapSchema = z.record(z.string(), z.string());
 
 const PAYEE_MAP_JSON_SCHEMA = {
     type: 'object' as const,
-    properties: {
-        mappings: {
-            type: 'array' as const,
-            items: {
-                type: 'object' as const,
-                properties: {
-                    rawPayee: { type: 'string' as const },
-                    cleanedPayee: { type: 'string' as const },
-                },
-                required: ['rawPayee', 'cleanedPayee'],
-            },
-        },
-    },
-    required: ['mappings'],
+    additionalProperties: { type: 'string' as const },
 };
 
 // ---------------------------------------------------------------------------
 // Shared helpers
-// ---------------------------------------------------------------------------
-
-const mappingsToRecord = (
-    mappings: Array<{ rawPayee: string; cleanedPayee: string }>
-): Record<string, string> =>
-    Object.fromEntries(mappings.map((m) => [m.rawPayee, m.cleanedPayee]));
-
 // ---------------------------------------------------------------------------
 // Backend interface
 // ---------------------------------------------------------------------------
@@ -119,7 +92,7 @@ export class OpenAIBackend implements TransformationBackend {
             throw new Error('OpenAI returned no payee transformation result');
         }
 
-        return mappingsToRecord(parsed.mappings);
+        return parsed;
     }
 
     getLabel(): string {
@@ -255,7 +228,7 @@ export class AppleIntelligenceBackend implements TransformationBackend {
                 );
             }
 
-            return mappingsToRecord(validationResult.data.mappings);
+            return validationResult.data;
         } finally {
             session.dispose();
         }

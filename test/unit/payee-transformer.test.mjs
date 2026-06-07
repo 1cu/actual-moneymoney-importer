@@ -26,12 +26,7 @@ const makeBackendStub = ({ mappings, error, onCreate } = {}) => ({
             throw error;
         }
 
-        const resolved =
-            mappings !== undefined
-                ? Object.fromEntries(
-                      mappings.map((m) => [m.rawPayee, m.cleanedPayee])
-                  )
-                : {};
+        const resolved = mappings !== undefined ? mappings : {};
         return resolved;
     },
     getLabel: () => 'test-model',
@@ -108,12 +103,9 @@ test('transformPayees bounds the relevant existing-payee shortlist', async () =>
         makeConfig(),
         logger,
         makeBackendStub({
-            mappings: [
-                {
-                    rawPayee: 'Alpha Hyperstore',
-                    cleanedPayee: 'Alpha Market 001',
-                },
-            ],
+            mappings: {
+                'Alpha Hyperstore': 'Alpha Market 001',
+            },
             onCreate: (prompt, payees, temperature) => {
                 capturedPrompt = prompt;
                 capturedPayees = payees;
@@ -151,12 +143,9 @@ test('transformPayees snaps transformed payees back to existing names', async ()
         makeConfig(),
         logger,
         makeBackendStub({
-            mappings: [
-                {
-                    rawPayee: 'AMZN Mktp US*1234567890',
-                    cleanedPayee: 'Amazon.com',
-                },
-            ],
+            mappings: {
+                'AMZN Mktp US*1234567890': 'Amazon.com',
+            },
             onCreate: (_prompt, payees) => {
                 capturedPayees = payees;
             },
@@ -239,7 +228,7 @@ test('OpenAIBackend constructs API call correctly', async () => {
                 parse: async (options) => {
                     capturedOptions.push(options);
                     return {
-                        choices: [{ message: { parsed: { mappings: [] } } }],
+                        choices: [{ message: { parsed: {} } }],
                     };
                 },
             },
@@ -278,16 +267,8 @@ test('OpenAIBackend returns mapped record from parsed response', async () => {
                         {
                             message: {
                                 parsed: {
-                                    mappings: [
-                                        {
-                                            rawPayee: 'Netflix.com',
-                                            cleanedPayee: 'Netflix',
-                                        },
-                                        {
-                                            rawPayee: 'AMZN Mktp',
-                                            cleanedPayee: 'Amazon',
-                                        },
-                                    ],
+                                    'Netflix.com': 'Netflix',
+                                    'AMZN Mktp': 'Amazon',
                                 },
                             },
                         },

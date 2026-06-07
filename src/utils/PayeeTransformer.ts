@@ -269,25 +269,25 @@ class PayeeTransformer {
             return this.config.prompt + existingPayeesSection;
         }
 
-        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce a JSON object with a "mappings" array, where each entry has "rawPayee" (the original input string) and "cleanedPayee" (a single cleaned, human-readable merchant name). Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the cleaned name. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
+        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce a JSON object where each key is the exact raw payee string and the value is a single cleaned, human-readable merchant name. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the cleaned name. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
 
 Examples (input separated by newline, output shown as JSON):
 
 Input:
 -
 Output:
-{"mappings": []}
+{}
 
 Input:
 AMZN Mktp US*1234567890
 Output:
-{"mappings": [{"rawPayee": "AMZN Mktp US*1234567890", "cleanedPayee": "Amazon"}]}
+{"AMZN Mktp US*1234567890": "Amazon"}
 
 Input:
 AMAZON.COM/BILLWA
 AMAZON.COM
 Output:
-{"mappings": [{"rawPayee": "AMAZON.COM/BILLWA", "cleanedPayee": "Amazon"}, {"rawPayee": "AMAZON.COM", "cleanedPayee": "Amazon"}]}`;
+{"AMAZON.COM/BILLWA": "Amazon", "AMAZON.COM": "Amazon"}`;
     }
 
     private describeTransformationError(error: unknown) {

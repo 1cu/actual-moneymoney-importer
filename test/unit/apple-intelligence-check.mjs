@@ -64,7 +64,7 @@ const start = Date.now();
 
 try {
     const result = await backend.transformPayees(
-        'Return JSON with "mappings": [{ "rawPayee": "...", "cleanedPayee": "..." }].',
+        'Return a JSON object mapping raw payee names to cleaned names. Example: {"AMZN Mktp US*1234567890": "Amazon"}',
         ['AMZN Mktp US*1234567890'],
         0
     );
