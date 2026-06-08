@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="./assets/actual-moneymoney.png" height="150">
+    <img src="./assets/actual-moneymoney.png" height="150" alt="Actual-MoneyMoney Importer">
 </p>
 <h1 align="center">Actual-MoneyMoney Importer</h1>
 <p align="center">
@@ -199,7 +199,7 @@ actual-mmi import --dry-run -l 3
 
 Category sync maps MoneyMoney categories to Actual categories during import. Enable it with `synchronizeCategories = true` in your config.
 
-**Policies for existing transactions**
+#### Policies for existing transactions
 
 When `synchronizeCategories = true`, the `categorySyncOnExisting` option controls how conflicts are handled for transactions that already exist in Actual:
 
@@ -214,14 +214,14 @@ actual-mmi import -C=new      # Only new transactions
 actual-mmi import -C=always   # Overwrite existing categories
 ```
 
-**How it works**
+#### How it works
 
 1. **New transactions**: Categories are assigned based on your `[actualServers.budgets.categoryMapping]`
 2. **Existing transactions (backfill)**: Uncategorised transactions in Actual get the mapped category applied
 3. **Conflicts**: When an existing transaction has a different category, the `categorySyncOnExisting` policy applies
 4. **Auto-rule override detection**: After import, the importer re-fetches new transactions and warns if Actual's auto-rules changed a synced category
 
-**Category mapping CLI**
+#### Category mapping CLI
 
 Audit, plan, and write your category mapping from the terminal:
 
