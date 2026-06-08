@@ -6,6 +6,41 @@ import { CommonArgs } from './cliArgs.js';
 import { z, ZodError } from 'zod';
 import { DEFAULT_CONFIG_FILE } from './shared.js';
 
+const ENV_VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+
+/**
+ * Recursively walk a parsed config object and replace `${ENV_VAR}` patterns
+ * in any string value with the corresponding environment variable.
+ *
+ * Throws if a referenced environment variable is not set.
+ */
+export const resolveEnvVars = (obj: unknown): unknown => {
+    if (typeof obj === 'string') {
+        return obj.replace(ENV_VAR_PATTERN, (_match, varName) => {
+            const value = process.env[varName as string];
+            if (value === undefined) {
+                throw new Error(
+                    `Environment variable '${varName}' referenced in config but not set`
+                );
+            }
+            return value;
+        });
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(resolveEnvVars);
+    }
+    if (obj !== null && typeof obj === 'object') {
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(
+            obj as Record<string, unknown>
+        )) {
+            result[key] = resolveEnvVars(value);
+        }
+        return result;
+    }
+    return obj;
+};
+
 const isValidCalendarDate = (dateString: string) => {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -256,7 +291,7 @@ export const getConfig = async (argv: ArgumentsCamelCase<CommonArgs>) => {
     const configContent = await fs.readFile(configFile, 'utf-8');
 
     try {
-        const configData = toml.parse(configContent);
+        const configData = resolveEnvVars(toml.parse(configContent));
         return parseConfigData(configData);
     } catch (e) {
         if (e instanceof Error && e.name === 'SyntaxError') {
@@ -267,6 +302,12 @@ export const getConfig = async (argv: ArgumentsCamelCase<CommonArgs>) => {
                 `Failed to parse configuration file: ${e.message} (line ${line}, column ${column})`,
                 { cause: e }
             );
+        }
+
+        // Let environment variable resolution errors pass through with
+        // their original message.
+        if (e instanceof Error && e.message.includes('Environment variable')) {
+            throw e;
         }
 
         if (e instanceof ZodError) {

@@ -6,7 +6,9 @@ enabled = false
 #                     # via Apple's Foundation Models. Requires macOS 26+ (Tahoe),
 #                     # Apple Silicon, and Apple Intelligence enabled in System Settings.
 #                     # No API key needed; all data stays local.
-openAiApiKey = "<openAiKey>"  # Required only with backend = "openai"
+# openAiApiKey = "${MMI_OPENAI_KEY}"  # Required only with backend = "openai"
+#                                    # Use an env var (${MMI_OPENAI_KEY})
+#                                    # or a literal key string
 # openAiModel = "gpt-4o-mini"  # Optional: OpenAI model (default: gpt-5.4-nano)
 # temperature = 0  # Optional: Temperature (0–2 inclusive, default: 0)
 # onTransformError = "warn"  # Optional: "warn" (default) or "fail"
