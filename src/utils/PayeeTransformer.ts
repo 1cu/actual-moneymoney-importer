@@ -195,8 +195,8 @@ class PayeeTransformer {
                 this.config.temperature
             );
 
-            this.logger.debug(`AI payee transformation response`, [
-                JSON.stringify(transformedPayees),
+            this.logger.debug(`AI payee transformation completed`, [
+                `Received ${Object.keys(transformedPayees).length} mappings`,
             ]);
 
             let snappedToExisting = 0;
@@ -204,22 +204,21 @@ class PayeeTransformer {
             let keptRaw = 0;
             let missingKeys = 0;
 
-            // Case-insensitive lookup: AI may return keys with different casing.
-            const lowerKeys = new Map<string, string>();
+            // Build a case-insensitive lookup from AI response keys.
+            // Maps lowercase(key) → original key, avoiding prototype
+            // poisoning from the `in` operator on plain objects.
+            const keyMap = new Map<string, string>();
             for (const key of Object.keys(transformedPayees)) {
-                const lower = key.toLowerCase();
-                if (key !== lower) {
-                    lowerKeys.set(lower, key);
-                }
+                keyMap.set(key.toLowerCase(), key);
             }
 
             const findAiResponseKey = (
                 rawPayee: string
             ): string | undefined => {
-                if (rawPayee in transformedPayees) return rawPayee;
-                const lower = rawPayee.toLowerCase();
-                if (lowerKeys.has(lower)) return lowerKeys.get(lower);
-                if (lower in transformedPayees) return lower;
+                // Exact match first (preserves original casing if it exists).
+                const original = keyMap.get(rawPayee.toLowerCase());
+                if (original === rawPayee) return rawPayee;
+                if (original !== undefined) return original;
                 return undefined;
             };
 
@@ -300,7 +299,7 @@ class PayeeTransformer {
             return this.config.prompt + existingPayeesSection;
         }
 
-        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce a JSON object where each key is the exact raw payee string and the value is a single cleaned, human-readable merchant name. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the cleaned name. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
+        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce JSON matching the response format shown below. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the cleaned name. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
 ${this.backend.getPromptExamples()}`;
     }
 

@@ -219,6 +219,48 @@ test('transformPayees returns raw payee names when backend returns no mappings',
     assert.equal(logger.errorMessages.length, 0);
 });
 
+test('transformPayees matches AI response keys case-insensitively', async () => {
+    const logger = makeLogger();
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: {
+                'netflix.com': 'Netflix',
+                'AMZN MKTP': 'Amazon',
+            },
+        })
+    );
+
+    const result = await transformer.transformPayees(
+        ['NETFLIX.COM', 'Amzn Mktp', 'Spotify'],
+        []
+    );
+
+    assert.equal(logger.errorMessages.length, 0);
+    assert.deepEqual(result, {
+        'NETFLIX.COM': 'Netflix',
+        'Amzn Mktp': 'Amazon',
+        Spotify: 'Spotify',
+    });
+});
+
+test('transformPayees keeps raw name when AI response key not found', async () => {
+    const logger = makeLogger();
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: { 'Some Other': 'Cleaned' },
+        })
+    );
+
+    const result = await transformer.transformPayees(['Coffee Shop'], []);
+
+    assert.equal(logger.errorMessages.length, 0);
+    assert.deepEqual(result, { 'Coffee Shop': 'Coffee Shop' });
+});
+
 // ---------------------------------------------------------------------------
 // OpenAIBackend unit tests
 // ---------------------------------------------------------------------------

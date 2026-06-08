@@ -20,7 +20,7 @@ describe('assets/config.example.toml', () => {
         assert.equal(
             actual,
             expected,
-            'assets/config.example.toml is stale. Run `npm run build` to regenerate.'
+            'assets/config.example.toml is stale. Run `npm run generate:example-config` to regenerate.'
         );
     });
 });
