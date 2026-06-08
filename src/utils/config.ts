@@ -6,6 +6,60 @@ import { CommonArgs } from './cliArgs.js';
 import { z, ZodError } from 'zod';
 import { DEFAULT_CONFIG_FILE } from './shared.js';
 
+const WHOLE_VALUE_ENV_PATTERN = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
+
+/**
+ * Error thrown when an environment variable referenced in the config is
+ * not set. Distinct from other config errors so callers can surface the
+ * specific variable name.
+ */
+export class EnvVarResolutionError extends Error {
+    constructor(varName: string) {
+        super(
+            `Environment variable '${varName}' referenced in config but not set`
+        );
+        this.name = 'EnvVarResolutionError';
+    }
+}
+
+/**
+ * Recursively walk a parsed config object. When a string value is exactly
+ * `\${ENV_VAR}`, replace it with the corresponding environment variable.
+ *
+ * Strings that contain `\${...}` as partial content are left unchanged;
+ * only whole-value references are resolved.
+ *
+ * Throws {@link EnvVarResolutionError} if a referenced environment
+ * variable is not set.
+ */
+export const resolveEnvVars = (obj: unknown): unknown => {
+    if (typeof obj === 'string') {
+        const match = obj.match(WHOLE_VALUE_ENV_PATTERN);
+        if (match) {
+            const varName = match[1] as string;
+            const value = process.env[varName];
+            if (value === undefined) {
+                throw new EnvVarResolutionError(varName);
+            }
+            return value;
+        }
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(resolveEnvVars);
+    }
+    if (obj !== null && typeof obj === 'object') {
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(
+            obj as Record<string, unknown>
+        )) {
+            result[key] = resolveEnvVars(value);
+        }
+        return result;
+    }
+    return obj;
+};
+
 const isValidCalendarDate = (dateString: string) => {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -230,6 +284,22 @@ export const parseConfigData = (configData: unknown): Config => {
     return config;
 };
 
+/**
+ * Parse a TOML config string into a validated {@link Config}, including
+ * environment variable resolution.
+ *
+ * This is the canonical parsing pipeline used by both `getConfig` and
+ * the `validate` command. It performs:
+ *
+ * 1. TOML parsing
+ * 2. Environment variable interpolation ({@link resolveEnvVars})
+ * 3. Zod schema validation + cleartext server warnings
+ */
+export const parseConfigContent = (configContent: string): Config => {
+    const configData = resolveEnvVars(toml.parse(configContent));
+    return parseConfigData(configData);
+};
+
 export const getConfigFile = (argv: ArgumentsCamelCase<CommonArgs>) => {
     if (argv.config) {
         const argvConfigFile = path.resolve(argv.config);
@@ -256,8 +326,7 @@ export const getConfig = async (argv: ArgumentsCamelCase<CommonArgs>) => {
     const configContent = await fs.readFile(configFile, 'utf-8');
 
     try {
-        const configData = toml.parse(configContent);
-        return parseConfigData(configData);
+        return parseConfigContent(configContent);
     } catch (e) {
         if (e instanceof Error && e.name === 'SyntaxError') {
             const line = 'line' in e ? e.line : -1;
@@ -267,6 +336,12 @@ export const getConfig = async (argv: ArgumentsCamelCase<CommonArgs>) => {
                 `Failed to parse configuration file: ${e.message} (line ${line}, column ${column})`,
                 { cause: e }
             );
+        }
+
+        // Let environment variable resolution errors pass through with
+        // their original message.
+        if (e instanceof EnvVarResolutionError) {
+            throw e;
         }
 
         if (e instanceof ZodError) {

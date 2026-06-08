@@ -1,6 +1,9 @@
-import toml from 'toml';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
-import { getConfigFile, parseConfigData } from '../utils/config.js';
+import {
+    EnvVarResolutionError,
+    getConfigFile,
+    parseConfigContent,
+} from '../utils/config.js';
 import { CommonArgs } from '../utils/cliArgs.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -40,12 +43,11 @@ const handleValidate = async (argv: ArgumentsCamelCase<CommonArgs>) => {
             const configContent = await fs.readFile(configPath, 'utf-8');
 
             logger.debug(`Parsing configuration file...`);
-            const configData = toml.parse(configContent);
-
-            logger.debug(`Parsing configuration schema...`);
-            parseConfigData(configData);
+            parseConfigContent(configContent);
         } catch (e) {
-            if (e instanceof ZodError) {
+            if (e instanceof EnvVarResolutionError) {
+                logger.error(e.message);
+            } else if (e instanceof ZodError) {
                 logger.error('Configuration file is invalid:');
                 for (const error of e.issues) {
                     logger.error(

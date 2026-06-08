@@ -276,6 +276,104 @@ test('getConfig accepts apple-intelligence backend with empty openAiApiKey', asy
     assert.equal(config.payeeTransformation.backend, 'apple-intelligence');
 });
 
+// ---------------------------------------------------------------------------
+// Environment variable interpolation
+// ---------------------------------------------------------------------------
+
+const makeConfigWithEnvVar = () => `
+[payeeTransformation]
+enabled = true
+backend = "openai"
+openAiApiKey = "\${MMI_OPENAI_KEY}"
+
+[import]
+importUncheckedTransactions = true
+synchronizeClearedStatus = true
+synchronizeCategories = false
+categorySyncOnExisting = "ask"
+importComments = false
+commentPrefix = "MoneyMoney Comment: "
+
+[import.transfers]
+enabled = false
+categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
+matchWindowDays = 0
+
+[[actualServers]]
+serverUrl = "http://example.com:5006"
+serverPassword = "pw"
+
+[[actualServers.budgets]]
+syncId = "budget-id"
+
+[actualServers.budgets.e2eEncryption]
+enabled = false
+password = ""
+
+[actualServers.budgets.accountMapping]
+"Account" = "actual-account"
+`;
+
+test('getConfig resolves env var in openAiApiKey', async (t) => {
+    const tempRoot = await mkdtemp(
+        path.join(os.tmpdir(), 'actual-mmi-config-load-')
+    );
+    const configPath = path.join(tempRoot, 'config.toml');
+
+    t.after(async () => {
+        await rm(tempRoot, { recursive: true, force: true });
+    });
+
+    await writeFile(configPath, makeConfigWithEnvVar(), 'utf8');
+
+    const originalEnv = process.env.MMI_OPENAI_KEY;
+    process.env.MMI_OPENAI_KEY = 'sk-test-key-12345';
+    try {
+        const config = await getConfig({ config: configPath });
+        assert.equal(
+            config.payeeTransformation.openAiApiKey,
+            'sk-test-key-12345'
+        );
+    } finally {
+        if (originalEnv === undefined) {
+            delete process.env.MMI_OPENAI_KEY;
+        } else {
+            process.env.MMI_OPENAI_KEY = originalEnv;
+        }
+    }
+});
+
+test('getConfig rejects when env var is not set', async (t) => {
+    const tempRoot = await mkdtemp(
+        path.join(os.tmpdir(), 'actual-mmi-config-load-')
+    );
+    const configPath = path.join(tempRoot, 'config.toml');
+
+    t.after(async () => {
+        await rm(tempRoot, { recursive: true, force: true });
+    });
+
+    await writeFile(configPath, makeConfigWithEnvVar(), 'utf8');
+
+    const originalEnv = process.env.MMI_OPENAI_KEY;
+    delete process.env.MMI_OPENAI_KEY;
+
+    try {
+        await assert.rejects(
+            () => getConfig({ config: configPath }),
+            (error) =>
+                error instanceof Error &&
+                error.message.includes(
+                    "Environment variable 'MMI_OPENAI_KEY' referenced in config but not set"
+                )
+        );
+    } finally {
+        if (originalEnv !== undefined) {
+            process.env.MMI_OPENAI_KEY = originalEnv;
+        }
+    }
+});
+
 const makeConfigInvalidBackend = () => `
 [payeeTransformation]
 enabled = true
