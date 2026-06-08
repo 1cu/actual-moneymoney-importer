@@ -162,8 +162,8 @@ Imports can be scoped with `--server` (alias `-s`), `--budget` (alias `-b`), and
 
 ```bash
 # Import specific accounts
-actual-mmi import -a "Checking" -a "Credit Card"
-actual-mmi import -a "Checking,Credit Card"
+actual-mmi import -a "DKB Giro" -a "DKB Visa"
+actual-mmi import -a "DKB Giro,DKB Visa"
 
 # Restrict to server and budget
 actual-mmi import -s http://localhost:5006 -b <syncId>
@@ -247,8 +247,8 @@ With `--write-config`, the tool rewrites your `[actualServers.budgets.categoryMa
 
 ```toml
 [actualServers.budgets.categoryMapping]
-# MoneyMoney: Expenses > Living > Groceries
-# Actual: Living > 🛒 Groceries
+# MoneyMoney: Ausgaben > Lebenshaltung > Lebensmittel
+# Actual: Lebenshaltung > 💳🧀 Lebensmittel
 "7f5c..." = "8aa1..."
 ```
 
