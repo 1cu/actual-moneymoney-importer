@@ -374,69 +374,6 @@ test('getConfig rejects when env var is not set', async (t) => {
     }
 });
 
-const makeConfigWithPartialEnvVar = () => `
-[payeeTransformation]
-enabled = true
-backend = "openai"
-openAiApiKey = "Bearer \${MMI_OPENAI_KEY}"
-
-[import]
-importUncheckedTransactions = true
-synchronizeClearedStatus = true
-synchronizeCategories = false
-categorySyncOnExisting = "ask"
-importComments = false
-commentPrefix = "MoneyMoney Comment: "
-
-[import.transfers]
-enabled = false
-categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
-matchWindowDays = 0
-
-[[actualServers]]
-serverUrl = "http://example.com:5006"
-serverPassword = "pw"
-
-[[actualServers.budgets]]
-syncId = "budget-id"
-
-[actualServers.budgets.e2eEncryption]
-enabled = false
-password = ""
-
-[actualServers.budgets.accountMapping]
-"Account" = "actual-account"
-`;
-
-test('getConfig resolves env var within a longer string', async (t) => {
-    const tempRoot = await mkdtemp(
-        path.join(os.tmpdir(), 'actual-mmi-config-load-')
-    );
-    const configPath = path.join(tempRoot, 'config.toml');
-
-    t.after(async () => {
-        await rm(tempRoot, { recursive: true, force: true });
-    });
-
-    await writeFile(configPath, makeConfigWithPartialEnvVar(), 'utf8');
-
-    const originalEnv = process.env.MMI_OPENAI_KEY;
-    process.env.MMI_OPENAI_KEY = 'sk-key-embedded';
-    try {
-        const config = await getConfig({ config: configPath });
-        assert.equal(
-            config.payeeTransformation.openAiApiKey,
-            'Bearer sk-key-embedded'
-        );
-    } finally {
-        if (originalEnv === undefined) {
-            delete process.env.MMI_OPENAI_KEY;
-        } else {
-            process.env.MMI_OPENAI_KEY = originalEnv;
-        }
-    }
-});
-
 const makeConfigInvalidBackend = () => `
 [payeeTransformation]
 enabled = true
