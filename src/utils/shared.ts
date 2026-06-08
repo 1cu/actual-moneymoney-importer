@@ -75,7 +75,7 @@ commentPrefix = "MoneyMoney Comment: "
 
 [import.transfers]
 enabled = false
-categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
+categoryRefs = ["Transfers"]
 matchWindowDays = 0
 
 # Ignore patterns (optional)
