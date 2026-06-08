@@ -30,6 +30,7 @@ const makeBackendStub = ({ mappings, error, onCreate } = {}) => ({
         return resolved;
     },
     getLabel: () => 'test-model',
+    getPromptExamples: () => '',
     isModelUnavailableError: (error) =>
         error.message.toLowerCase().includes('model') &&
         (error.message.toLowerCase().includes('does not exist') ||
@@ -46,6 +47,8 @@ const makeConfig = () => ({
     openAiModel: 'gpt-5-nano',
     temperature: 1,
     onTransformError: 'warn',
+    payeeMatchThreshold: 0.7,
+    maxExistingPayeesInPrompt: 100,
 });
 
 test('transformPayees returns an empty object for no payees', async () => {
@@ -214,6 +217,48 @@ test('transformPayees returns raw payee names when backend returns no mappings',
 
     assert.deepEqual(result, { 'Coffee Shop': 'Coffee Shop' });
     assert.equal(logger.errorMessages.length, 0);
+});
+
+test('transformPayees matches AI response keys case-insensitively', async () => {
+    const logger = makeLogger();
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: {
+                'netflix.com': 'Netflix',
+                'AMZN MKTP': 'Amazon',
+            },
+        })
+    );
+
+    const result = await transformer.transformPayees(
+        ['NETFLIX.COM', 'Amzn Mktp', 'Spotify'],
+        []
+    );
+
+    assert.equal(logger.errorMessages.length, 0);
+    assert.deepEqual(result, {
+        'NETFLIX.COM': 'Netflix',
+        'Amzn Mktp': 'Amazon',
+        Spotify: 'Spotify',
+    });
+});
+
+test('transformPayees keeps raw name when AI response key not found', async () => {
+    const logger = makeLogger();
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: { 'Some Other': 'Cleaned' },
+        })
+    );
+
+    const result = await transformer.transformPayees(['Coffee Shop'], []);
+
+    assert.equal(logger.errorMessages.length, 0);
+    assert.deepEqual(result, { 'Coffee Shop': 'Coffee Shop' });
 });
 
 // ---------------------------------------------------------------------------

@@ -5,9 +5,6 @@ import {
     createTransformationBackend,
 } from './TransformationBackend.js';
 
-const MAX_EXISTING_PAYEES_IN_PROMPT = 100;
-const EXISTING_PAYEE_MATCH_THRESHOLD = 0.75;
-
 const normalizePayee = (value: string) =>
     value
         .normalize('NFKD')
@@ -127,6 +124,8 @@ class PayeeTransformer {
         this.logger.debug(`Payee transformation enabled`, [
             `Backend: ${this.backend.getLabel()}`,
             `Temperature: ${this.config.temperature}`,
+            `Match threshold: ${this.config.payeeMatchThreshold}`,
+            `Max existing payees in prompt: ${this.config.maxExistingPayeesInPrompt}`,
         ]);
     }
 
@@ -156,7 +155,7 @@ class PayeeTransformer {
 
             if (
                 bestExistingPayee &&
-                bestExistingPayee.score >= EXISTING_PAYEE_MATCH_THRESHOLD
+                bestExistingPayee.score >= this.config.payeeMatchThreshold
             ) {
                 resolvedPayees.set(payee, bestExistingPayee.payeeName);
                 return false;
@@ -175,7 +174,7 @@ class PayeeTransformer {
         const relevantExistingPayees = selectRelevantExistingPayees(
             existingPayeeNames,
             unresolvedPayees,
-            MAX_EXISTING_PAYEES_IN_PROMPT
+            this.config.maxExistingPayeesInPrompt
         );
         const prompt = this.generatePrompt(
             relevantExistingPayees,
@@ -196,12 +195,42 @@ class PayeeTransformer {
                 this.config.temperature
             );
 
+            this.logger.debug(`AI payee transformation completed`, [
+                `Received ${Object.keys(transformedPayees).length} mappings`,
+            ]);
+
             let snappedToExisting = 0;
             let aiKeptAsNew = 0;
             let keptRaw = 0;
+            let missingKeys = 0;
+
+            // Build a case-insensitive lookup from AI response keys.
+            // Maps lowercase(key) → original key, avoiding prototype
+            // poisoning from the `in` operator on plain objects.
+            const keyMap = new Map<string, string>();
+            for (const key of Object.keys(transformedPayees)) {
+                keyMap.set(key.toLowerCase(), key);
+            }
+
+            const findAiResponseKey = (
+                rawPayee: string
+            ): string | undefined => {
+                // Exact match first (preserves original casing if it exists).
+                const original = keyMap.get(rawPayee.toLowerCase());
+                if (original === rawPayee) return rawPayee;
+                if (original !== undefined) return original;
+                return undefined;
+            };
 
             for (const rawPayee of unresolvedPayees) {
-                const transformedPayee = transformedPayees[rawPayee]?.trim();
+                const aiResponseKey = findAiResponseKey(rawPayee);
+                const transformedPayee = aiResponseKey
+                    ? transformedPayees[aiResponseKey]?.trim()
+                    : undefined;
+
+                if (!aiResponseKey) {
+                    missingKeys++;
+                }
                 const normalizedPayee = transformedPayee || rawPayee;
                 const bestExistingPayee = findBestExistingPayee(
                     normalizedPayee,
@@ -210,7 +239,7 @@ class PayeeTransformer {
 
                 if (
                     bestExistingPayee &&
-                    bestExistingPayee.score >= EXISTING_PAYEE_MATCH_THRESHOLD
+                    bestExistingPayee.score >= this.config.payeeMatchThreshold
                 ) {
                     resolvedPayees.set(rawPayee, bestExistingPayee.payeeName);
                     if (transformedPayee) {
@@ -234,6 +263,7 @@ class PayeeTransformer {
                 `Snapped to existing: ${snappedToExisting}`,
                 `AI new names: ${aiKeptAsNew}`,
                 `Kept raw: ${keptRaw}`,
+                `Missing keys: ${missingKeys}`,
             ]);
 
             return Object.fromEntries(resolvedPayees);
@@ -269,25 +299,8 @@ class PayeeTransformer {
             return this.config.prompt + existingPayeesSection;
         }
 
-        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce a JSON object where each key is the exact raw payee string and the value is a single cleaned, human-readable merchant name. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the cleaned name. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
-
-Examples (input separated by newline, output shown as JSON):
-
-Input:
--
-Output:
-{"mappings": []}
-
-Input:
-AMZN Mktp US*1234567890
-Output:
-{"mappings": [{"rawPayee": "AMZN Mktp US*1234567890", "cleanedPayee": "Amazon"}]}
-
-Input:
-AMAZON.COM/BILLWA
-AMAZON.COM
-Output:
-{"mappings": [{"rawPayee": "AMAZON.COM/BILLWA", "cleanedPayee": "Amazon"}, {"rawPayee": "AMAZON.COM", "cleanedPayee": "Amazon"}]}`;
+        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce JSON matching the response format shown below. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the cleaned name. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
+${this.backend.getPromptExamples()}`;
     }
 
     private describeTransformationError(error: unknown) {

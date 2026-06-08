@@ -58,66 +58,7 @@ The application uses a TOML configuration file.
 Run `actual-mmi validate` to validate the configuration and, on first run, generate an example file and print its path.
 You can pass a custom configuration file with `--config` (alias `-c`).
 
-A configuration document looks like this:
-
-```toml
-# Payee transformation
-[payeeTransformation]
-enabled = false
-openAiApiKey = "<openAiKey>"  # Your OpenAI API key
-# openAiModel = "gpt-4o-mini"  # Optional: OpenAI model (default: gpt-5.4-nano)
-# temperature = 1  # Optional: Temperature for OpenAI API (0–2 inclusive, default: 1)
-# onTransformError = "warn"  # Optional: Error handling: "warn" (default) or "fail"
-# prompt = "<custom prompt>"  # Optional: Override the default payee transformation instructions
-
-# Import settings
-[import]
-importUncheckedTransactions = true
-synchronizeClearedStatus = true
-synchronizeCategories = false  # Optional: category sync is opt-in
-categorySyncOnExisting = "ask" # ask|new|always
-importComments = false # Optional: Import MoneyMoney comments into Actual
-commentPrefix = "MoneyMoney Comment: " # Optional: Set a prefix for MoneyMoney comments inside the notes
-
-[import.transfers]
-enabled = false
-categoryRefs = ["Umbuchungen > Echte Umbuchungen"]
-matchWindowDays = 0
-
-# Ignore patterns (optional)
-# [import.ignorePatterns]
-# commentPatterns = ["[actual-ignore]"]
-# payeePatterns = []
-# purposePatterns = []
-
-# Actual servers, you can add multiple servers
-[[actualServers]]
-serverUrl = "http://localhost:5006"
-serverPassword = "<password>"
-
-# Budgets for the server, you can add multiple budgets
-[[actualServers.budgets]]
-syncId = "<syncId>" # Get this value from the Actual advanced settings
-# earliestImportDate = "2024-01-01" # Optional: only import transactions from this date
-
-# E2E encryption for the budget, if enabled
-[actualServers.budgets.e2eEncryption]
-enabled = false
-password = ""
-
-# Account map for the budget
-[actualServers.budgets.accountMapping]
-# The key is either the account name, or the account number of a MoneyMoney account
-# The value is the account name or the account id (from the url) of the Actual account
-"<monMonAcc>" = "<actualAcc>"
-
-# Optional category mapping
-[actualServers.budgets.categoryMapping]
-# Tool-managed block: running `actual-mmi categories map --write-config`
-# rewrites this section with annotated comments for readability.
-# The key is the MoneyMoney category UUID and the value is the Actual category id.
-"<monMonCategoryUuid>" = "<actualCategoryId>"
-```
+See [assets/config.example.toml](assets/config.example.toml) for a full annotated example.
 
 ### Payee transformation
 
@@ -132,15 +73,7 @@ Two backends are available:
 
 With `apple-intelligence`, all payee data is processed locally on your Mac. Nothing is sent to any cloud service. You need the `tsfm-sdk` npm package installed (`npm install tsfm-sdk`). No API key or network access is required beyond the initial package install.
 
-| Option             | Default        | Description                                                                                                 |
-| ------------------ | -------------- | ----------------------------------------------------------------------------------------------------------- |
-| `enabled`          | `false`        | Enable/disable AI payee transformation                                                                      |
-| `backend`          | `openai`       | Backend to use: `openai` or `apple-intelligence`                                                            |
-| `openAiApiKey`     | —              | Your OpenAI API key (required only with `backend = "openai"`)                                               |
-| `openAiModel`      | `gpt-5.4-nano` | OpenAI model to use. You may need to change this to a model available on your account (e.g. `gpt-4o-mini`). |
-| `temperature`      | `1`            | Temperature for API calls (0–2 inclusive)                                                                   |
-| `onTransformError` | `warn`         | Error handling: `warn` (use raw names) or `fail` (abort import)                                             |
-| `prompt`           | built-in       | Custom transformation instructions (existing payees are appended automatically)                             |
+All options are documented in [assets/config.example.toml](assets/config.example.toml) with inline comments. Key options include `enabled`, `backend`, `temperature`, `payeeMatchThreshold`, and `maxExistingPayeesInPrompt`. Run `actual-mmi validate` to generate a fresh example at your config path.
 
 The AI receives a bounded shortlist of existing payees from your budget to prefer matching over creating duplicates, and close matches are normalized back to existing payee names after the API call.
 

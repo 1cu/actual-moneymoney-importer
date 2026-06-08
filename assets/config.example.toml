@@ -1,41 +1,3 @@
-import os from 'os';
-import path from 'path';
-import type { Transaction as MonMonTransaction } from 'moneymoney';
-
-export const DATE_FORMAT = 'yyyy-MM-dd';
-
-export const getIdForMoneyMoneyTransaction = (
-    transaction: Pick<MonMonTransaction, 'accountUuid' | 'id'>
-): string => `${transaction.accountUuid}-${transaction.id}`;
-
-export const buildTransactionNotes = (
-    transaction: MonMonTransaction,
-    importComments: boolean,
-    commentPrefix: string
-): string => {
-    return [
-        transaction.purpose,
-        transaction.comment && importComments
-            ? `${commentPrefix}${transaction.comment}`
-            : undefined,
-    ]
-        .filter(Boolean)
-        .join(' | ');
-};
-
-export const APPLICATION_DIRECTORY = path.resolve(os.homedir(), '.actually');
-
-export const DEFAULT_DATA_DIR = path.resolve(
-    APPLICATION_DIRECTORY,
-    'actual-data'
-);
-
-export const DEFAULT_CONFIG_FILE = path.resolve(
-    APPLICATION_DIRECTORY,
-    'config.toml'
-);
-
-export const EXAMPLE_CONFIG = `
 # Payee transformation
 [payeeTransformation]
 enabled = false
@@ -109,4 +71,4 @@ password = ""
 # The key is a MoneyMoney category UUID, the value is an Actual category ID.
 [actualServers.budgets.categoryMapping]
 "<monMonCategoryUuid>" = "<actualCategoryId>"
-`;
+

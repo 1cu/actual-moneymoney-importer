@@ -5,7 +5,8 @@
     "packageManager": "npm@11.12.1",
     "scripts": {
         "build": "tsc",
-        "prepack": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build",
+        "generate:example-config": "node scripts/generate-example-config.js",
+        "prepack": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build && npm run generate:example-config",
         "start": "node dist/index.js",
         "test": "npm run build && node --test \"test/cli/**/*.test.mjs\" \"test/unit/**/*.test.mjs\"",
         "test:cli": "npm run build && node --test \"test/cli/**/*.test.mjs\"",
@@ -34,7 +35,8 @@
         "access": "public"
     },
     "files": [
-        "dist"
+        "dist",
+        "assets/config.example.toml"
     ],
     "author": "1cu",
     "license": "MIT",
