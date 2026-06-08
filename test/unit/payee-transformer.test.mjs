@@ -30,6 +30,7 @@ const makeBackendStub = ({ mappings, error, onCreate } = {}) => ({
         return resolved;
     },
     getLabel: () => 'test-model',
+    getPromptExamples: () => '',
     isModelUnavailableError: (error) =>
         error.message.toLowerCase().includes('model') &&
         (error.message.toLowerCase().includes('does not exist') ||
@@ -46,6 +47,8 @@ const makeConfig = () => ({
     openAiModel: 'gpt-5-nano',
     temperature: 1,
     onTransformError: 'warn',
+    payeeMatchThreshold: 0.7,
+    maxExistingPayeesInPrompt: 100,
 });
 
 test('transformPayees returns an empty object for no payees', async () => {

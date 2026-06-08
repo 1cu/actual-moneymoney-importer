@@ -80,9 +80,41 @@ const payeeTransformationSchema = z.object({
         .default('openai'),
     openAiApiKey: z.string().optional(),
     openAiModel: z.string().optional().default('gpt-5.4-nano'),
-    temperature: z.number().min(0).max(2).optional().default(1),
+    temperature: z.number().min(0).max(2).optional().default(0),
     onTransformError: z.enum(['warn', 'fail']).optional().default('warn'),
     prompt: z.string().optional(),
+    /**
+     * Maximum number of existing payees included in the AI prompt.
+     *
+     * The importer selects the existing budget payees most similar to the
+     * unresolved raw payee names (by Dice bigram coefficient) and includes
+     * them in the prompt so the model can prefer exact matches. Higher
+     * values give the model more context but increase prompt size and
+     * token usage. Set to 0 to omit existing payees entirely.
+     *
+     * @default 100
+     */
+    maxExistingPayeesInPrompt: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .default(100),
+    /**
+     * Dice bigram coefficient threshold for snapping a payee to an
+     * existing budget payee. Applied both before the AI call (local
+     * pre-filter) and after (post-AI snap-back).
+     *
+     * 1.0 = exact match only (after normalization: unicode NFKD,
+     * lowercase, strip non-alphanumeric). 0.0 = match anything.
+     *
+     * Lower values catch more partial-name matches (e.g. "Munch Energie
+     * GmbH" → "Munch Energie" at ~0.73) but may produce false snaps on
+     * short, generic names. Values below 0.6 are rarely useful.
+     *
+     * @default 0.7
+     */
+    payeeMatchThreshold: z.number().min(0).max(1).optional().default(0.7),
 });
 
 const transferImportSchema = z.object({

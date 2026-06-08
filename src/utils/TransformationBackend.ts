@@ -75,6 +75,13 @@ export interface TransformationBackend {
     /** Human-readable label for logging (e.g., model name) */
     getLabel(): string;
 
+    /**
+     * Backend-specific JSON format examples for the AI prompt.
+     * Each backend enforces a different schema (OpenAI: nested mappings,
+     * Apple Intelligence: flat record). The examples must match.
+     */
+    getPromptExamples(): string;
+
     /** Check if error indicates the model is unavailable / doesn't exist */
     isModelUnavailableError(error: Error): boolean;
 
@@ -125,6 +132,27 @@ export class OpenAIBackend implements TransformationBackend {
 
     getLabel(): string {
         return this.model;
+    }
+
+    getPromptExamples(): string {
+        return `
+Examples (input separated by newline, output shown as JSON):
+
+Input:
+-
+Output:
+{"mappings": []}
+
+Input:
+AMZN Mktp US*1234567890
+Output:
+{"mappings": [{"rawPayee": "AMZN Mktp US*1234567890", "cleanedPayee": "Amazon"}]}
+
+Input:
+AMAZON.COM/BILLWA
+AMAZON.COM
+Output:
+{"mappings": [{"rawPayee": "AMAZON.COM/BILLWA", "cleanedPayee": "Amazon"}, {"rawPayee": "AMAZON.COM", "cleanedPayee": "Amazon"}]}`;
     }
 
     isModelUnavailableError(error: Error): boolean {
@@ -264,6 +292,27 @@ export class AppleIntelligenceBackend implements TransformationBackend {
 
     getLabel(): string {
         return 'Apple Intelligence (on-device)';
+    }
+
+    getPromptExamples(): string {
+        return `
+Examples (input separated by newline, output shown as JSON):
+
+Input:
+-
+Output:
+{}
+
+Input:
+AMZN Mktp US*1234567890
+Output:
+{"AMZN Mktp US*1234567890": "Amazon"}
+
+Input:
+AMAZON.COM/BILLWA
+AMAZON.COM
+Output:
+{"AMAZON.COM/BILLWA": "Amazon", "AMAZON.COM": "Amazon"}`;
     }
 
     /** Release the underlying on-device model. Safe to call multiple times. */
