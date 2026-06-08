@@ -11,11 +11,11 @@ Brief description of the changes and why they're needed.
 ## Testing
 
 - [ ] Commands run (one or more of the following, as applicable):
-    - `npm test`
-    - `npm run test:cli`
-    - `npm run test:unit`
-    - `npm run lint:eslint`
-    - `npm run lint:prettier`
+  - `npm test`
+  - `npm run test:cli`
+  - `npm run test:unit`
+  - `npm run lint:eslint`
+  - `npm run lint:prettier`
 - [ ] Manual verification (if applicable)
 
 ## Release / Config Impact

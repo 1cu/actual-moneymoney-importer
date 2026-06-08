@@ -75,11 +75,11 @@ search live transactions directly instead of guessing from names alone.
 - Use `getAccounts()` to resolve account names, UUIDs, and IBANs first.
 - Use `getTransactions({ from, to })` and filter by `accountUuid` for the source account.
 - For transfer probes, look for:
-    - opposite amounts
-    - different `valueDate`s when proving cross-date behavior
-    - a transfer category on the source side
-    - a source `accountNumber` that matches the target account's IBAN
-    - matching `purpose` text when possible
+  - opposite amounts
+  - different `valueDate`s when proving cross-date behavior
+  - a transfer category on the source side
+  - a source `accountNumber` that matches the target account's IBAN
+  - matching `purpose` text when possible
 - In Actual, use `getTransactions(accountId, startDate, endDate)` after `downloadBudget(...)` to verify the imported state.
 - If a probe was already imported, delete the Actual transaction first and re-sync before rerunning the import.
 

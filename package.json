@@ -15,7 +15,8 @@
         "test:apple-intelligence": "npm run build && node --test test/unit/apple-intelligence.test.mjs",
         "lint:eslint": "eslint src test eslint.config.mjs commitlint.config.js",
         "lint:prettier": "prettier --check 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js'",
-        "lint:fix": "eslint src test eslint.config.mjs commitlint.config.js --fix && prettier --write 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js'",
+        "lint:markdownlint": "markdownlint-cli2 '*.md' '.github/**/*.md'",
+        "lint:fix": "eslint src test eslint.config.mjs commitlint.config.js --fix && prettier --write 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js' && markdownlint-cli2 --fix '*.md' '.github/**/*.md'",
         "prepare": "husky"
     },
     "type": "module",
@@ -73,6 +74,7 @@
         "globals": "^17.6.0",
         "husky": "^9.1.7",
         "lint-staged": "^17.0.5",
+        "markdownlint-cli2": "^0.22.1",
         "prettier": "^3.8.3",
         "semantic-release": "^25.0.3",
         "typescript": "^6.0.3",
@@ -88,10 +90,12 @@
             "prettier --write"
         ],
         "*.md": [
-            "prettier --write"
+            "prettier --write",
+            "markdownlint-cli2 --fix"
         ],
         ".github/**/*.md": [
-            "prettier --write"
+            "prettier --write",
+            "markdownlint-cli2 --fix"
         ],
         ".github/**/*.yml": [
             "prettier --write"
