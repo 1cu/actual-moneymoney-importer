@@ -360,8 +360,15 @@ class Importer {
         isDryRun?: boolean;
         categorySyncOnExisting?: ExistingCategorySyncPolicy;
     }) {
-        const existingCategoryPolicy =
+        let existingCategoryPolicy =
             categorySyncOnExisting ?? this.config.import.categorySyncOnExisting;
+
+        // In dry-run mode, interactive 'ask' policy makes no sense — nothing
+        // will be written. Treat it as 'new' to skip interactive prompts
+        // while still reporting category conflicts in the summary.
+        if (isDryRun && existingCategoryPolicy === 'ask') {
+            existingCategoryPolicy = 'new';
+        }
 
         const fromDate = from ?? subMonths(new Date(), 1);
         const earliestImportDate = this.budgetConfig.earliestImportDate
