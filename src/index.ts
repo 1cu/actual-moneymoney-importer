@@ -3,6 +3,7 @@
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import accountsCommand from './commands/accounts.command.js';
 import categoriesCommand from './commands/categories.command.js';
 import importCommand from './commands/import.command.js';
 import validateCommand from './commands/validate.command.js';
@@ -30,6 +31,7 @@ yargs(hideBin(process.argv))
         choices: [0, 1, 2, 3, 4],
     })
     .command(importCommand)
+    .command(accountsCommand)
     .command(categoriesCommand)
     .command(validateCommand)
     .strictCommands()

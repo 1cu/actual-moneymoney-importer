@@ -71,6 +71,7 @@ test('prints root help and exits successfully with --help', () => {
     assert.equal(result.status, 0);
     assert.match(result.output, /Commands:/);
     assert.match(result.output, /import/);
+    assert.match(result.output, /accounts/);
     assert.match(result.output, /categories/);
     assert.match(result.output, /validate/);
 });
