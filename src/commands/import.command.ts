@@ -79,6 +79,7 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
     if (
         config.import.synchronizeCategories &&
         categorySyncOnExisting === 'ask' &&
+        !isDryRun &&
         !process.stdin.isTTY
     ) {
         throw new Error(
