@@ -143,8 +143,7 @@ export class AccountMap {
             parsedAccountMapping.set(moneyMoneyAccount, actualAccount);
         }
 
-        this.logger.info('Parsed account mapping', [
-            '[MoneyMoney Account] → [Actual Account]',
+        this.logger.info('Parsed account mapping (MoneyMoney → Actual):', [
             ...Array.from(parsedAccountMapping.entries()).map(
                 ([monMonAccount, actualAccount]) =>
                     `${monMonAccount.name} → ${actualAccount.name}`
