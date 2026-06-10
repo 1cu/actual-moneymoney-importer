@@ -690,313 +690,301 @@ class Importer {
 
         this.logger.phase('Prepare');
 
-        try {
-            for (const {
-                monMonAccount,
-                actualAccount,
-                accountTransactions,
-                existingActualTransactions,
-                newMonMonTransactions,
-                existingPairs,
-            } of accountStates) {
-                runMetrics.accountsScanned++;
-                this.logger.phase(actualAccount.name);
+        for (const {
+            monMonAccount,
+            actualAccount,
+            accountTransactions,
+            existingActualTransactions,
+            newMonMonTransactions,
+            existingPairs,
+        } of accountStates) {
+            runMetrics.accountsScanned++;
+            this.logger.phase(actualAccount.name);
 
-                const createTransactions: ImportTransactionEntity[] = [];
-                // Maps imported_id → intended category ID (for auto-rule override detection).
-                const intendedCategoryByImportedId = new Map<string, string>();
-                for (const transaction of newMonMonTransactions) {
-                    const importedId =
-                        getIdForMoneyMoneyTransaction(transaction);
-                    if (transferPlan.suppressedImportedIds.has(importedId)) {
-                        continue;
-                    }
+            const createTransactions: ImportTransactionEntity[] = [];
+            // Maps imported_id → intended category ID (for auto-rule override detection).
+            const intendedCategoryByImportedId = new Map<string, string>();
+            for (const transaction of newMonMonTransactions) {
+                const importedId = getIdForMoneyMoneyTransaction(transaction);
+                if (transferPlan.suppressedImportedIds.has(importedId)) {
+                    continue;
+                }
 
-                    const plannedTransfer =
-                        transferPlan.seedByImportedId.get(importedId);
-                    const createTransaction =
-                        await this.convertToActualTransaction(
-                            transaction,
-                            plannedTransfer,
-                            actualAccount.id
+                const plannedTransfer =
+                    transferPlan.seedByImportedId.get(importedId);
+                const createTransaction = await this.convertToActualTransaction(
+                    transaction,
+                    plannedTransfer,
+                    actualAccount.id
+                );
+
+                if (shouldSyncCategories && !plannedTransfer) {
+                    const categoryResolution =
+                        this.categoryMap.getMappedActualCategoryId(
+                            transaction.categoryUuid
                         );
 
-                    if (shouldSyncCategories && !plannedTransfer) {
-                        const categoryResolution =
-                            this.categoryMap.getMappedActualCategoryId(
-                                transaction.categoryUuid
+                    if (categoryResolution.actualCategoryId) {
+                        createTransaction.category =
+                            categoryResolution.actualCategoryId;
+                        if (createTransaction.imported_id) {
+                            intendedCategoryByImportedId.set(
+                                createTransaction.imported_id,
+                                categoryResolution.actualCategoryId
+                            );
+                        }
+                    } else if (
+                        !categoryResolution.isUncategorized &&
+                        !categoryResolution.isMapped
+                    ) {
+                        const warningKey =
+                            categoryResolution.categoryPath ??
+                            transaction.categoryUuid;
+
+                        const isTransferHandled =
+                            transferPlan.seedByImportedId.has(importedId) ||
+                            transferPlan.suppressedImportedIds.has(
+                                importedId
+                            ) ||
+                            transferPlan.existingCounterpartConversionsByImportedId.has(
+                                importedId
                             );
 
-                        if (categoryResolution.actualCategoryId) {
-                            createTransaction.category =
-                                categoryResolution.actualCategoryId;
-                            if (createTransaction.imported_id) {
-                                intendedCategoryByImportedId.set(
-                                    createTransaction.imported_id,
-                                    categoryResolution.actualCategoryId
-                                );
-                            }
-                        } else if (
-                            !categoryResolution.isUncategorized &&
-                            !categoryResolution.isMapped
-                        ) {
-                            const warningKey =
-                                categoryResolution.categoryPath ??
-                                transaction.categoryUuid;
-
-                            const isTransferHandled =
-                                transferPlan.seedByImportedId.has(importedId) ||
-                                transferPlan.suppressedImportedIds.has(
-                                    importedId
-                                ) ||
-                                transferPlan.existingCounterpartConversionsByImportedId.has(
-                                    importedId
-                                );
-
-                            if (
-                                !unmappedCategoryWarnings.has(warningKey) &&
-                                !isTransferHandled
-                            ) {
-                                unmappedCategoryWarnings.add(warningKey);
-                                runMetrics.totalUnmappedCategoryWarnings++;
-                                this.logger.warn(
-                                    `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
-                                );
-                            } else if (isTransferHandled) {
-                                this.logger.debug(
-                                    `Skipping unmapped category warning for transfer-handled category '${warningKey}'.`
-                                );
-                            }
-                        }
-                    }
-
-                    createTransactions.push(createTransaction);
-                }
-
-                if (!isDryRun) {
-                    await this.applyExistingCounterpartConversions({
-                        newMonMonTransactions,
-                        transferPlan,
-                    });
-                }
-
-                const effectiveExistingActualTransactions =
-                    await this.getExistingTransactionsForStartBalanceCheck({
-                        actualAccountId: actualAccount.id,
-                        existingActualTransactions,
-                        transfersEnabled,
-                        isDryRun,
-                    });
-
-                if (effectiveExistingActualTransactions.length === 0) {
-                    const latestTransactionDate =
-                        getLatestTransactionValueDate(accountTransactions);
-
-                    const startTransaction: ImportTransactionEntity = {
-                        account: actualAccount.id,
-                        date: format(
-                            latestTransactionDate ?? new Date(),
-                            DATE_FORMAT
-                        ),
-                        amount: this.getStartingBalanceForAccount(
-                            monMonAccount,
-                            accountTransactions
-                        ),
-                        imported_id: `${monMonAccount.uuid}-start`,
-                        cleared: true,
-                        notes: 'Starting balance',
-                        imported_payee: 'Starting balance',
-                    };
-
-                    createTransactions.push(startTransaction);
-                }
-
-                if (createTransactions.length > 0) {
-                    this.logger.debug(
-                        `Considering ${createTransactions.length} new transactions for Actual account '${actualAccount.name}'...`
-                    );
-
-                    createTransactions.forEach((t) => {
-                        if (t.payee) {
-                            return;
-                        }
-
-                        t.payee_name = shouldTransformPayees
-                            ? (transformedPayeesByRawName?.[
-                                  t.imported_payee as string
-                              ] ??
-                              t.imported_payee ??
-                              '')
-                            : (t.imported_payee ?? '');
-                    });
-
-                    if (!isDryRun) {
-                        const result = await this.actualApi.importTransactions(
-                            actualAccount.id,
-                            createTransactions
-                        );
-                        runMetrics.totalTransactionsAdded +=
-                            result.added.length;
-                        runMetrics.totalTransactionsUpdated +=
-                            result.updated.length;
                         if (
-                            result.added.length > 0 ||
-                            result.updated.length > 0
+                            !unmappedCategoryWarnings.has(warningKey) &&
+                            !isTransferHandled
                         ) {
-                            runMetrics.accountsWithImportActivity++;
-                        }
-
-                        const importErrors = result.errors ?? [];
-                        const hadImportErrors = importErrors.length > 0;
-
-                        if (hadImportErrors) {
-                            this.hadImportErrors = true;
-                            runMetrics.accountsWithImportErrors++;
-                            runMetrics.totalImportErrors += importErrors.length;
-                            this.logger.error(
-                                'Some errors occurred during import:'
-                            );
-                            for (let i = 0; i < importErrors.length; i++) {
-                                this.logger.error(
-                                    `Error ${i + 1}: ${importErrors[i]?.message ?? 'Unknown error'}`
-                                );
-                            }
-                        }
-
-                        if (hadImportErrors) {
+                            unmappedCategoryWarnings.add(warningKey);
+                            runMetrics.totalUnmappedCategoryWarnings++;
                             this.logger.warn(
-                                `Transaction import to account '${actualAccount.name}' completed with errors`,
-                                [
-                                    `Added ${result.added.length} new transaction.`,
-                                    `Updated ${result.updated.length} existing transaction.`,
-                                ]
+                                `No category mapping found for MoneyMoney category '${warningKey}'. Transaction categories will be left untouched.`
                             );
-                        } else {
-                            this.logger.info(
-                                `Transaction import to account '${actualAccount.name}' successful`,
-                                [
-                                    `Added ${result.added.length} new transaction.`,
-                                    `Updated ${result.updated.length} existing transaction.`,
-                                ]
+                        } else if (isTransferHandled) {
+                            this.logger.debug(
+                                `Skipping unmapped category warning for transfer-handled category '${warningKey}'.`
                             );
                         }
-
-                        const importedTransactions =
-                            result.added.length > 0 || result.updated.length > 0
-                                ? await this.actualApi.getTransactionsByIds(
-                                      actualAccount.id,
-                                      [...result.added, ...result.updated]
-                                  )
-                                : [];
-
-                        await this.applyTransferCounterpartUpdates({
-                            actualAccountName: actualAccount.name,
-                            importedTransactions,
-                            transferPlan,
-                        });
-
-                        if (
-                            intendedCategoryByImportedId.size > 0 &&
-                            result.added.length > 0
-                        ) {
-                            const overrideCount =
-                                await this.detectAndWarnAutoRuleOverrides({
-                                    actualAccountName: actualAccount.name,
-                                    addedIds: result.added,
-                                    importedTransactions,
-                                    intendedCategoryByImportedId,
-                                });
-                            runMetrics.totalAutoRuleOverrides += overrideCount;
-                        }
-                    } else {
-                        runMetrics.totalTransactionsAdded +=
-                            createTransactions.length;
-                        runMetrics.accountsWithImportActivity++;
-                        this.logger.info(
-                            `Dry run: would import ${createTransactions.length} new transactions to '${actualAccount.name}'.`
-                        );
                     }
                 }
 
-                if (!shouldSyncCategories) {
-                    continue;
-                }
+                createTransactions.push(createTransaction);
+            }
 
-                if (!existingCategoryPolicy) {
-                    continue;
-                }
-
-                const {
-                    pendingUpdates,
-                    backfillCount,
-                    conflictCount,
-                    skippedConflictCount,
-                    transferLockedCount,
-                } = await this.planExistingCategoryUpdates({
-                    existingPairs,
+            if (!isDryRun) {
+                await this.applyExistingCounterpartConversions({
+                    newMonMonTransactions,
+                    transferPlan,
                 });
+            }
 
-                if (transferLockedCount > 0) {
-                    categorySyncDebug.push(
-                        `'${actualAccount.name}': excluded ${transferLockedCount} transfer-linked`
-                    );
-                }
-
-                runMetrics.totalBackfills += backfillCount;
-                runMetrics.totalConflicts += conflictCount;
-                runMetrics.totalSkippedConflicts += skippedConflictCount;
-                runMetrics.totalCategoryUpdatesPlanned += pendingUpdates.length;
-                if (backfillCount > 0 || conflictCount > 0) {
-                    runMetrics.accountsWithCategoryActivity++;
-                }
-                if (conflictCount > 0) {
-                    runMetrics.accountsWithConflicts++;
-                }
-
-                this.logCategorySyncSummary({
-                    actualAccountName: actualAccount.name,
-                    existingPairsCount: existingPairs.length,
-                    backfillCount,
-                    conflictCount,
-                    pendingUpdatesCount: pendingUpdates.length,
-                    skippedConflictCount,
-                    categorySyncDebug,
-                });
-
-                if (pendingUpdates.length === 0) {
-                    continue;
-                }
-
-                await this.applyOrPreviewCategoryUpdates({
-                    actualAccountName: actualAccount.name,
-                    pendingUpdates,
+            const effectiveExistingActualTransactions =
+                await this.getExistingTransactionsForStartBalanceCheck({
+                    actualAccountId: actualAccount.id,
+                    existingActualTransactions,
+                    transfersEnabled,
                     isDryRun,
                 });
-                if (isDryRun) {
-                    runMetrics.totalCategoryUpdatesDryRun +=
-                        pendingUpdates.length;
+
+            if (effectiveExistingActualTransactions.length === 0) {
+                const latestTransactionDate =
+                    getLatestTransactionValueDate(accountTransactions);
+
+                const startTransaction: ImportTransactionEntity = {
+                    account: actualAccount.id,
+                    date: format(
+                        latestTransactionDate ?? new Date(),
+                        DATE_FORMAT
+                    ),
+                    amount: this.getStartingBalanceForAccount(
+                        monMonAccount,
+                        accountTransactions
+                    ),
+                    imported_id: `${monMonAccount.uuid}-start`,
+                    cleared: true,
+                    notes: 'Starting balance',
+                    imported_payee: 'Starting balance',
+                };
+
+                createTransactions.push(startTransaction);
+            }
+
+            if (createTransactions.length > 0) {
+                this.logger.debug(
+                    `Considering ${createTransactions.length} new transactions for Actual account '${actualAccount.name}'...`
+                );
+
+                createTransactions.forEach((t) => {
+                    if (t.payee) {
+                        return;
+                    }
+
+                    t.payee_name = shouldTransformPayees
+                        ? (transformedPayeesByRawName?.[
+                              t.imported_payee as string
+                          ] ??
+                          t.imported_payee ??
+                          '')
+                        : (t.imported_payee ?? '');
+                });
+
+                if (!isDryRun) {
+                    const result = await this.actualApi.importTransactions(
+                        actualAccount.id,
+                        createTransactions
+                    );
+                    runMetrics.totalTransactionsAdded += result.added.length;
+                    runMetrics.totalTransactionsUpdated +=
+                        result.updated.length;
+                    if (result.added.length > 0 || result.updated.length > 0) {
+                        runMetrics.accountsWithImportActivity++;
+                    }
+
+                    const importErrors = result.errors ?? [];
+                    const hadImportErrors = importErrors.length > 0;
+
+                    if (hadImportErrors) {
+                        this.hadImportErrors = true;
+                        runMetrics.accountsWithImportErrors++;
+                        runMetrics.totalImportErrors += importErrors.length;
+                        this.logger.error(
+                            'Some errors occurred during import:'
+                        );
+                        for (let i = 0; i < importErrors.length; i++) {
+                            this.logger.error(
+                                `Error ${i + 1}: ${importErrors[i]?.message ?? 'Unknown error'}`
+                            );
+                        }
+                    }
+
+                    if (hadImportErrors) {
+                        this.logger.warn(
+                            `Transaction import to account '${actualAccount.name}' completed with errors`,
+                            [
+                                `Added ${result.added.length} new transaction.`,
+                                `Updated ${result.updated.length} existing transaction.`,
+                            ]
+                        );
+                    } else {
+                        this.logger.info(
+                            `Transaction import to account '${actualAccount.name}' successful`,
+                            [
+                                `Added ${result.added.length} new transaction.`,
+                                `Updated ${result.updated.length} existing transaction.`,
+                            ]
+                        );
+                    }
+
+                    const importedTransactions =
+                        result.added.length > 0 || result.updated.length > 0
+                            ? await this.actualApi.getTransactionsByIds(
+                                  actualAccount.id,
+                                  [...result.added, ...result.updated]
+                              )
+                            : [];
+
+                    await this.applyTransferCounterpartUpdates({
+                        actualAccountName: actualAccount.name,
+                        importedTransactions,
+                        transferPlan,
+                    });
+
+                    if (
+                        intendedCategoryByImportedId.size > 0 &&
+                        result.added.length > 0
+                    ) {
+                        const overrideCount =
+                            await this.detectAndWarnAutoRuleOverrides({
+                                actualAccountName: actualAccount.name,
+                                addedIds: result.added,
+                                importedTransactions,
+                                intendedCategoryByImportedId,
+                            });
+                        runMetrics.totalAutoRuleOverrides += overrideCount;
+                    }
                 } else {
-                    runMetrics.totalCategoryUpdatesApplied +=
-                        pendingUpdates.length;
+                    runMetrics.totalTransactionsAdded +=
+                        createTransactions.length;
+                    runMetrics.accountsWithImportActivity++;
+                    this.logger.info(
+                        `Dry run: would import ${createTransactions.length} new transactions to '${actualAccount.name}'.`
+                    );
                 }
             }
 
-            if (categorySyncDebug.length > 0) {
-                this.logger.debug(
-                    'Category sync (per-account):',
-                    categorySyncDebug
+            if (!shouldSyncCategories) {
+                continue;
+            }
+
+            if (!existingCategoryPolicy) {
+                continue;
+            }
+
+            const {
+                pendingUpdates,
+                backfillCount,
+                conflictCount,
+                skippedConflictCount,
+                transferLockedCount,
+            } = await this.planExistingCategoryUpdates({
+                existingPairs,
+            });
+
+            if (transferLockedCount > 0) {
+                categorySyncDebug.push(
+                    `'${actualAccount.name}': excluded ${transferLockedCount} transfer-linked`
                 );
             }
 
-            if (shouldEmitMappingConflictGuidance(runMetrics)) {
-                this.logger.warn(
-                    `Category conflicts occurred while some categories are unmapped. Review with 'actual-mmi categories map' if needed.`
-                );
+            runMetrics.totalBackfills += backfillCount;
+            runMetrics.totalConflicts += conflictCount;
+            runMetrics.totalSkippedConflicts += skippedConflictCount;
+            runMetrics.totalCategoryUpdatesPlanned += pendingUpdates.length;
+            if (backfillCount > 0 || conflictCount > 0) {
+                runMetrics.accountsWithCategoryActivity++;
             }
-            this.emitImportRunSummary(runMetrics, isDryRun);
-        } finally {
-            // promptState removed
+            if (conflictCount > 0) {
+                runMetrics.accountsWithConflicts++;
+            }
+
+            this.logCategorySyncSummary({
+                actualAccountName: actualAccount.name,
+                existingPairsCount: existingPairs.length,
+                backfillCount,
+                conflictCount,
+                pendingUpdatesCount: pendingUpdates.length,
+                skippedConflictCount,
+                categorySyncDebug,
+            });
+
+            if (pendingUpdates.length === 0) {
+                continue;
+            }
+
+            await this.applyOrPreviewCategoryUpdates({
+                actualAccountName: actualAccount.name,
+                pendingUpdates,
+                isDryRun,
+            });
+            if (isDryRun) {
+                runMetrics.totalCategoryUpdatesDryRun += pendingUpdates.length;
+            } else {
+                runMetrics.totalCategoryUpdatesApplied += pendingUpdates.length;
+            }
         }
+
+        if (categorySyncDebug.length > 0) {
+            this.logger.debug(
+                'Category sync (per-account):',
+                categorySyncDebug
+            );
+        }
+
+        if (shouldEmitMappingConflictGuidance(runMetrics)) {
+            this.logger.warn(
+                `Category conflicts occurred while some categories are unmapped. Review with 'actual-mmi categories map' if needed.`
+            );
+        }
+        this.emitImportRunSummary(runMetrics, isDryRun);
     }
 
     public hasImportErrors() {
