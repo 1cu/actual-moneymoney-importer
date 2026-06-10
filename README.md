@@ -133,14 +133,13 @@ Once configured, run `actual-mmi validate` to verify the format.
 
 ### Import settings
 
-| Option                        | Default                  | Description                                                 |
-| ----------------------------- | ------------------------ | ----------------------------------------------------------- |
-| `importUncheckedTransactions` | `true`                   | Import transactions not yet checked in MoneyMoney           |
-| `synchronizeClearedStatus`    | `true`                   | Sync MoneyMoney's cleared status to Actual                  |
-| `synchronizeCategories`       | `false`                  | Enable [category sync](#category-sync)                      |
-| `categorySyncOnExisting`      | `ask`                    | Policy for existing transactions: `ask`, `new`, or `always` |
-| `importComments`              | `false`                  | Import MoneyMoney comments into Actual notes                |
-| `commentPrefix`               | `"MoneyMoney Comment: "` | Prefix added to imported comments                           |
+| Option                        | Default                  | Description                                                                                             |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `importUncheckedTransactions` | `true`                   | Import transactions not yet checked in MoneyMoney                                                       |
+| `synchronizeClearedStatus`    | `true`                   | Sync MoneyMoney's cleared status to Actual                                                              |
+| `categorySync`                | none                     | Category sync policy: `"off"` (don't apply), `"new"` (new imports only), `"all"` (also update existing) |
+| `importComments`              | `false`                  | Import MoneyMoney comments into Actual notes                                                            |
+| `commentPrefix`               | `"MoneyMoney Comment: "` | Prefix added to imported comments                                                                       |
 
 ### Comment import
 
@@ -197,29 +196,54 @@ actual-mmi import --dry-run -l 3
 
 ### Category sync
 
-Category sync maps MoneyMoney categories to Actual categories during import. Enable it with `synchronizeCategories = true` in your config.
+Category sync maps MoneyMoney categories to Actual categories during import. Enable it by setting `categorySync = "new"` or `categorySync = "all"` in your `[import]` section.
 
-#### Policies for existing transactions
+#### Policies
 
-When `synchronizeCategories = true`, the `categorySyncOnExisting` option controls how conflicts are handled for transactions that already exist in Actual:
-
-- **`ask`** (default): Prompt interactively for each conflict. Requires a TTY; use `-C=new` or `-C=always` in non-interactive environments. Prompt choices: `y`/`yes` to update, `n`/`no` to keep, `A`/`all` to update all remaining, `N`/`none` to keep all remaining, and `q`/`quit` to abort.
-- **`new`**: Only apply categories to newly imported transactions; leave existing transactions unchanged.
-- **`always`**: Always apply the mapped category, overwriting any existing category in Actual.
-
-Override at runtime with `--category-sync-on-existing` or `-C`:
-
-```bash
-actual-mmi import -C=new      # Only new transactions
-actual-mmi import -C=always   # Overwrite existing categories
-```
+- **`"off"`**: Don't apply category mappings (default when no `categorySync` is set).
+- **`"new"`**: Apply categories to newly imported transactions only; leave existing transactions unchanged.
+- **`"all"`**: Apply the mapped category to both new and existing transactions. Existing transactions with a different category will be overwritten.
 
 #### How it works
 
 1. **New transactions**: Categories are assigned based on your `[actualServers.budgets.categoryMapping]`
 2. **Existing transactions (backfill)**: Uncategorised transactions in Actual get the mapped category applied
-3. **Conflicts**: When an existing transaction has a different category, the `categorySyncOnExisting` policy applies
+3. **Conflicts**: When an existing transaction has a different category, the policy determines whether to overwrite
 4. **Auto-rule override detection**: After import, the importer re-fetches new transactions and warns if Actual's auto-rules changed a synced category
+
+#### Category mapping config
+
+The mapping uses human-readable `path:` refs by default. Each key is a MoneyMoney category path, each value an Actual category path:
+
+```toml
+[actualServers.budgets.categoryMapping]
+# Tool-managed block: running actual-mmi categories map --write-config rewrites this section.
+# Keys use "path:" refs by default. Fall back to "uuid:" or "id:" for ambiguous categories.
+# MoneyMoney: Ausgaben > Lebenshaltung > Lebensmittel
+# Actual: Lebenshaltung > 💳🧀 Lebensmittel
+"path:Ausgaben > Lebenshaltung > Lebensmittel" = "path:Lebenshaltung > 💳🧀 Lebensmittel"
+```
+
+For categories with duplicate names, use `uuid:` (MoneyMoney) or `id:` (Actual) as escape hatches:
+
+```toml
+"uuid:1d3f24ce-b007-4d64-98a2-6869cfae075a" = "id:82852131-7413-4517-8bd7-3df8da60b8d1"
+```
+
+#### Intentionally ignored categories
+
+To exclude specific MoneyMoney categories from the "unresolved" count (e.g., transfer categories), list them under the budget:
+
+```toml
+[[actualServers.budgets]]
+syncId = "<syncId>"
+# Place ignoredMoneyMoneyCategoryRefs BEFORE any [actualServers.budgets.*] sub-table
+ignoredMoneyMoneyCategoryRefs = ["path:Umbuchungen > Echte Umbuchungen"]
+
+[actualServers.budgets.e2eEncryption]
+```
+
+Ignored categories are excluded from the unresolved count, suggestions, and `--write-config` output. They appear in a separate "Intentionally Ignored" section in the mapping report.
 
 #### Category mapping CLI
 
@@ -236,21 +260,16 @@ actual-mmi categories map -s http://localhost:5006 -b <syncId> --format toml
 
 The audit report includes:
 
+- **Status Bar**: One-line summary (mapped, suggestions, invalid, unresolved, ignored)
 - **Configured Mappings**: Current mappings from your config
 - **Safe Suggestions**: High-confidence matches (identical category names)
-- **Invalid**: Mappings pointing to non-existent Actual categories
+- **Invalid**: Mappings pointing to non-existent categories
 - **Unresolved**: MoneyMoney categories without a mapping
+- **Intentionally Ignored**: Categories excluded from mapping by `ignoredMoneyMoneyCategoryRefs`
 - **Unused**: Mapped Actual categories not found in the budget
-- **Next Actions**: Recommended steps to complete your mapping
+- **Next Actions**: Context-aware recommendations based on current state
 
-With `--write-config`, the tool rewrites your `[actualServers.budgets.categoryMapping]` block with annotated comments for readability:
-
-```toml
-[actualServers.budgets.categoryMapping]
-# MoneyMoney: Ausgaben > Lebenshaltung > Lebensmittel
-# Actual: Lebenshaltung > 💳🧀 Lebensmittel
-"7f5c..." = "8aa1..."
-```
+With `--write-config`, the tool rewrites your `[actualServers.budgets.categoryMapping]` block with annotated comments for readability.
 
 ### Payee transformation
 
@@ -345,7 +364,6 @@ The configuration file (default: `~/.actually/config.toml`) may contain Actual p
 | `E2E encryption password is required`                                                          | If your Actual budget uses end-to-end encryption, set `enabled = true` and provide the `password` in `[actualServers.budgets.e2eEncryption]`.                               |
 | OpenAI model error (the default model is unavailable for your account)                         | The default model is `gpt-5.4-nano`. Set `payeeTransformation.openAiModel` to a model available on your OpenAI account (e.g. `gpt-4o-mini`).                                |
 | `Apple Intelligence backend is unavailable`                                                    | Requires macOS 26+ (Tahoe), Apple Silicon (M1 or later), and Apple Intelligence enabled in System Settings. Also ensure `tsfm-sdk` is installed.                            |
-| `Category sync policy 'ask' requires an interactive terminal`                                  | Use `-C=new` or `-C=always` when running in a non-interactive environment (CI, cron, launchd).                                                                              |
 | Auto-rule override warning: "Actual's rules changed the category of transaction X from Y to Z" | This is informational. Add a corresponding rule in Actual, or adjust the rule ordering so it doesn't conflict with the synced category.                                     |
 | Duplicate `imported_id` in Actual budget                                                       | Actual contains multiple transactions with the same importer ID. Inspect/merge/delete the duplicate transactions before relying on category backfill or duplicate skipping. |
 
