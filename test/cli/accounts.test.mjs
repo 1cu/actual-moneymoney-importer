@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -7,6 +9,27 @@ import test from 'node:test';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const cliPath = path.resolve(__dirname, '../../dist/index.js');
+
+const makeValidConfig = (serverUrl) => `
+[payeeTransformation]
+enabled = false
+
+[import]
+importUncheckedTransactions = true
+
+[[actualServers]]
+serverUrl = "${serverUrl}"
+serverPassword = "pw"
+
+[[actualServers.budgets]]
+syncId = "budget-id"
+
+[actualServers.budgets.e2eEncryption]
+enabled = false
+
+[actualServers.budgets.accountMapping]
+"Account" = "actual-account"
+`;
 
 const runCli = (args = []) => {
     const result = spawnSync(process.execPath, [cliPath, ...args], {
@@ -18,6 +41,23 @@ const runCli = (args = []) => {
         output: `${result.stdout}${result.stderr}`,
     };
 };
+
+const localhostUrl = 'http://localhost:5006';
+
+let tempDir;
+let configPath;
+
+test.before(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'actual-mmi-test-'));
+    configPath = path.join(tempDir, 'config.toml');
+    await writeFile(configPath, makeValidConfig(localhostUrl), 'utf8');
+});
+
+test.after(async () => {
+    if (tempDir) {
+        await rm(tempDir, { recursive: true, force: true });
+    }
+});
 
 test('accounts base command shows help guidance', () => {
     const result = runCli(['accounts']);
@@ -44,11 +84,19 @@ test('accounts list with invalid format fails', () => {
 });
 
 test('accounts list --format json produces valid JSON', () => {
-    const result = runCli(['accounts', 'list', '--format', 'json']);
+    const result = runCli([
+        'accounts',
+        'list',
+        '--format',
+        'json',
+        '--config',
+        configPath,
+    ]);
 
-    // Will fail if MoneyMoney DB is locked, which is expected in CI
+    // Will fail if MoneyMoney DB is locked or Actual is unreachable, which is
+    // expected in CI.
     if (result.status !== 0) {
-        assert.match(result.output, /MoneyMoney database is locked/i);
+        assert.match(result.output, /MoneyMoney database is locked|\[ERROR\]/i);
         return;
     }
 
@@ -64,11 +112,19 @@ test('accounts list --format json produces valid JSON', () => {
 });
 
 test('accounts list --format toml prints TOML snippet', () => {
-    const result = runCli(['accounts', 'list', '--format', 'toml']);
+    const result = runCli([
+        'accounts',
+        'list',
+        '--format',
+        'toml',
+        '--config',
+        configPath,
+    ]);
 
-    // Will fail if MoneyMoney DB is locked, which is expected in CI
+    // Will fail if MoneyMoney DB is locked or Actual is unreachable, which is
+    // expected in CI.
     if (result.status !== 0) {
-        assert.match(result.output, /MoneyMoney database is locked/i);
+        assert.match(result.output, /MoneyMoney database is locked|\[ERROR\]/i);
         return;
     }
 
@@ -124,15 +180,15 @@ test('accounts list --side actual skips MoneyMoney', () => {
         '--format',
         'json',
         '--server',
-        'http://localhost:5006',
+        localhostUrl,
+        '--config',
+        configPath,
     ]);
 
-    // In CI with no config/server, this will fail with no matching targets
+    // In CI with no Actual server running, this will fail with a connection
+    // error; MoneyMoney lock is also possible on macOS.
     if (result.status !== 0) {
-        assert.match(
-            result.output,
-            /No matching server\/budget|MoneyMoney database is locked/i
-        );
+        assert.match(result.output, /MoneyMoney database is locked|\[ERROR\]/i);
         return;
     }
 
