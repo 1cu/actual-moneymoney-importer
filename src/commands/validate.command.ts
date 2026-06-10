@@ -3,6 +3,7 @@ import {
     EnvVarResolutionError,
     getConfigFile,
     parseConfigContent,
+    resolveCategorySyncPolicy,
 } from '../utils/config.js';
 import { CommonArgs } from '../utils/cliArgs.js';
 import fs from 'fs/promises';
@@ -43,7 +44,29 @@ const handleValidate = async (argv: ArgumentsCamelCase<CommonArgs>) => {
             const configContent = await fs.readFile(configPath, 'utf-8');
 
             logger.debug(`Parsing configuration file...`);
-            parseConfigContent(configContent);
+            const config = parseConfigContent(configContent);
+
+            // Soft warning: categorySync is 'off' but mappings exist
+            if (resolveCategorySyncPolicy(config.import) === 'off') {
+                const hasMappings = config.actualServers.some((server) =>
+                    server.budgets.some(
+                        (budget) =>
+                            budget.categoryMapping !== undefined &&
+                            Object.keys(budget.categoryMapping).length > 0
+                    )
+                );
+                if (hasMappings) {
+                    logger.warn(
+                        'categorySync is "off" but one or more budgets have categoryMapping entries.'
+                    );
+                    logger.warn(
+                        'These mappings will be ignored during import.'
+                    );
+                    logger.warn(
+                        'Set categorySync to "new" or "all" in [import] to activate them.'
+                    );
+                }
+            }
         } catch (e) {
             if (e instanceof EnvVarResolutionError) {
                 logger.error(e.message);

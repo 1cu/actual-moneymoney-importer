@@ -430,7 +430,9 @@ test('getCanonicalMapping excludes suggestions when includeSuggestions is false'
     });
 
     assert.deepEqual(withoutSuggestions, {});
-    assert.deepEqual(withSuggestions, { 'mm-food': 'actual-food' });
+    assert.deepEqual(withSuggestions, {
+        'path:Food': 'path:Expenses > Food',
+    });
 });
 
 test('getCanonicalMappingEntries exposes origin and optional reason', () => {
@@ -581,6 +583,7 @@ test('report exposes planning fields and omits legacy report keys', () => {
     assert.ok(Array.isArray(report.unresolvedMoneyMoneyCategories));
     assert.ok(Array.isArray(report.unusedActualCategories));
     assert.ok(Array.isArray(report.planningWarnings));
+    assert.ok(Array.isArray(report.ignoredMoneyMoneyCategories));
     assert.equal('validMappings' in report, false);
     assert.equal('suggestions' in report, false);
     assert.equal('unmappedCategories' in report, false);
@@ -681,4 +684,120 @@ test('planningWarnings include exact messages when unresolved or unused categori
         'Unused Actual categories: 1',
         'Planning is incomplete (this can be intentional).',
     ]);
+});
+
+test('ignoredMoneyMoneyCategoryRefs excludes categories from unresolved', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+        ignoredMoneyMoneyCategoryRefs: ['mm-transfer'],
+    };
+
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
+
+    map.loadFromData(
+        [
+            makeMonMonCategory({
+                uuid: 'mm-transfer',
+                name: 'Echte Umbuchungen',
+            }),
+            makeMonMonCategory({ uuid: 'mm-food', name: 'Food' }),
+        ],
+        [],
+        []
+    );
+
+    const report = map.getReport();
+
+    assert.deepEqual(report.unresolvedMoneyMoneyCategories, [
+        { uuid: 'mm-food', path: 'Food' },
+    ]);
+
+    assert.equal(report.ignoredMoneyMoneyCategories.length, 1);
+    assert.equal(report.ignoredMoneyMoneyCategories[0]?.uuid, 'mm-transfer');
+    assert.match(
+        report.ignoredMoneyMoneyCategories[0]?.path ?? '',
+        /Echte Umbuchungen/
+    );
+    assert.equal(report.ignoredMoneyMoneyCategories[0]?.ref, 'mm-transfer');
+});
+
+test('ignoredMoneyMoneyCategoryRefs with path: ref', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+        ignoredMoneyMoneyCategoryRefs: ['path:Some Group > Transfer'],
+    };
+
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
+
+    map.loadFromData(
+        [
+            makeMonMonCategory({
+                uuid: 'mm-group',
+                name: 'Some Group',
+                group: true,
+                indentation: 0,
+            }),
+            makeMonMonCategory({
+                uuid: 'mm-transfer',
+                name: 'Transfer',
+                indentation: 1,
+            }),
+        ],
+        [],
+        []
+    );
+
+    const report = map.getReport();
+
+    assert.equal(report.ignoredMoneyMoneyCategories.length, 1);
+    assert.equal(report.ignoredMoneyMoneyCategories[0]?.uuid, 'mm-transfer');
+    assert.equal(
+        report.ignoredMoneyMoneyCategories[0]?.ref,
+        'path:Some Group > Transfer'
+    );
+});
+
+test('ignored categories do not appear in planning warnings', () => {
+    const budgetConfig = {
+        syncId: 'sync-id',
+        earliestImportDate: undefined,
+        e2eEncryption: { enabled: false, password: undefined },
+        accountMapping: {},
+        categoryMapping: {},
+        ignoredMoneyMoneyCategoryRefs: ['mm-food'],
+    };
+
+    const map = new CategoryMap(
+        budgetConfig,
+        makeActualApiStub(),
+        makeLogger()
+    );
+
+    map.loadFromData(
+        [makeMonMonCategory({ uuid: 'mm-food', name: 'Food' })],
+        [],
+        []
+    );
+
+    const report = map.getReport();
+
+    assert.equal(report.ignoredMoneyMoneyCategories.length, 1);
+    assert.equal(report.unresolvedMoneyMoneyCategories.length, 0);
+    assert.equal(report.planningWarnings.length, 0);
 });

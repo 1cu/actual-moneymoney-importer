@@ -9,7 +9,7 @@ import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import PayeeTransformer from '../utils/PayeeTransformer.js';
 import { withApiNoiseFilter } from '../utils/ActualApiLogControl.js';
-import { getConfig } from '../utils/config.js';
+import { getConfig, resolveCategorySyncPolicy } from '../utils/config.js';
 import { DATE_FORMAT } from '../utils/shared.js';
 
 export const buildBudgetNameBySyncIdMap = async (
@@ -38,7 +38,6 @@ type ImportArgs = CommonArgs & {
     account?: string | string[];
     server?: string | string[];
     budget?: string | string[];
-    'category-sync-on-existing'?: 'ask' | 'new' | 'always';
     from?: string;
     to?: string;
 };
@@ -72,20 +71,6 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
     const accountRefs = toRefList(argv.account);
     const serverRefs = toRefList(argv.server);
     const budgetRefs = toRefList(argv.budget);
-
-    const categorySyncOnExisting =
-        argv.categorySyncOnExisting ?? config.import.categorySyncOnExisting;
-
-    if (
-        config.import.synchronizeCategories &&
-        categorySyncOnExisting === 'ask' &&
-        !isDryRun &&
-        !process.stdin.isTTY
-    ) {
-        throw new Error(
-            `Category sync policy 'ask' requires an interactive terminal. Use --category-sync-on-existing=new|always for non-interactive runs.`
-        );
-    }
 
     if (fromDate && isNaN(fromDate.getTime())) {
         throw new Error(
@@ -196,7 +181,7 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
                         logger
                     );
                     if (
-                        config.import.synchronizeCategories ||
+                        resolveCategorySyncPolicy(config.import) !== 'off' ||
                         config.import.transfers.enabled
                     ) {
                         await categoryMap.load();
@@ -222,10 +207,8 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
                         from?: Date;
                         to?: Date;
                         isDryRun: boolean;
-                        categorySyncOnExisting?: 'ask' | 'new' | 'always';
                     } = {
                         isDryRun,
-                        categorySyncOnExisting,
                     };
 
                     if (accountRefs) {
@@ -288,13 +271,6 @@ export default {
             .describe(
                 'budget',
                 'Import only to the specified Actual budget identifier (syncId)'
-            )
-            .string('category-sync-on-existing')
-            .alias('category-sync-on-existing', 'C')
-            .choices('category-sync-on-existing', ['ask', 'new', 'always'])
-            .describe(
-                'category-sync-on-existing',
-                'How category sync handles existing imported transactions: ask|new|always'
             )
             .string('from')
             .alias('from', 'f')

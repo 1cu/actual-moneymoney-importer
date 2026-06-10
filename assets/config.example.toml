@@ -30,8 +30,7 @@ enabled = false
 [import]
 importUncheckedTransactions = true
 synchronizeClearedStatus = true
-synchronizeCategories = false
-categorySyncOnExisting = "ask" # ask|new|always
+categorySync = "off" # off|new|all (off = don't apply category mappings, new = new imports only, all = also update existing)
 importComments = false
 commentPrefix = "MoneyMoney Comment: "
 
@@ -56,6 +55,13 @@ serverPassword = "<password>"
 syncId = "<syncId>" # Get this value from the Actual advanced settings
 # earliestImportDate = "2024-01-01" # Optional, only import transactions from this date
 
+# Intentionally ignored MoneyMoney categories (optional)
+# Place this at the budget level (before any [actualServers.budgets.*] subsections).
+# Categories listed here are excluded from the "unresolved" count in
+# the mapping report. Use this for transfer categories or categories
+# that should never receive category assignments.
+# ignoredMoneyMoneyCategoryRefs = ["path:Umbuchungen > Echte Umbuchungen"]
+
 # E2E encryption for the budget, if enabled
 [actualServers.budgets.e2eEncryption]
 enabled = false
@@ -71,7 +77,8 @@ password = ""
 # Category map for the budget (optional)
 # Tool-managed block: running actual-mmi categories map --write-config
 # rewrites this section with annotated comments for readability.
-# The key is a MoneyMoney category UUID, the value is an Actual category ID.
+# Keys use human-readable "path:" refs by default: "path:Expenses > Food"
+# Fall back to "uuid:<uuid>" or "id:<id>" only for ambiguous categories.
 [actualServers.budgets.categoryMapping]
-"<monMonCategoryUuid>" = "<actualCategoryId>"
+"path:<monMonCategoryPath>" = "path:<actualCategoryPath>"
 

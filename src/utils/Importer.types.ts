@@ -4,10 +4,6 @@ import type {
     Account as MonMonAccount,
     Transaction as MonMonTransaction,
 } from 'moneymoney';
-import type { Config } from './config.js';
-
-export type ExistingCategorySyncPolicy =
-    Config['import']['categorySyncOnExisting'];
 
 export type CategoryUpdateClassification =
     | { type: 'backfill'; targetCategoryId: string }

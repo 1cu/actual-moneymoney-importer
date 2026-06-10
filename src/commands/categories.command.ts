@@ -18,12 +18,14 @@ import {
     ActualServerConfig,
     getConfig,
     getConfigFile,
+    resolveCategorySyncPolicy,
 } from '../utils/config.js';
 
 type MapFormat = 'table' | 'json' | 'toml';
 type CategoryMapItem = {
     serverUrl: string;
     syncId: string;
+    budgetName: string | undefined;
     report: ReturnType<CategoryMap['getReport']>;
     canonicalMappingEntries: CanonicalMappingEntry[];
     canonicalMapping: Record<string, string>;
@@ -91,13 +93,7 @@ const handleMapCommand = async (
 
     let shutdownFailed = false;
 
-    const reports: Array<{
-        serverUrl: string;
-        syncId: string;
-        report: ReturnType<CategoryMap['getReport']>;
-        canonicalMappingEntries: CanonicalMappingEntry[];
-        canonicalMapping: Record<string, string>;
-    }> = [];
+    const reports: CategoryMapItem[] = [];
 
     const targetsByServer = new Map<ActualServerConfig, ActualBudgetConfig[]>();
     for (const target of matchingTargets) {
@@ -109,6 +105,19 @@ const handleMapCommand = async (
     for (const [serverConfig, budgets] of targetsByServer.entries()) {
         const actualApi = new ActualApi(serverConfig, logger);
         await actualApi.init();
+
+        const budgetNameBySyncId = new Map<string, string>();
+        try {
+            const userFiles = await actualApi.getUserFiles();
+            for (const file of userFiles) {
+                budgetNameBySyncId.set(file.fileId, file.name);
+            }
+        } catch (err) {
+            // Non-fatal: budget names will fall back to syncId
+            logger.debug(
+                `Could not resolve budget names for server ${serverConfig.serverUrl}: ${err instanceof Error ? err.message : String(err)}`
+            );
+        }
 
         try {
             for (const budgetConfig of budgets) {
@@ -124,6 +133,7 @@ const handleMapCommand = async (
                 reports.push({
                     serverUrl: serverConfig.serverUrl,
                     syncId: budgetConfig.syncId,
+                    budgetName: budgetNameBySyncId.get(budgetConfig.syncId),
                     report: categoryMap.getReport(),
                     canonicalMappingEntries:
                         categoryMap.getCanonicalMappingEntries({
@@ -146,7 +156,9 @@ const handleMapCommand = async (
         }
     }
 
-    printReports(reports, outputFormat);
+    const categorySyncPolicy = resolveCategorySyncPolicy(config.import);
+
+    printReports(reports, outputFormat, categorySyncPolicy);
 
     if (!writeConfig) {
         process.exit(shutdownFailed ? 1 : 0);
@@ -235,7 +247,11 @@ const handleMapCommand = async (
     process.exit(shutdownFailed ? 1 : 0);
 };
 
-const printReports = (reports: CategoryMapItem[], format: MapFormat) => {
+const printReports = (
+    reports: CategoryMapItem[],
+    format: MapFormat,
+    categorySyncPolicy: 'off' | 'new' | 'all'
+) => {
     if (format === 'json') {
         console.log(JSON.stringify(reports, null, 4));
         return;
@@ -256,18 +272,40 @@ const printReports = (reports: CategoryMapItem[], format: MapFormat) => {
         return;
     }
 
+    const maxWidth = (process.stdout.columns ?? 142) - 2;
+
     for (const item of reports) {
         const report = item.report;
-        const maxWidth = (process.stdout.columns ?? 142) - 2;
-        for (const line of formatTableReport(
+
+        // --- Status bar ---
+        console.log(formatStatusBar(report));
+        console.log();
+
+        // --- Warning banner ---
+        if (categorySyncPolicy === 'off') {
+            console.log(formatSyncOffBanner(maxWidth));
+            console.log();
+        }
+
+        // --- Sections (only non-empty) ---
+        const sections = buildTableSections(
             item.serverUrl,
             item.syncId,
+            item.budgetName,
             report,
-            maxWidth
-        )) {
-            console.log(line);
+            maxWidth,
+            categorySyncPolicy
+        );
+
+        for (const section of sections) {
+            console.log(section.header);
+            for (const line of section.lines) {
+                console.log(line);
+            }
+            if (section.lines.length > 0) {
+                console.log();
+            }
         }
-        console.log();
     }
 };
 
@@ -396,6 +434,26 @@ export const formatUnresolvedMoneyMoneySection = (
     });
 };
 
+export const formatIgnoredMoneyMoneySection = (
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number
+) => {
+    const rows = report.ignoredMoneyMoneyCategories.map((category) => {
+        return [category.path, category.ref];
+    });
+
+    return formatSectionWithRows({
+        title: 'Intentionally Ignored:',
+        headers: ['MoneyMoney Path', 'Config Ref'],
+        rows,
+        columns: [
+            { width: 42, alignment: 'left', truncatePriority: 1 },
+            { width: 42, alignment: 'left', truncatePriority: 2 },
+        ],
+        maxWidth,
+    });
+};
+
 export const formatUnusedActualSection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
@@ -433,17 +491,28 @@ export const formatPlanningWarningsSection = (
 
 export const formatNextActionsSection = (
     report: ReturnType<CategoryMap['getReport']>,
-    maxWidth: number
+    maxWidth: number,
+    syncOff: boolean
 ) => {
-    let action =
-        'Mapping is complete; ready for import with `actual-mmi import`.';
+    let action: string;
 
     if (report.invalidMappings.length > 0) {
         action =
             'Fix invalid category refs in config first, then rerun `actual-mmi categories map`.';
+    } else if (report.safeSuggestions.length > 0) {
+        if (syncOff) {
+            action = `${report.safeSuggestions.length} safe suggestion${report.safeSuggestions.length !== 1 ? 's' : ''} available. Enable categorySync to apply them, then run \`--write-config\`.`;
+        } else {
+            action = `Run \`actual-mmi categories map --write-config\` to accept ${report.safeSuggestions.length} safe suggestion${report.safeSuggestions.length !== 1 ? 's' : ''} and write them to the config file.`;
+        }
     } else if (report.unresolvedMoneyMoneyCategories.length > 0) {
+        action = `${report.unresolvedMoneyMoneyCategories.length} categor${report.unresolvedMoneyMoneyCategories.length !== 1 ? 'ies' : 'y'} unresolved (this may be intentional). Add mappings or mark as ignored with \`ignoredMoneyMoneyCategoryRefs\` in the config.`;
+    } else if (syncOff) {
         action =
-            'Review unresolved categories, then run `actual-mmi categories map --write-config` to apply safe mappings.';
+            'Mapping is complete but categorySync is off; mappings will not be applied during import.';
+    } else {
+        action =
+            'Mapping is complete; ready for import with `actual-mmi import`.';
     }
 
     return formatSectionWithRows({
@@ -455,6 +524,141 @@ export const formatNextActionsSection = (
     });
 };
 
+export const formatStatusBar = (
+    report: ReturnType<CategoryMap['getReport']>
+) => {
+    const mapped = report.configuredMappings.length;
+    const suggestions = report.safeSuggestions.length;
+    const invalid = report.invalidMappings.length;
+    const unresolved = report.unresolvedMoneyMoneyCategories.length;
+    const ignored = report.ignoredMoneyMoneyCategories.length;
+
+    const parts: string[] = [];
+    if (mapped > 0) parts.push(`  ✅ ${mapped} mapped`);
+    if (suggestions > 0) parts.push(`💡 ${suggestions} suggestions`);
+    if (invalid > 0) parts.push(`❌ ${invalid} invalid`);
+    if (unresolved > 0) parts.push(`⚠️  ${unresolved} unresolved`);
+    if (ignored > 0) parts.push(`🫷 ${ignored} ignored`);
+    if (parts.length === 0) parts.push('  No categories configured');
+
+    return parts.join('  |  ');
+};
+
+export const formatSyncOffBanner = (maxWidth: number) => {
+    const width = Math.max(maxWidth, 40);
+    const top = '╔' + '═'.repeat(width) + '╗';
+    const bottom = '╚' + '═'.repeat(width) + '╝';
+    const empty = '║' + ' '.repeat(width) + '║';
+    const lines = [
+        '║  ⚠️  CATEGORY SYNC IS DISABLED' +
+            ' '.repeat(Math.max(0, width - 32)) +
+            '║',
+        empty,
+        '║  categorySync is "off" — these mappings will not be applied during import.' +
+            ' '.repeat(Math.max(0, width - 73)) +
+            '║',
+        '║  Set categorySync = "new" or "all" in [import] to enable category sync.' +
+            ' '.repeat(Math.max(0, width - 74)) +
+            '║',
+    ];
+    return [top, ...lines, bottom].join('\n');
+};
+
+type TableSection = {
+    header: string;
+    lines: string[];
+};
+
+export const buildTableSections = (
+    serverUrl: string,
+    syncId: string,
+    budgetName: string | undefined,
+    report: ReturnType<CategoryMap['getReport']>,
+    maxWidth: number,
+    categorySyncPolicy: 'off' | 'new' | 'all'
+): TableSection[] => {
+    const sections: TableSection[] = [];
+    const syncOff = categorySyncPolicy === 'off';
+
+    // Header
+    const budgetLabel = budgetName ? `${budgetName} (${syncId})` : syncId;
+    sections.push({
+        header: `Server: ${serverUrl}`,
+        lines: ['', `Budget: ${budgetLabel}`],
+    });
+
+    // Configured mappings (only if any)
+    if (report.configuredMappings.length > 0) {
+        const formatted = formatConfiguredMappingsSection(report, maxWidth);
+        const title = `Configured Mappings (${report.configuredMappings.length}):`;
+        sections.push({ header: title, lines: formatted.slice(1) });
+    }
+
+    // Invalid mappings (only if any)
+    if (report.invalidMappings.length > 0) {
+        const formatted = formatInvalidMappingsSection(report, maxWidth);
+        const title = `Invalid Mappings (${report.invalidMappings.length}):`;
+        sections.push({ header: title, lines: formatted.slice(1) });
+    }
+
+    // Safe suggestions (only if any)
+    if (report.safeSuggestions.length > 0) {
+        const formatted = formatSafeSuggestionsSection(report, maxWidth);
+        const title = `Safe Suggestions (${report.safeSuggestions.length}):`;
+        const hint = '  Run --write-config to accept these.';
+        sections.push({
+            header: title,
+            lines: [...formatted.slice(1), '', hint],
+        });
+    }
+
+    // Unresolved MoneyMoney categories (only if any)
+    if (report.unresolvedMoneyMoneyCategories.length > 0) {
+        const formatted = formatUnresolvedMoneyMoneySection(report, maxWidth);
+        const title = `Unresolved MoneyMoney Categories (${report.unresolvedMoneyMoneyCategories.length}):`;
+        sections.push({ header: title, lines: formatted.slice(1) });
+    }
+
+    // Intentionally ignored MoneyMoney categories (only if any)
+    if (report.ignoredMoneyMoneyCategories.length > 0) {
+        const formatted = formatIgnoredMoneyMoneySection(report, maxWidth);
+        const title = `Intentionally Ignored (${report.ignoredMoneyMoneyCategories.length}):`;
+        sections.push({ header: title, lines: formatted.slice(1) });
+    }
+
+    // Unused Actual categories (only if any)
+    if (report.unusedActualCategories.length > 0) {
+        const formatted = formatUnusedActualSection(report, maxWidth);
+        const title = `Unused Actual Categories (${report.unusedActualCategories.length}):`;
+        sections.push({ header: title, lines: formatted.slice(1) });
+    }
+
+    // Planning warnings (only if any)
+    if (report.planningWarnings.length > 0) {
+        const formatted = formatPlanningWarningsSection(report, maxWidth);
+        sections.push({
+            header: formatted[0] ?? 'Planning Warnings:',
+            lines: formatted.slice(1),
+        });
+    }
+
+    // Next actions (always)
+    const nextFormatted = formatNextActionsSection(report, maxWidth, syncOff);
+    sections.push({
+        header: nextFormatted[0] ?? 'Next Actions:',
+        lines: nextFormatted.slice(1),
+    });
+
+    return sections;
+};
+
+/**
+ * Legacy flat format: always renders all sections regardless of content.
+ *
+ * The actual CLI output uses {@link buildTableSections} instead, which
+ * only shows sections that have entries. This function is kept for
+ * backwards-compatible test coverage of the individual section formatters.
+ */
 export const formatTableReport = (
     serverUrl: string,
     syncId: string,
@@ -473,11 +677,13 @@ export const formatTableReport = (
         '',
         ...formatUnresolvedMoneyMoneySection(report, maxWidth),
         '',
+        ...formatIgnoredMoneyMoneySection(report, maxWidth),
+        '',
         ...formatUnusedActualSection(report, maxWidth),
         '',
         ...formatPlanningWarningsSection(report, maxWidth),
         '',
-        ...formatNextActionsSection(report, maxWidth),
+        ...formatNextActionsSection(report, maxWidth, false),
     ];
 };
 
@@ -492,6 +698,12 @@ export const formatTomlReport = (
         `# Unresolved MoneyMoney categories: ${report.unresolvedMoneyMoneyCategories.length}`,
         `# Unused Actual categories: ${report.unusedActualCategories.length}`,
     ];
+
+    if (report.ignoredMoneyMoneyCategories.length > 0) {
+        lines.push(
+            `# Intentionally ignored MoneyMoney categories: ${report.ignoredMoneyMoneyCategories.length}`
+        );
+    }
 
     if (report.planningWarnings.length > 0) {
         lines.push('# Planning is incomplete (this can be intentional).');
