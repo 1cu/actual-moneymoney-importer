@@ -18,7 +18,11 @@ export const renderCategoryMappingLines = (
 export const renderAnnotatedCategoryMappingLines = (
     entries: CanonicalMappingEntry[]
 ): string[] => {
-    const lines: string[] = ['[actualServers.budgets.categoryMapping]'];
+    const lines: string[] = [
+        '# Tool-managed block: running actual-mmi categories map --write-config rewrites this section.',
+        '# Keys use "path:" refs by default. Fall back to "uuid:" or "id:" for ambiguous categories.',
+        '[actualServers.budgets.categoryMapping]',
+    ];
 
     if (entries.length === 0) {
         lines.push('# No mappings generated.');
@@ -33,10 +37,17 @@ export const renderAnnotatedCategoryMappingLines = (
             ? entry.targetPath
             : `[UNRESOLVED] ${entry.targetId}`;
 
+        const sourceKey = entry.sourcePath?.trim()
+            ? `path:${entry.sourcePath}`
+            : entry.sourceUuid;
+        const targetValue = entry.targetPath?.trim()
+            ? `path:${entry.targetPath}`
+            : entry.targetId;
+
         lines.push(`# MoneyMoney: ${sourcePath}`);
         lines.push(`# Actual: ${targetPath}`);
         lines.push(
-            `${JSON.stringify(entry.sourceUuid)} = ${JSON.stringify(entry.targetId)}`
+            `${JSON.stringify(sourceKey)} = ${JSON.stringify(targetValue)}`
         );
         lines.push('');
     }

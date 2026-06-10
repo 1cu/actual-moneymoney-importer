@@ -4,10 +4,11 @@ import type {
     Account as MonMonAccount,
     Transaction as MonMonTransaction,
 } from 'moneymoney';
-import type { Config } from './config.js';
 
+/** Effective existing-category sync behaviour derived from {@link Config.import.categorySync}. */
 export type ExistingCategorySyncPolicy =
-    Config['import']['categorySyncOnExisting'];
+    | 'always' // categorySync = "all"
+    | 'new'; // categorySync = "new" or legacy "ask" fallback
 
 export type CategoryUpdateClassification =
     | { type: 'backfill'; targetCategoryId: string }

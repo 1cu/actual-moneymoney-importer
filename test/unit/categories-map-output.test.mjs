@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     formatConfiguredMappingsSection,
+    formatIgnoredMoneyMoneySection,
     formatInvalidMappingsSection,
     formatNextActionsSection,
     formatPlanningWarningsSection,
     formatSafeSuggestionsSection,
+    formatStatusBar,
     formatTableReport,
     formatTomlReport,
     formatUnresolvedMoneyMoneySection,
@@ -20,6 +22,7 @@ const makeReport = ({
     unresolvedMoneyMoneyCategories = [],
     unusedActualCategories = [],
     planningWarnings = [],
+    ignoredMoneyMoneyCategories = [],
 } = {}) => ({
     configuredMappings,
     invalidMappings,
@@ -27,6 +30,7 @@ const makeReport = ({
     unresolvedMoneyMoneyCategories,
     unusedActualCategories,
     planningWarnings,
+    ignoredMoneyMoneyCategories,
 });
 
 test('section formatters show None for empty sections', () => {
@@ -59,6 +63,11 @@ test('section formatters show None for empty sections', () => {
     ]);
     assert.deepEqual(formatPlanningWarningsSection(report, 120), [
         'Planning Warnings:',
+        '',
+        'None',
+    ]);
+    assert.deepEqual(formatIgnoredMoneyMoneySection(report, 120), [
+        'Intentionally Ignored:',
         '',
         'None',
     ]);
@@ -106,6 +115,13 @@ test('formatters include expected headers and rows', () => {
                 path: 'G > H',
             },
         ],
+        ignoredMoneyMoneyCategories: [
+            {
+                uuid: 'mm-ignored-1',
+                path: 'Transfers > Internal',
+                ref: 'path:Transfers > Internal',
+            },
+        ],
         planningWarnings: ['Planning is incomplete (this can be intentional).'],
     });
 
@@ -114,6 +130,7 @@ test('formatters include expected headers and rows', () => {
     const suggestionsLines = formatSafeSuggestionsSection(report, 120);
     const unresolvedLines = formatUnresolvedMoneyMoneySection(report, 120);
     const unusedLines = formatUnusedActualSection(report, 120);
+    const ignoredLines = formatIgnoredMoneyMoneySection(report, 120);
 
     assert.equal(
         configuredLines.some((line) => line.includes('╔')),
@@ -139,6 +156,10 @@ test('formatters include expected headers and rows', () => {
         unusedLines.some((line) => line.includes('ID')),
         true
     );
+    assert.equal(
+        ignoredLines.some((line) => line.includes('MoneyMoney Path')),
+        true
+    );
 });
 
 test('table report includes sections in expected order', () => {
@@ -149,6 +170,7 @@ test('table report includes sections in expected order', () => {
     const invalidIdx = lines.indexOf('Invalid Configured Mappings:');
     const suggestionsIdx = lines.indexOf('Safe Suggestions:');
     const unresolvedIdx = lines.indexOf('Unresolved MoneyMoney Categories:');
+    const ignoredIdx = lines.indexOf('Intentionally Ignored:');
     const unusedIdx = lines.indexOf('Unused Actual Categories:');
     const warningsIdx = lines.indexOf('Planning Warnings:');
     const actionsIdx = lines.indexOf('Next Actions:');
@@ -157,7 +179,8 @@ test('table report includes sections in expected order', () => {
     assert.ok(invalidIdx > configuredIdx);
     assert.ok(suggestionsIdx > invalidIdx);
     assert.ok(unresolvedIdx > suggestionsIdx);
-    assert.ok(unusedIdx > unresolvedIdx);
+    assert.ok(ignoredIdx > unresolvedIdx);
+    assert.ok(unusedIdx > ignoredIdx);
     assert.ok(warningsIdx > unusedIdx);
     assert.ok(actionsIdx > warningsIdx);
 });
@@ -186,6 +209,8 @@ test('unsafe write failures return a non-zero exit code', () => {
     ]);
     assert.equal(calls.info.length, 1);
     assert.deepEqual(calls.info[0][1], [
+        '# Tool-managed block: running actual-mmi categories map --write-config rewrites this section.',
+        '# Keys use "path:" refs by default. Fall back to "uuid:" or "id:" for ambiguous categories.',
         '[actualServers.budgets.categoryMapping]',
         '# No mappings generated.',
     ]);
@@ -201,7 +226,7 @@ test('next actions prioritizes invalid mappings over unresolved categories', () 
 
     const lines = formatNextActionsSection(report, 120).join('\n');
     assert.match(lines, /Fix invalid category refs in config first/);
-    assert.doesNotMatch(lines, /Review unresolved categories/);
+    assert.doesNotMatch(lines, /\d+ categor(y|ies) unresolved/);
 });
 
 test('next actions shows unresolved guidance when no invalid mappings exist', () => {
@@ -210,7 +235,7 @@ test('next actions shows unresolved guidance when no invalid mappings exist', ()
     });
 
     const lines = formatNextActionsSection(report, 120).join('\n');
-    assert.match(lines, /Review unresolved categories/);
+    assert.match(lines, /\d+ categor(y|ies) unresolved/);
     assert.doesNotMatch(lines, /Fix invalid category refs in config first/);
 });
 
@@ -224,6 +249,22 @@ test('next actions shows complete guidance when no invalid or unresolved remain'
     );
     assert.doesNotMatch(lines, /Fix invalid category refs in config first/);
     assert.doesNotMatch(lines, /Review unresolved categories/);
+});
+
+test('next actions shows suggestion guidance when safe suggestions exist', () => {
+    const report = makeReport({
+        safeSuggestions: [
+            { sourcePath: 'A', targetPath: 'B', reason: 'exact-normalized' },
+        ],
+    });
+
+    const lines = formatNextActionsSection(report, 120).join('\n');
+    assert.match(
+        lines,
+        /Run .+actual-mmi categories map --write-config.+accept 1 safe suggestion/
+    );
+    assert.doesNotMatch(lines, /Fix invalid category refs in config first/);
+    assert.doesNotMatch(lines, /\d+ categor(y|ies) unresolved/);
 });
 
 test('toml formatter includes preamble counts and incompleteness note when needed', () => {
@@ -251,7 +292,37 @@ test('toml formatter includes preamble counts and incompleteness note when neede
     ]);
     assert.ok(lines.some((line) => line.includes('# MoneyMoney: A > B')));
     assert.ok(lines.some((line) => line.includes('# Actual: C > D')));
-    assert.ok(lines.some((line) => line.includes('"mm-1" = "actual-1"')));
+    assert.ok(
+        lines.some((line) => line.includes('"path:A > B" = "path:C > D"'))
+    );
+});
+
+test('toml formatter includes ignored count when configured', () => {
+    const report = makeReport({
+        ignoredMoneyMoneyCategories: [
+            {
+                uuid: 'mm-ig',
+                path: 'Transfers > Transfer',
+                ref: 'path:Transfers > Transfer',
+            },
+        ],
+    });
+
+    const lines = formatTomlReport('server', 'budget', report, [
+        {
+            sourceUuid: 'mm-1',
+            targetId: 'actual-1',
+            sourcePath: 'A > B',
+            targetPath: 'C > D',
+            origin: 'configured',
+        },
+    ]);
+
+    assert.ok(
+        lines.some((line) =>
+            line.includes('# Intentionally ignored MoneyMoney categories: 1')
+        )
+    );
 });
 
 test('table output truncates only when max width is narrow', () => {
@@ -271,4 +342,24 @@ test('table output truncates only when max width is narrow', () => {
 
     assert.equal(narrow.includes('…'), true);
     assert.equal(wide.includes('…'), false);
+});
+
+test('formatStatusBar includes ignored count', () => {
+    const report = makeReport({
+        configuredMappings: [
+            {
+                sourceRef: 'mm-1',
+                targetRef: 'actual-1',
+                sourcePath: 'A',
+                targetPath: 'B',
+            },
+        ],
+        ignoredMoneyMoneyCategories: [
+            { uuid: 'mm-ig-1', path: 'X > Y', ref: 'path:X > Y' },
+            { uuid: 'mm-ig-2', path: 'P > Q', ref: 'path:P > Q' },
+        ],
+    });
+
+    const result = formatStatusBar(report);
+    assert.equal(result.includes('🫷 2 ignored'), true);
 });

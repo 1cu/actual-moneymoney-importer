@@ -91,6 +91,17 @@ const budgetSchema = z
         }),
         accountMapping: z.record(z.string(), z.string()),
         categoryMapping: z.record(z.string(), z.string()).optional(),
+        /**
+         * MoneyMoney category refs to intentionally leave unmapped.
+         *
+         * Categories listed here will not appear as "unresolved" in the
+         * mapping report. Use this for transfer categories or categories
+         * that should never receive category assignments.
+         *
+         * Accepts "path:"-prefixed refs (e.g. "path:Umbuchungen > Echte
+         * Umbuchungen"), bare paths, bare UUIDs, or leaf names.
+         */
+        ignoredMoneyMoneyCategoryRefs: z.array(z.string()).default([]),
     })
     .check((payload) => {
         if (
@@ -178,29 +189,73 @@ const transferImportSchema = z.object({
 });
 const defaultTransferImportConfig = transferImportSchema.parse({});
 
+/**
+ * Resolve the effective category sync policy from config.
+ *
+ * Prefers the new unified `categorySync` field when present. Falls back to
+ * deriving from the legacy `synchronizeCategories` and
+ * `categorySyncOnExisting` fields for backward compatibility.
+ *
+ * Legacy `ask` policy is treated as `new` (sync only new imports; never
+ * overwrite existing transactions without explicit user action).
+ */
+export const resolveCategorySyncPolicy = (
+    imp: z.infer<typeof importSchema>
+): 'off' | 'new' | 'all' => {
+    if (imp.categorySync !== undefined) {
+        return imp.categorySync;
+    }
+    // Derive from legacy fields for backward compat
+    if (!imp.synchronizeCategories) {
+        return 'off';
+    }
+    switch (imp.categorySyncOnExisting) {
+        case 'always':
+            return 'all';
+        default:
+            // 'ask' and 'new' both map to 'new'
+            return 'new';
+    }
+};
+
+const importSchema = z.object({
+    importUncheckedTransactions: z.boolean(),
+    synchronizeClearedStatus: z.boolean().default(true),
+    /**
+     * Legacy: replaced by `categorySync`.
+     * @deprecated Use `categorySync` instead.
+     */
+    synchronizeCategories: z.boolean().default(false),
+    /**
+     * Legacy: replaced by `categorySync`.
+     * @deprecated Use `categorySync` instead.
+     */
+    categorySyncOnExisting: z.enum(['ask', 'new', 'always']).default('ask'),
+    /**
+     * Unified category sync policy controlling both new imports and
+     * existing transactions.
+     *
+     * - `off`: never apply category mappings
+     * - `new`: apply category mappings to newly imported transactions only
+     * - `all`: also update previously imported transactions
+     */
+    categorySync: z.enum(['off', 'new', 'all']).optional(),
+    importComments: z.boolean().default(false),
+    commentPrefix: z.string().default('MoneyMoney Comment: '),
+    transfers: transferImportSchema.default(defaultTransferImportConfig),
+    ignorePatterns: z
+        .object({
+            commentPatterns: z.array(z.string()).optional(),
+            payeePatterns: z.array(z.string()).optional(),
+            purposePatterns: z.array(z.string()).optional(),
+        })
+        .optional(),
+});
+
 export const configSchema = z
     .object({
         payeeTransformation: payeeTransformationSchema,
-        import: z.object({
-            importUncheckedTransactions: z.boolean(),
-            synchronizeClearedStatus: z.boolean().default(true),
-            synchronizeCategories: z.boolean().default(false),
-            categorySyncOnExisting: z
-                .enum(['ask', 'new', 'always'])
-                .default('ask'),
-            importComments: z.boolean().default(false),
-            commentPrefix: z.string().default('MoneyMoney Comment: '),
-            transfers: transferImportSchema.default(
-                defaultTransferImportConfig
-            ),
-            ignorePatterns: z
-                .object({
-                    commentPatterns: z.array(z.string()).optional(),
-                    payeePatterns: z.array(z.string()).optional(),
-                    purposePatterns: z.array(z.string()).optional(),
-                })
-                .optional(),
-        }),
+        import: importSchema,
         actualServers: z.array(actualServerSchema).min(1),
     })
     .check((payload) => {

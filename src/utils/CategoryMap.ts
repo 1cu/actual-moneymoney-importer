@@ -62,6 +62,11 @@ type CategoryMapReport = {
     unresolvedMoneyMoneyCategories: Array<{ uuid: string; path: string }>;
     unusedActualCategories: Array<{ id: string; path: string }>;
     planningWarnings: string[];
+    ignoredMoneyMoneyCategories: Array<{
+        uuid: string;
+        path: string;
+        ref: string;
+    }>;
 };
 
 const DEFAULT_CATEGORY_PATH_SEPARATOR = ' > ';
@@ -83,6 +88,11 @@ class CategoryMap {
 
     private mappedMoneyMoneyUuids = new Set<string>();
     private mappedCategoryBySourceUuid = new Map<string, string>();
+    private ignoredState: Array<{
+        uuid: string;
+        path: string;
+        ref: string;
+    }> = [];
 
     constructor(
         private budgetConfig: ActualBudgetConfig,
@@ -113,6 +123,7 @@ class CategoryMap {
         this.buildMoneyMoneyCategoryInfos();
         this.buildActualCategoryInfos(actualCategories, actualGroups);
         this.evaluateConfiguredMappings();
+        this.resolveIgnoredState();
         this.computeSuggestions();
     }
 
@@ -221,6 +232,7 @@ class CategoryMap {
     }
 
     getReport(): CategoryMapReport {
+        const ignoredMoneyMoneyCategories = this.ignoredState;
         const unresolvedMoneyMoneyCategories = this.getUnmappedCategories();
         const unusedActualCategories = this.computeUnusedActualCategories();
         const planningWarnings = this.computePlanningWarnings(
@@ -235,6 +247,7 @@ class CategoryMap {
             unresolvedMoneyMoneyCategories,
             unusedActualCategories,
             planningWarnings,
+            ignoredMoneyMoneyCategories,
         };
     }
 
@@ -245,7 +258,10 @@ class CategoryMap {
     }) {
         return Object.fromEntries(
             this.getCanonicalMappingEntries({ includeSuggestions }).map(
-                (entry) => [entry.sourceUuid, entry.targetId]
+                (entry) => [
+                    `path:${entry.sourcePath}`,
+                    `path:${entry.targetPath}`,
+                ]
             )
         );
     }
@@ -534,6 +550,42 @@ class CategoryMap {
             }));
     }
 
+    private resolveIgnoredState() {
+        const refs = this.budgetConfig.ignoredMoneyMoneyCategoryRefs ?? [];
+        const { resolvedUuids, invalidRefs } =
+            this.resolveMoneyMoneyCategoryRefs(refs);
+
+        const ignored: Array<{
+            uuid: string;
+            path: string;
+            ref: string;
+        }> = [];
+
+        for (const uuid of resolvedUuids) {
+            this.mappedMoneyMoneyUuids.add(uuid);
+            const info = this.monMonCategoryInfos.get(uuid);
+            if (info) {
+                const ref = refs.find((r) => {
+                    const res = this.resolveMoneyMoneyCategoryRef(r);
+                    return res.info?.uuid === uuid;
+                });
+                ignored.push({
+                    uuid: info.uuid,
+                    path: info.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR),
+                    ref: ref ?? uuid,
+                });
+            }
+        }
+
+        for (const invalid of invalidRefs) {
+            this.logger.warn(
+                `Ignored category ref '${invalid.ref}' is invalid: ${invalid.reason}`
+            );
+        }
+
+        this.ignoredState = ignored;
+    }
+
     private computeUnusedActualCategories() {
         const usedActualIds = new Set<string>();
 
@@ -583,12 +635,27 @@ class CategoryMap {
         info?: MoneyMoneyCategoryInfo;
         reason?: string;
     } {
-        const byUuid = this.monMonCategoryInfos.get(ref);
+        // Handle "uuid:" prefix — explicit MoneyMoney category UUID lookup only.
+        if (ref.startsWith('uuid:')) {
+            const uuid = ref.slice(5);
+            const byUuid = this.monMonCategoryInfos.get(uuid);
+            if (byUuid) {
+                return { info: byUuid };
+            }
+            return {
+                reason: `MoneyMoney category uuid '${uuid}' not found.`,
+            };
+        }
+
+        // Strip optional "path:" prefix for human-readable refs.
+        const actualRef = ref.startsWith('path:') ? ref.slice(5) : ref;
+
+        const byUuid = this.monMonCategoryInfos.get(actualRef);
         if (byUuid) {
             return { info: byUuid };
         }
 
-        const normalizedRef = this.normalizeCategoryName(ref);
+        const normalizedRef = this.normalizeCategoryName(actualRef);
         const categories = Array.from(this.monMonCategoryInfos.values());
 
         const byPath = categories.filter((category) => {
@@ -636,12 +703,25 @@ class CategoryMap {
         info?: ActualCategoryInfo;
         reason?: string;
     } {
-        const byId = this.actualCategoryInfos.get(ref);
+        // Handle "id:" prefix — explicit Actual category ID lookup only.
+        if (ref.startsWith('id:')) {
+            const id = ref.slice(3);
+            const byId = this.actualCategoryInfos.get(id);
+            if (byId) {
+                return { info: byId };
+            }
+            return { reason: `Actual category id '${id}' not found.` };
+        }
+
+        // Strip optional "path:" prefix for human-readable refs.
+        const actualRef = ref.startsWith('path:') ? ref.slice(5) : ref;
+
+        const byId = this.actualCategoryInfos.get(actualRef);
         if (byId) {
             return { info: byId };
         }
 
-        const normalizedRef = this.normalizeCategoryName(ref);
+        const normalizedRef = this.normalizeCategoryName(actualRef);
         const categories = Array.from(this.actualCategoryInfos.values());
 
         const byPath = categories.filter((category) => {
@@ -704,6 +784,7 @@ class CategoryMap {
         this.suggestions = [];
         this.mappedMoneyMoneyUuids.clear();
         this.mappedCategoryBySourceUuid.clear();
+        this.ignoredState = [];
     }
 }
 

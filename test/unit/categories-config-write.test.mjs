@@ -59,7 +59,7 @@ test('replaceCategoryMappingInConfig inserts missing mapping block', () => {
     assert.match(result.content, /# MoneyMoney: A > B/);
     assert.match(result.content, /# Actual: C > D/);
     assert.match(result.content, /\[actualServers\.budgets\.categoryMapping\]/);
-    assert.match(result.content, /"mm-1" = "actual-1"/);
+    assert.match(result.content, /"path:A > B" = "path:C > D"/);
 });
 
 test('replaceCategoryMappingInConfig replaces existing mapping block', () => {
@@ -83,7 +83,7 @@ test('replaceCategoryMappingInConfig replaces existing mapping block', () => {
     }
 
     assert.doesNotMatch(result.content, /"old-mm" = "old-actual"/);
-    assert.match(result.content, /"new-mm" = "new-actual"/);
+    assert.match(result.content, /"path:X > Y" = "path:Z > Q"/);
 });
 
 test('replaceCategoryMappingInConfig replaces section cleanly before next header', () => {
@@ -118,7 +118,7 @@ syncId = "budget-a"
 
     assert.match(
         result.content,
-        /\[actualServers\.budgets\.categoryMapping\]\n# MoneyMoney: X > Y[\s\S]*"new-mm" = "new-actual"\n\n\[actualServers\.budgets\.accountMapping\]/
+        /# Tool-managed block:.*\n# Keys use "path:".*\n\[actualServers\.budgets\.categoryMapping\]\n# MoneyMoney: X > Y[\s\S]*"path:X > Y" = "path:Z > Q"\n\n\[actualServers\.budgets\.accountMapping\]/
     );
 });
 
@@ -232,7 +232,7 @@ test('replaceCategoryMappingInConfig replaces mapping section at EOF without tra
         return;
     }
 
-    assert.match(result.content, /"new-mm" = "new-actual"/);
+    assert.match(result.content, /"path:X > Y" = "path:Z > Q"/);
     assert.doesNotMatch(result.content, /"old-mm" = "old-actual"/);
 });
 
@@ -257,7 +257,51 @@ test('renderAnnotatedCategoryMappingLines includes unresolved fallback comments'
 test('renderAnnotatedCategoryMappingLines shows explicit empty mapping section', () => {
     const lines = renderAnnotatedCategoryMappingLines([]);
     assert.deepEqual(lines, [
+        '# Tool-managed block: running actual-mmi categories map --write-config rewrites this section.',
+        '# Keys use "path:" refs by default. Fall back to "uuid:" or "id:" for ambiguous categories.',
         '[actualServers.budgets.categoryMapping]',
         '# No mappings generated.',
     ]);
+});
+
+test('replaceCategoryMappingInConfig preserves budget-level ignoredMoneyMoneyCategoryRefs', () => {
+    const configWithIgnored = `
+[[actualServers]]
+serverUrl = "http://localhost:5006"
+serverPassword = "pw"
+
+[[actualServers.budgets]]
+syncId = "budget-a"
+ignoredMoneyMoneyCategoryRefs = ["path:Transfers > Transfer"]
+
+[actualServers.budgets.e2eEncryption]
+enabled = false
+
+[actualServers.budgets.accountMapping]
+"A" = "B"
+
+[actualServers.budgets.categoryMapping]
+# Tool-managed block...
+"path:Food" = "path:Expenses > Food"
+`;
+
+    const entries = [
+        {
+            sourceUuid: 'mm-drink',
+            targetId: 'actual-drink',
+            sourcePath: 'Drink',
+            targetPath: 'Expenses > Drink',
+            origin: 'configured',
+        },
+    ];
+
+    const result = replaceCategoryMappingInConfig(
+        configWithIgnored,
+        'budget-a',
+        entries
+    );
+    assert.equal(result.ok, true);
+    assert.match(result.content, /ignoredMoneyMoneyCategoryRefs =/);
+    assert.match(result.content, /"path:Drink" =/);
+    assert.doesNotMatch(result.content, /"path:Food"/);
 });

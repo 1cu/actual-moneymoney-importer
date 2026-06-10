@@ -17,7 +17,11 @@ import {
 import { AccountMap } from './AccountMap.js';
 import ActualApi from './ActualApi.js';
 import CategoryMap from './CategoryMap.js';
-import { ActualBudgetConfig, Config } from './config.js';
+import {
+    ActualBudgetConfig,
+    Config,
+    resolveCategorySyncPolicy,
+} from './config.js';
 import Logger from './Logger.js';
 import PayeeTransformer from './PayeeTransformer.js';
 import TransferPlanner from './TransferPlanner.js';
@@ -352,23 +356,17 @@ class Importer {
         from,
         to: toDate,
         isDryRun = false,
-        categorySyncOnExisting,
     }: {
         accountRefs?: Array<string>;
         from?: Date;
         to?: Date;
         isDryRun?: boolean;
-        categorySyncOnExisting?: ExistingCategorySyncPolicy;
     }) {
-        let existingCategoryPolicy =
-            categorySyncOnExisting ?? this.config.import.categorySyncOnExisting;
-
-        // In dry-run mode, interactive 'ask' policy makes no sense — nothing
-        // will be written. Treat it as 'new' to skip interactive prompts
-        // while still reporting category conflicts in the summary.
-        if (isDryRun && existingCategoryPolicy === 'ask') {
-            existingCategoryPolicy = 'new';
-        }
+        const effectiveCategorySync = resolveCategorySyncPolicy(
+            this.config.import
+        );
+        const existingCategoryPolicy: ExistingCategorySyncPolicy =
+            effectiveCategorySync === 'all' ? 'always' : 'new';
 
         const fromDate = from ?? subMonths(new Date(), 1);
         const earliestImportDate = this.budgetConfig.earliestImportDate
@@ -413,8 +411,8 @@ class Importer {
 
         this.logger.debug(
             `Category synchronization is ${
-                this.config.import.synchronizeCategories
-                    ? `enabled (existing policy: ${existingCategoryPolicy})`
+                effectiveCategorySync !== 'off'
+                    ? `enabled (mode: ${effectiveCategorySync})`
                     : 'disabled'
             }`
         );
@@ -570,7 +568,7 @@ class Importer {
                 .filter((payee) => payee.transfer_acct)
                 .map((payee) => [payee.transfer_acct as string, payee.id])
         );
-        const shouldSyncCategories = this.config.import.synchronizeCategories;
+        const shouldSyncCategories = effectiveCategorySync !== 'off';
 
         const accountStates = Array.from(accountMapping.entries()).map(
             ([monMonAccount, actualAccount]) => {
