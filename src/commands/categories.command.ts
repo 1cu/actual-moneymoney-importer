@@ -3,7 +3,8 @@ import toml from 'toml';
 import { checkDatabaseUnlocked } from 'moneymoney';
 import { ArgumentsCamelCase, CommandModule } from 'yargs';
 import ActualApi from '../utils/ActualApi.js';
-import { includesRef, toRefList, CommonArgs } from '../utils/cliArgs.js';
+import { selectTargets } from '../utils/actualTargets.js';
+import { toRefList, CommonArgs } from '../utils/cliArgs.js';
 import CategoryMap, { CanonicalMappingEntry } from '../utils/CategoryMap.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import { renderTextTable, TableColumnConfig } from '../utils/textTable.js';
@@ -18,11 +19,6 @@ import {
     getConfig,
     getConfigFile,
 } from '../utils/config.js';
-
-type MappingTarget = {
-    server: ActualServerConfig;
-    budget: ActualBudgetConfig;
-};
 
 type MapFormat = 'table' | 'json' | 'toml';
 type CategoryMapItem = {
@@ -237,30 +233,6 @@ const handleMapCommand = async (
         `Updated category mapping in ${configPath} (${report.canonicalMappingEntries.length} entries, annotated for readability).`
     );
     process.exit(shutdownFailed ? 1 : 0);
-};
-
-const selectTargets = (
-    servers: ActualServerConfig[],
-    serverRefs: string[] | undefined,
-    budgetRefs: string[] | undefined
-): MappingTarget[] => {
-    const targets: MappingTarget[] = [];
-
-    for (const server of servers) {
-        if (!includesRef(serverRefs, server.serverUrl)) {
-            continue;
-        }
-
-        for (const budget of server.budgets) {
-            if (!includesRef(budgetRefs, budget.syncId)) {
-                continue;
-            }
-
-            targets.push({ server, budget });
-        }
-    }
-
-    return targets;
 };
 
 const printReports = (reports: CategoryMapItem[], format: MapFormat) => {

@@ -63,7 +63,8 @@ password = ""
 
 # Account map for the budget
 [actualServers.budgets.accountMapping]
-# The key is either the account name, or the account number of a MoneyMoney account
+# The key is the account name, account number (IBAN), or UUID of a MoneyMoney account.
+# Use "actual-mmi accounts list --format toml" to see available accounts with their UUIDs.
 # The value is the account name or the account id (from the url) of the Actual account
 "<monMonAcc>" = "<actualAcc>"
 
