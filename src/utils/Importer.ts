@@ -1415,11 +1415,19 @@ class Importer {
                 const toPath = this.categoryMap.getActualCategoryPath(
                     update.toCategoryId
                 );
-                return `${update.importedId}: ${fromPath} -> ${toPath}`;
+                const tx = update.monMonTransaction;
+                const name = tx.name?.trim() || '(no name)';
+                const date = format(tx.valueDate, DATE_FORMAT);
+                const amount =
+                    tx.amount > 0
+                        ? `+${tx.amount.toFixed(2)}`
+                        : tx.amount.toFixed(2);
+                return `${name} (${amount} on ${date}): change category from "${fromPath}" to "${toPath}"`;
             });
 
+            const plural = pendingUpdates.length === 1 ? '' : 's';
             this.logger.info(
-                `Dry run: would apply ${pendingUpdates.length} category updates in '${actualAccountName}'.`,
+                `Dry run: would update categor${plural === 's' ? 'ies' : 'y'} on ${pendingUpdates.length} existing transaction${plural} in '${actualAccountName}':`,
                 preview
             );
             return;
