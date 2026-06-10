@@ -113,7 +113,7 @@ test('planExistingCategoryUpdates backfills null category for new policy', async
     assert.equal(plan.transferLockedCount, 0);
 });
 
-test('planExistingCategoryUpdates skips conflict for new and applies for always', async () => {
+test('planExistingCategoryUpdates applies conflicts when called (categorySync=all behavior)', async () => {
     const mappingByUuid = {
         'mm-1': {
             actualCategoryId: 'cat-target',
@@ -122,25 +122,13 @@ test('planExistingCategoryUpdates skips conflict for new and applies for always'
         },
     };
 
-    const { importer: importerNew } = makeImporter({ mappingByUuid });
-    const planNew = await importerNew.planExistingCategoryUpdates({
+    const { importer } = makeImporter({ mappingByUuid });
+    const plan = await importer.planExistingCategoryUpdates({
         existingPairs: [makePair({ currentCategoryId: 'cat-current' })],
-        existingCategoryPolicy: 'new',
-        promptState: { mode: 'prompt' },
     });
-    assert.equal(planNew.pendingUpdates.length, 0);
-    assert.equal(planNew.skippedConflictCount, 1);
-    assert.equal(planNew.transferLockedCount, 0);
-
-    const { importer: importerAlways } = makeImporter({ mappingByUuid });
-    const planAlways = await importerAlways.planExistingCategoryUpdates({
-        existingPairs: [makePair({ currentCategoryId: 'cat-current' })],
-        existingCategoryPolicy: 'always',
-        promptState: { mode: 'prompt' },
-    });
-    assert.equal(planAlways.pendingUpdates.length, 1);
-    assert.equal(planAlways.pendingUpdates[0]?.reason, 'conflict');
-    assert.equal(planAlways.transferLockedCount, 0);
+    assert.equal(plan.pendingUpdates.length, 1);
+    assert.equal(plan.pendingUpdates[0]?.reason, 'conflict');
+    assert.equal(plan.transferLockedCount, 0);
 });
 
 test('planExistingCategoryUpdates skips transfer-linked transactions from category sync', async () => {
@@ -168,33 +156,6 @@ test('planExistingCategoryUpdates skips transfer-linked transactions from catego
     assert.equal(plan.conflictCount, 0);
     assert.equal(plan.pendingUpdates.length, 0);
     assert.equal(plan.transferLockedCount, 1);
-});
-
-test('planExistingCategoryUpdates aborts on quit decision', async () => {
-    const { importer } = makeImporter({
-        mappingByUuid: {
-            'mm-1': {
-                actualCategoryId: 'cat-target',
-                isUncategorized: false,
-                isMapped: true,
-            },
-        },
-    });
-
-    importer.promptForConflictDecision = async () => 'quit';
-
-    await assert.rejects(
-        () =>
-            importer.planExistingCategoryUpdates({
-                existingPairs: [makePair({ currentCategoryId: 'cat-current' })],
-                existingCategoryPolicy: 'ask',
-                promptState: {
-                    mode: 'prompt',
-                    promptInterface: {},
-                },
-            }),
-        /Category sync aborted by user/
-    );
 });
 
 test('applyOrPreviewCategoryUpdates does not mutate in dry run', async () => {

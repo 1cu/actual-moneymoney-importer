@@ -85,7 +85,7 @@ const budgetSchema = z
     .object({
         syncId: z.string(),
         earliestImportDate: z.string().optional(),
-        e2eEncryption: z.object({
+        e2eEncryption: z.strictObject({
             enabled: z.boolean(),
             password: z.string().optional(),
         }),

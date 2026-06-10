@@ -67,6 +67,10 @@ type CategoryMapReport = {
         path: string;
         ref: string;
     }>;
+    invalidIgnoredRefWarnings: Array<{
+        ref: string;
+        reason: string;
+    }>;
 };
 
 const DEFAULT_CATEGORY_PATH_SEPARATOR = ' > ';
@@ -92,6 +96,10 @@ class CategoryMap {
         uuid: string;
         path: string;
         ref: string;
+    }> = [];
+    private invalidIgnoredRefWarnings: Array<{
+        ref: string;
+        reason: string;
     }> = [];
 
     constructor(
@@ -237,7 +245,8 @@ class CategoryMap {
         const unusedActualCategories = this.computeUnusedActualCategories();
         const planningWarnings = this.computePlanningWarnings(
             unresolvedMoneyMoneyCategories.length,
-            unusedActualCategories.length
+            unusedActualCategories.length,
+            this.invalidIgnoredRefWarnings.length
         );
 
         return {
@@ -248,6 +257,7 @@ class CategoryMap {
             unusedActualCategories,
             planningWarnings,
             ignoredMoneyMoneyCategories,
+            invalidIgnoredRefWarnings: this.invalidIgnoredRefWarnings,
         };
     }
 
@@ -258,12 +268,47 @@ class CategoryMap {
     }) {
         return Object.fromEntries(
             this.getCanonicalMappingEntries({ includeSuggestions }).map(
-                (entry) => [
-                    `path:${entry.sourcePath}`,
-                    `path:${entry.targetPath}`,
-                ]
+                (entry) => {
+                    const sourceRef = this.canonicalSourceRef(
+                        entry.sourceUuid,
+                        entry.sourcePath
+                    );
+                    const targetRef = this.canonicalTargetRef(
+                        entry.targetId,
+                        entry.targetPath
+                    );
+                    return [sourceRef, targetRef];
+                }
             )
         );
+    }
+
+    /**
+     * Choose the best ref for a MoneyMoney category in canonical output.
+     *
+     * Prefers "path:" when the path resolves uniquely back to the same UUID.
+     * Falls back to "uuid:" when paths collide (e.g., after normalization).
+     */
+    private canonicalSourceRef(uuid: string, path: string): string {
+        const resolved = this.resolveMoneyMoneyCategoryRef(path);
+        if (resolved.info?.uuid === uuid) {
+            return `path:${path}`;
+        }
+        return `uuid:${uuid}`;
+    }
+
+    /**
+     * Choose the best ref for an Actual category in canonical output.
+     *
+     * Prefers "path:" when the path resolves uniquely back to the same id.
+     * Falls back to "id:" when paths collide or resolution is ambiguous.
+     */
+    private canonicalTargetRef(id: string, path: string): string {
+        const resolved = this.resolveActualCategoryRef(path);
+        if (resolved.info?.id === id) {
+            return `path:${path}`;
+        }
+        return `id:${id}`;
     }
 
     getCanonicalMappingEntries({
@@ -562,25 +607,45 @@ class CategoryMap {
         }> = [];
 
         for (const uuid of resolvedUuids) {
-            this.mappedMoneyMoneyUuids.add(uuid);
             const info = this.monMonCategoryInfos.get(uuid);
-            if (info) {
-                const ref = refs.find((r) => {
-                    const res = this.resolveMoneyMoneyCategoryRef(r);
-                    return res.info?.uuid === uuid;
+            if (!info) continue;
+
+            // Detect mapped+ignored conflicts: an ignored category that is
+            // also explicitly mapped is ambiguous user intent. Flag the mapping
+            // as invalid and skip adding to mappedMoneyMoneyUuids so the
+            // category still appears as unresolved (alerting the user).
+            const conflictingMapping = this.validMappings.find(
+                (m) => m.sourceUuid === uuid
+            );
+            if (conflictingMapping) {
+                this.validMappings = this.validMappings.filter(
+                    (m) => m !== conflictingMapping
+                );
+                const mappedReason =
+                    'Mapped category is also listed in ignoredMoneyMoneyCategoryRefs. Remove one.';
+                this.invalidMappings.push({
+                    ...conflictingMapping,
+                    reason: conflictingMapping.reason
+                        ? `${conflictingMapping.reason}; ${mappedReason}`
+                        : mappedReason,
                 });
-                ignored.push({
-                    uuid: info.uuid,
-                    path: info.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR),
-                    ref: ref ?? uuid,
-                });
+                continue;
             }
+
+            this.mappedMoneyMoneyUuids.add(uuid);
+            const ref = refs.find((r) => {
+                const res = this.resolveMoneyMoneyCategoryRef(r);
+                return res.info?.uuid === uuid;
+            });
+            ignored.push({
+                uuid: info.uuid,
+                path: info.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR),
+                ref: ref ?? uuid,
+            });
         }
 
         for (const invalid of invalidRefs) {
-            this.logger.warn(
-                `Ignored category ref '${invalid.ref}' is invalid: ${invalid.reason}`
-            );
+            this.invalidIgnoredRefWarnings.push(invalid);
         }
 
         this.ignoredState = ignored;
@@ -610,7 +675,8 @@ class CategoryMap {
 
     private computePlanningWarnings(
         unresolvedCount: number,
-        unusedCount: number
+        unusedCount: number,
+        invalidIgnoredRefCount: number
     ) {
         const warnings: string[] = [];
 
@@ -622,6 +688,12 @@ class CategoryMap {
 
         if (unusedCount > 0) {
             warnings.push(`Unused Actual categories: ${unusedCount}`);
+        }
+
+        if (invalidIgnoredRefCount > 0) {
+            warnings.push(
+                `Invalid ignored category refs: ${invalidIgnoredRefCount}`
+            );
         }
 
         if (warnings.length > 0) {
@@ -785,6 +857,7 @@ class CategoryMap {
         this.mappedMoneyMoneyUuids.clear();
         this.mappedCategoryBySourceUuid.clear();
         this.ignoredState = [];
+        this.invalidIgnoredRefWarnings = [];
     }
 }
 

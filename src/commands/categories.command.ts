@@ -114,11 +114,8 @@ const handleMapCommand = async (
             }
         } catch (err) {
             // Non-fatal: budget names will fall back to syncId
-            logger.warn(
-                `Could not resolve budget names for server ${serverConfig.serverUrl}`
-            );
             logger.debug(
-                `Error details: ${err instanceof Error ? err.message : String(err)}`
+                `Could not resolve budget names for server ${serverConfig.serverUrl}: ${err instanceof Error ? err.message : String(err)}`
             );
         }
 

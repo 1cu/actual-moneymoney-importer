@@ -7,8 +7,6 @@ import {
     subMonths,
 } from 'date-fns';
 import chalk from 'chalk';
-import { stdin, stdout } from 'node:process';
-import { createInterface } from 'node:readline/promises';
 import {
     Account as MonMonAccount,
     Transaction as MonMonTransaction,
@@ -39,7 +37,6 @@ import type {
     ImportRunMetrics,
     PlannedTransferSeed,
     PromptDecision,
-    PromptState,
     TransferPlan,
 } from './Importer.types.js';
 import {
@@ -365,8 +362,8 @@ class Importer {
         const effectiveCategorySync = resolveCategorySyncPolicy(
             this.config.import
         );
-        const existingCategoryPolicy: ExistingCategorySyncPolicy =
-            effectiveCategorySync === 'all' ? 'always' : 'new';
+        const existingCategoryPolicy: ExistingCategorySyncPolicy | undefined =
+            effectiveCategorySync === 'all' ? 'always' : undefined;
 
         const fromDate = from ?? subMonths(new Date(), 1);
         const earliestImportDate = this.budgetConfig.earliestImportDate
@@ -690,7 +687,11 @@ class Importer {
             totalImportErrors: 0,
         };
 
-        const promptState: PromptState = { mode: 'prompt' };
+        const promptState: {
+            promptInterface?: ReturnType<
+                typeof import('node:readline/promises').createInterface
+            >;
+        } = {};
         const categorySyncDebug: string[] = [];
 
         this.logger.phase('Prepare');
@@ -927,6 +928,10 @@ class Importer {
                     continue;
                 }
 
+                if (!existingCategoryPolicy) {
+                    continue;
+                }
+
                 const {
                     pendingUpdates,
                     backfillCount,
@@ -935,8 +940,6 @@ class Importer {
                     transferLockedCount,
                 } = await this.planExistingCategoryUpdates({
                     existingPairs,
-                    existingCategoryPolicy,
-                    promptState,
                 });
 
                 if (transferLockedCount > 0) {
@@ -1347,17 +1350,13 @@ class Importer {
 
     private async planExistingCategoryUpdates({
         existingPairs,
-        existingCategoryPolicy,
-        promptState,
     }: {
         existingPairs: ExistingTransactionPair[];
-        existingCategoryPolicy: ExistingCategorySyncPolicy;
-        promptState: PromptState;
     }): Promise<CategoryUpdatePlan> {
         const pendingUpdates: ExistingCategoryUpdate[] = [];
         let backfillCount = 0;
         let conflictCount = 0;
-        let skippedConflictCount = 0;
+        const skippedConflictCount = 0;
         let transferLockedCount = 0;
 
         for (const pair of existingPairs) {
@@ -1395,94 +1394,15 @@ class Importer {
 
             conflictCount++;
 
-            if (existingCategoryPolicy === 'new') {
-                skippedConflictCount++;
-                continue;
-            }
-
-            if (existingCategoryPolicy === 'always') {
-                pendingUpdates.push(
-                    buildExistingCategoryUpdate({
-                        pair,
-                        targetCategoryId: classification.targetCategoryId,
-                        reason: 'conflict',
-                        fromCategoryId: classification.currentCategoryId,
-                    })
-                );
-                continue;
-            }
-
-            if (promptState.mode === 'none') {
-                skippedConflictCount++;
-                continue;
-            }
-
-            if (promptState.mode === 'all') {
-                pendingUpdates.push(
-                    buildExistingCategoryUpdate({
-                        pair,
-                        targetCategoryId: classification.targetCategoryId,
-                        reason: 'conflict',
-                        fromCategoryId: classification.currentCategoryId,
-                    })
-                );
-                continue;
-            }
-
-            if (!promptState.promptInterface) {
-                this.logger.info(
-                    `Interactive category decisions stay active for the rest of this import across all accounts.`,
-                    `Use A/N to apply a choice to all remaining conflicts, or q to abort.`
-                );
-                promptState.promptInterface = createInterface({
-                    input: stdin,
-                    output: stdout,
-                });
-            }
-
-            const shouldApply = await this.promptForConflictDecision(
-                promptState.promptInterface,
-                pair,
-                classification.currentCategoryId,
-                classification.targetCategoryId
+            pendingUpdates.push(
+                buildExistingCategoryUpdate({
+                    pair,
+                    targetCategoryId: classification.targetCategoryId,
+                    reason: 'conflict',
+                    fromCategoryId: classification.currentCategoryId,
+                })
             );
-
-            if (shouldApply === 'all') {
-                promptState.mode = 'all';
-                pendingUpdates.push(
-                    buildExistingCategoryUpdate({
-                        pair,
-                        targetCategoryId: classification.targetCategoryId,
-                        reason: 'conflict',
-                        fromCategoryId: classification.currentCategoryId,
-                    })
-                );
-                continue;
-            }
-
-            if (shouldApply === 'none') {
-                promptState.mode = 'none';
-                skippedConflictCount++;
-                continue;
-            }
-
-            if (shouldApply === 'quit') {
-                throw new Error('Category sync aborted by user.');
-            }
-
-            if (shouldApply === true) {
-                pendingUpdates.push(
-                    buildExistingCategoryUpdate({
-                        pair,
-                        targetCategoryId: classification.targetCategoryId,
-                        reason: 'conflict',
-                        fromCategoryId: classification.currentCategoryId,
-                    })
-                );
-                continue;
-            }
-
-            skippedConflictCount++;
+            continue;
         }
 
         return {
@@ -1764,35 +1684,6 @@ class Importer {
         const status = (error as { status?: unknown }).status;
 
         return status === 401 || status === 403;
-    }
-
-    private async promptForConflictDecision(
-        promptInterface: ReturnType<typeof createInterface>,
-        pair: ExistingTransactionPair,
-        currentCategoryId: string,
-        targetCategoryId: string
-    ): Promise<PromptDecision> {
-        const fromCategory =
-            this.categoryMap.getActualCategoryPath(currentCategoryId);
-        const toCategory =
-            this.categoryMap.getActualCategoryPath(targetCategoryId);
-        const question = buildConflictPromptText({
-            transactionName: pair.monMonTransaction.name,
-            valueDate: pair.monMonTransaction.valueDate,
-            amount: pair.monMonTransaction.amount,
-            currentCategory: fromCategory,
-            targetCategory: toCategory,
-        });
-
-        while (true) {
-            const answer = (await promptInterface.question(question)).trim();
-            const decision = parsePromptDecision(answer);
-            if (decision !== 'invalid') {
-                return decision;
-            }
-
-            this.logger.warn(`Invalid input '${answer}'. Use y/n/A/N/q.`);
-        }
     }
 
     private async convertToActualTransaction(

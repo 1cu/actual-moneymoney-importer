@@ -6,9 +6,7 @@ import type {
 } from 'moneymoney';
 
 /** Effective existing-category sync behaviour derived from {@link Config.import.categorySync}. */
-export type ExistingCategorySyncPolicy =
-    | 'always' // categorySync = "all"
-    | 'new'; // categorySync = "new" or legacy "ask" fallback
+export type ExistingCategorySyncPolicy = 'always'; // categorySync = "all" — backfill uncategorised and overwrite conflicts
 
 export type CategoryUpdateClassification =
     | { type: 'backfill'; targetCategoryId: string }
