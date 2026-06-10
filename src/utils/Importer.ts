@@ -31,7 +31,6 @@ import type {
     CategoryUpdateClassification,
     CategoryUpdatePlan,
     DuplicateImportedIdGroup,
-    ExistingCategorySyncPolicy,
     ExistingCategoryUpdate,
     ExistingTransactionPair,
     ImportRunMetrics,
@@ -362,7 +361,7 @@ class Importer {
         const effectiveCategorySync = resolveCategorySyncPolicy(
             this.config.import
         );
-        const existingCategoryPolicy: ExistingCategorySyncPolicy | undefined =
+        const existingCategoryPolicy: 'always' | undefined =
             effectiveCategorySync === 'all' ? 'always' : undefined;
 
         const fromDate = from ?? subMonths(new Date(), 1);
@@ -687,11 +686,6 @@ class Importer {
             totalImportErrors: 0,
         };
 
-        const promptState: {
-            promptInterface?: ReturnType<
-                typeof import('node:readline/promises').createInterface
-            >;
-        } = {};
         const categorySyncDebug: string[] = [];
 
         this.logger.phase('Prepare');
@@ -1001,7 +995,7 @@ class Importer {
             }
             this.emitImportRunSummary(runMetrics, isDryRun);
         } finally {
-            promptState.promptInterface?.close();
+            // promptState removed
         }
     }
 

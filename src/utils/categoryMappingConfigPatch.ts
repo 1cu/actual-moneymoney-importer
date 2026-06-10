@@ -37,12 +37,16 @@ export const renderAnnotatedCategoryMappingLines = (
             ? entry.targetPath
             : `[UNRESOLVED] ${entry.targetId}`;
 
-        const sourceKey = entry.sourcePath?.trim()
-            ? `path:${entry.sourcePath}`
-            : entry.sourceUuid;
-        const targetValue = entry.targetPath?.trim()
-            ? `path:${entry.targetPath}`
-            : entry.targetId;
+        const sourceKey = entry.sourceRef
+            ? entry.sourceRef
+            : entry.sourcePath?.trim()
+              ? `path:${entry.sourcePath}`
+              : entry.sourceUuid;
+        const targetValue = entry.targetRef
+            ? entry.targetRef
+            : entry.targetPath?.trim()
+              ? `path:${entry.targetPath}`
+              : entry.targetId;
 
         lines.push(`# MoneyMoney: ${sourcePath}`);
         lines.push(`# Actual: ${targetPath}`);

@@ -293,7 +293,8 @@ const printReports = (
             item.syncId,
             item.budgetName,
             report,
-            maxWidth
+            maxWidth,
+            categorySyncPolicy
         );
 
         for (const section of sections) {
@@ -490,18 +491,28 @@ export const formatPlanningWarningsSection = (
 
 export const formatNextActionsSection = (
     report: ReturnType<CategoryMap['getReport']>,
-    maxWidth: number
+    maxWidth: number,
+    syncOff: boolean
 ) => {
-    let action =
-        'Mapping is complete; ready for import with `actual-mmi import`.';
+    let action: string;
 
     if (report.invalidMappings.length > 0) {
         action =
             'Fix invalid category refs in config first, then rerun `actual-mmi categories map`.';
     } else if (report.safeSuggestions.length > 0) {
-        action = `Run \`actual-mmi categories map --write-config\` to accept ${report.safeSuggestions.length} safe suggestion${report.safeSuggestions.length !== 1 ? 's' : ''} and write them to the config file.`;
+        if (syncOff) {
+            action = `${report.safeSuggestions.length} safe suggestion${report.safeSuggestions.length !== 1 ? 's' : ''} available. Enable categorySync to apply them, then run \`--write-config\`.`;
+        } else {
+            action = `Run \`actual-mmi categories map --write-config\` to accept ${report.safeSuggestions.length} safe suggestion${report.safeSuggestions.length !== 1 ? 's' : ''} and write them to the config file.`;
+        }
     } else if (report.unresolvedMoneyMoneyCategories.length > 0) {
         action = `${report.unresolvedMoneyMoneyCategories.length} categor${report.unresolvedMoneyMoneyCategories.length !== 1 ? 'ies' : 'y'} unresolved (this may be intentional). Add mappings or mark as ignored with \`ignoredMoneyMoneyCategoryRefs\` in the config.`;
+    } else if (syncOff) {
+        action =
+            'Mapping is complete but categorySync is off; mappings will not be applied during import.';
+    } else {
+        action =
+            'Mapping is complete; ready for import with `actual-mmi import`.';
     }
 
     return formatSectionWithRows({
@@ -563,9 +574,11 @@ export const buildTableSections = (
     syncId: string,
     budgetName: string | undefined,
     report: ReturnType<CategoryMap['getReport']>,
-    maxWidth: number
+    maxWidth: number,
+    categorySyncPolicy: 'off' | 'new' | 'all'
 ): TableSection[] => {
     const sections: TableSection[] = [];
+    const syncOff = categorySyncPolicy === 'off';
 
     // Header
     const budgetLabel = budgetName ? `${budgetName} (${syncId})` : syncId;
@@ -630,7 +643,7 @@ export const buildTableSections = (
     }
 
     // Next actions (always)
-    const nextFormatted = formatNextActionsSection(report, maxWidth);
+    const nextFormatted = formatNextActionsSection(report, maxWidth, syncOff);
     sections.push({
         header: nextFormatted[0] ?? 'Next Actions:',
         lines: nextFormatted.slice(1),
@@ -670,7 +683,7 @@ export const formatTableReport = (
         '',
         ...formatPlanningWarningsSection(report, maxWidth),
         '',
-        ...formatNextActionsSection(report, maxWidth),
+        ...formatNextActionsSection(report, maxWidth, false),
     ];
 };
 

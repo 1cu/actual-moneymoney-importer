@@ -51,6 +51,8 @@ type CanonicalMappingEntry = {
     targetId: string;
     sourcePath: string;
     targetPath: string;
+    sourceRef: string;
+    targetRef: string;
     origin: 'configured' | 'suggested';
     reason?: 'exact-normalized' | 'path-exact';
 };
@@ -332,6 +334,14 @@ class CategoryMap {
                     targetId: mapping.targetId,
                     sourcePath: mapping.sourcePath,
                     targetPath: mapping.targetPath,
+                    sourceRef: this.canonicalSourceRef(
+                        mapping.sourceUuid,
+                        mapping.sourcePath
+                    ),
+                    targetRef: this.canonicalTargetRef(
+                        mapping.targetId,
+                        mapping.targetPath
+                    ),
                     origin: 'configured',
                 });
             }
@@ -349,6 +359,14 @@ class CategoryMap {
                         targetId: suggestion.targetId,
                         sourcePath: suggestion.sourcePath,
                         targetPath: suggestion.targetPath,
+                        sourceRef: this.canonicalSourceRef(
+                            suggestion.sourceUuid,
+                            suggestion.sourcePath
+                        ),
+                        targetRef: this.canonicalTargetRef(
+                            suggestion.targetId,
+                            suggestion.targetPath
+                        ),
                         origin: 'suggested',
                         reason: suggestion.reason,
                     });
@@ -621,6 +639,8 @@ class CategoryMap {
                 this.validMappings = this.validMappings.filter(
                     (m) => m !== conflictingMapping
                 );
+                this.mappedMoneyMoneyUuids.delete(uuid);
+                this.mappedCategoryBySourceUuid.delete(uuid);
                 const mappedReason =
                     'Mapped category is also listed in ignoredMoneyMoneyCategoryRefs. Remove one.';
                 this.invalidMappings.push({
