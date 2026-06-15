@@ -79,6 +79,40 @@ const findBestExistingPayee = (payee: string, existingPayeeNames: string[]) => {
     return bestMatch;
 };
 
+const MAX_EXISTING_PAYEES_IN_RAW_LOG = 10;
+
+const formatRawPayeeLog = (payees: string[]) => {
+    return [`User message (${payees.length} payees): ${payees.join('\n')}`];
+};
+
+const formatRawResponseLog = (transformedPayees: Record<string, string>) => {
+    return [
+        `Response JSON (${Object.keys(transformedPayees).length} mappings): ${JSON.stringify(transformedPayees, null, 2)}`,
+    ];
+};
+
+const formatExistingPayeeLog = (
+    existingPayeeNames: string[],
+    totalExistingPayees: number
+) => {
+    if (existingPayeeNames.length === 0) {
+        return ['Existing payees in prompt: 0'];
+    }
+
+    const visiblePayees = existingPayeeNames.slice(
+        0,
+        MAX_EXISTING_PAYEES_IN_RAW_LOG
+    );
+    const hiddenCount = existingPayeeNames.length - visiblePayees.length;
+
+    return [
+        `Existing payees in prompt (first ${visiblePayees.length} of ${existingPayeeNames.length}${totalExistingPayees > existingPayeeNames.length ? ` relevant, ${totalExistingPayees} total` : ''}): ${visiblePayees.join('\n')}`,
+        ...(hiddenCount > 0
+            ? [`... ${hiddenCount} more existing payees omitted from log`]
+            : []),
+    ];
+};
+
 const selectRelevantExistingPayees = (
     existingPayeeNames: string[],
     unresolvedPayees: string[],
@@ -183,6 +217,20 @@ class PayeeTransformer {
             relevantExistingPayees,
             existingPayeeNames.length
         );
+        const promptLogExistingPayees = relevantExistingPayees.slice(
+            0,
+            MAX_EXISTING_PAYEES_IN_RAW_LOG
+        );
+        const systemPromptLog = this.generateInstructionPrompt();
+        const systemPromptPreviewLog = this.generatePrompt(
+            promptLogExistingPayees,
+            existingPayeeNames.length
+        );
+
+        const existingPayeeLog = formatExistingPayeeLog(
+            relevantExistingPayees,
+            existingPayeeNames.length
+        );
 
         try {
             this.logger.debug(`Starting payee transformation...`, [
@@ -193,10 +241,22 @@ class PayeeTransformer {
                 `Backend: ${this.backend.getLabel()}`,
             ]);
 
+            this.logger.debug('Raw payee transformation request', [
+                `Base system message: ${systemPromptLog}`,
+                ...existingPayeeLog,
+                `System message preview (${promptLogExistingPayees.length} of ${relevantExistingPayees.length} existing payees included): ${systemPromptPreviewLog}`,
+                ...formatRawPayeeLog(unresolvedPayees),
+            ]);
+
             const transformedPayees = await this.backend.transformPayees(
                 prompt,
                 unresolvedPayees,
                 this.config.temperature
+            );
+
+            this.logger.debug(
+                'Raw payee transformation response',
+                formatRawResponseLog(transformedPayees)
             );
 
             this.logger.debug(`AI payee transformation completed`, [
@@ -223,6 +283,22 @@ class PayeeTransformer {
                 const original = keyMap.get(rawPayee.toLowerCase());
                 if (original === rawPayee) return rawPayee;
                 if (original !== undefined) return original;
+
+                const normalizedRawPayee = normalizePayee(rawPayee);
+                const matchingKeys = Object.keys(transformedPayees).filter(
+                    (key) => {
+                        const normalizedKey = normalizePayee(key);
+                        return (
+                            normalizedKey.length > 0 &&
+                            normalizedRawPayee.length > 0 &&
+                            (normalizedRawPayee.startsWith(normalizedKey) ||
+                                normalizedKey.startsWith(normalizedRawPayee))
+                        );
+                    }
+                );
+
+                if (matchingKeys.length === 1) return matchingKeys[0];
+
                 return undefined;
             };
 
@@ -291,6 +367,14 @@ class PayeeTransformer {
         existingPayeeNames: string[] = [],
         totalExistingPayees = existingPayeeNames.length
     ) {
+        return `${this.generateBasePrompt(existingPayeeNames, totalExistingPayees)}
+${this.backend.getPromptExamples()}`;
+    }
+
+    private generateBasePrompt(
+        existingPayeeNames: string[] = [],
+        totalExistingPayees = existingPayeeNames.length
+    ) {
         const existingPayeesSection =
             existingPayeeNames.length > 0
                 ? `
@@ -306,8 +390,33 @@ class PayeeTransformer {
             return this.config.prompt + existingPayeesSection;
         }
 
-        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings (how they appear in MoneyMoney). Produce JSON matching the response format shown below. Always return valid JSON and never return "Unknown", "unknown", or any placeholder—if you cannot identify a distinct merchant, normalize the input (remove extraneous punctuation/ordering, fix capitalization) and return that normalized form as the cleaned name. Favor concise, canonical brand names (e.g., Amazon, Netflix, IKEA) and remove terminal IDs, country codes, or POS data. Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the cleaned name. Do not include explanations, metadata, or anything outside the JSON object.${existingPayeesSection}
-${this.backend.getPromptExamples()}`;
+        return `${this.generateInstructionPrompt()}${existingPayeesSection}`;
+    }
+
+    private generateInstructionPrompt() {
+        if (this.config.prompt?.trim()) {
+            return this.config.prompt;
+        }
+
+        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings from MoneyMoney. Return only a valid JSON object.
+
+Critical JSON rules:
+- The JSON object keys MUST be copied exactly from the input lines.
+- Copy each key character-for-character, including punctuation, spaces, casing, numbers, country codes, and suffixes.
+- Do not clean, normalize, shorten, reorder, or modify JSON keys.
+- Return exactly one JSON property for each input line.
+- Only clean the JSON values.
+
+Value-cleaning rules:
+- The JSON value is the cleaned payee name.
+- Prefer an existing payee name exactly when it clearly matches.
+- Remove terminal IDs, phone numbers, POS metadata, country codes, and payment noise from the value.
+- Favor concise, canonical merchant names (e.g., Amazon, Netflix, IKEA).
+- Never return "Unknown", "unknown", or any placeholder.
+- If you cannot identify a distinct merchant, use a lightly normalized version of the raw input as the JSON value.
+- Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the JSON value.
+
+Do not include explanations, metadata, or anything outside the JSON object.`;
     }
 
     private describeTransformationError(error: unknown) {
