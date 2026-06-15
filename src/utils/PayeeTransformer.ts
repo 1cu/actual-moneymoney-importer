@@ -163,11 +163,14 @@ class PayeeTransformer {
 
             return true;
         });
+        const locallyMatchedPayees = resolvedPayees.size;
 
         if (unresolvedPayees.length === 0) {
-            this.logger.debug(
-                'All payees matched existing payees locally. Returning existing payee names.'
-            );
+            this.logger.debug('Payee transformation completed locally', [
+                `Unique input payees: ${uniquePayees.length}`,
+                `Matched locally: ${locallyMatchedPayees}`,
+                `Sent to backend: 0`,
+            ]);
             return Object.fromEntries(resolvedPayees);
         }
 
@@ -183,8 +186,9 @@ class PayeeTransformer {
 
         try {
             this.logger.debug(`Starting payee transformation...`, [
-                `Payees: ${unresolvedPayees.length}`,
-                `Locally matched payees: ${resolvedPayees.size}`,
+                `Unique input payees: ${uniquePayees.length}`,
+                `Matched locally before AI: ${locallyMatchedPayees}`,
+                `Sent to backend: ${unresolvedPayees.length}`,
                 `Existing payees used in prompt: ${relevantExistingPayees.length}${existingPayeeNames.length > relevantExistingPayees.length ? ` of ${existingPayeeNames.length}` : ''}`,
                 `Backend: ${this.backend.getLabel()}`,
             ]);
@@ -258,12 +262,15 @@ class PayeeTransformer {
             }
 
             this.logger.debug(`Payee transformation results`, [
-                `Local Dice matches (no AI): ${resolvedPayees.size - unresolvedPayees.length}`,
+                `Unique input payees: ${uniquePayees.length}`,
+                `Matched locally before AI: ${locallyMatchedPayees}`,
                 `Sent to backend: ${unresolvedPayees.length}`,
-                `Snapped to existing: ${snappedToExisting}`,
-                `AI new names: ${aiKeptAsNew}`,
-                `Kept raw: ${keptRaw}`,
-                `Missing keys: ${missingKeys}`,
+                `Backend responses matched to requests: ${unresolvedPayees.length - missingKeys}`,
+                `Backend responses missing/unusable: ${missingKeys}`,
+                `Backend results snapped to existing payees: ${snappedToExisting}`,
+                `Backend results kept as new payee names: ${aiKeptAsNew}`,
+                `Backend requests kept raw: ${keptRaw}`,
+                `Final mappings returned: ${resolvedPayees.size}`,
             ]);
 
             return Object.fromEntries(resolvedPayees);
