@@ -18,7 +18,12 @@ const makeLogger = () => ({
     },
 });
 
-const makeBackendStub = ({ mappings, error, onCreate } = {}) => ({
+const makeBackendStub = ({
+    mappings,
+    error,
+    onCreate,
+    promptExamples,
+} = {}) => ({
     transformPayees: async (_prompt, _payees, _temperature) => {
         onCreate?.(_prompt, _payees, _temperature);
 
@@ -30,7 +35,7 @@ const makeBackendStub = ({ mappings, error, onCreate } = {}) => ({
         return resolved;
     },
     getLabel: () => 'test-model',
-    getPromptExamples: () => '',
+    getPromptExamples: () => promptExamples ?? '',
     isModelUnavailableError: (error) =>
         error.message.toLowerCase().includes('model') &&
         (error.message.toLowerCase().includes('does not exist') ||
@@ -166,6 +171,137 @@ test('transformPayees snaps transformed payees back to existing names', async ()
     });
 });
 
+test('transformPayees logs raw backend request and response', async () => {
+    const logger = makeLogger();
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: {
+                'Example Store, 800-5550100 Us': 'Example Store',
+            },
+        })
+    );
+
+    await transformer.transformPayees(
+        ['Example Store, 800-5550100 Us'],
+        ['Example Store']
+    );
+
+    const requestLog = logger.debugMessages.find(
+        ([message]) => message === 'Raw payee transformation request'
+    );
+    const responseLog = logger.debugMessages.find(
+        ([message]) => message === 'Raw payee transformation response'
+    );
+
+    assert.ok(requestLog, 'Expected raw request debug log');
+    assert.ok(responseLog, 'Expected raw response debug log');
+    assert.match(
+        requestLog[1].join('\n'),
+        /User message \(1 payees\): Example Store, 800-5550100 Us/
+    );
+    assert.match(responseLog[1].join('\n'), /"Example Store"/);
+});
+
+test('transformPayees raw logs shorten existing payees but keep raw payees and response complete', async () => {
+    const logger = makeLogger();
+    const rawPayees = Array.from(
+        { length: 6 },
+        (_, index) => `Example Store ${index + 1}, 800-555010${index} Us`
+    );
+    const existingPayees = Array.from(
+        { length: 12 },
+        (_, index) => `Example Store ${index + 1}`
+    );
+    const mappings = Object.fromEntries(
+        rawPayees.map((payee) => [payee, payee.split(',')[0]])
+    );
+    const transformer = new PayeeTransformer(
+        { ...makeConfig(), payeeMatchThreshold: 1 },
+        logger,
+        makeBackendStub({
+            mappings,
+            promptExamples: `
+Examples (input separated by newline, output shown as JSON):
+
+Input:
+Example Store, 800-5550100 Us
+Output:
+{"Example Store, 800-5550100 Us": "Example Store"}`,
+        })
+    );
+
+    await transformer.transformPayees(rawPayees, existingPayees);
+
+    const requestLog = logger.debugMessages.find(
+        ([message]) => message === 'Raw payee transformation request'
+    );
+    const responseLog = logger.debugMessages.find(
+        ([message]) => message === 'Raw payee transformation response'
+    );
+
+    assert.ok(requestLog, 'Expected raw request debug log');
+    assert.ok(responseLog, 'Expected raw response debug log');
+
+    const requestDetails = requestLog[1].join('\n');
+    const responseDetails = responseLog[1].join('\n');
+
+    assert.match(requestDetails, /Base system message:/);
+    assert.match(
+        requestDetails,
+        /Existing payees in prompt \(first 10 of 12\):/
+    );
+    assert.match(
+        requestDetails,
+        /\.\.\. 2 more existing payees omitted from log/
+    );
+    assert.match(
+        requestDetails,
+        /System message preview \(10 of 12 existing payees included\):/
+    );
+    assert.match(requestDetails, /Examples \(input separated/);
+    assert.match(requestDetails, /User message \(6 payees\):/);
+    assert.match(requestDetails, /Example Store 6, 800-5550105 Us/);
+    assert.match(responseDetails, /Response JSON \(6 mappings\):/);
+    assert.match(responseDetails, /Example Store 6, 800-5550105 Us/);
+});
+
+test('transformPayees prompt requires exact raw keys and includes noisy suffix example', async () => {
+    const logger = makeLogger();
+    let capturedPrompt;
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: {},
+            promptExamples: `
+Examples (input separated by newline, output shown as JSON):
+
+Input:
+Example Store, 800-5550100 Us
+Output:
+{"Example Store, 800-5550100 Us": "Example Store"}`,
+            onCreate: (prompt) => {
+                capturedPrompt = prompt;
+            },
+        })
+    );
+
+    await transformer.transformPayees(['Coffee Shop Terminal 123'], []);
+
+    assert.match(
+        capturedPrompt,
+        /The JSON object keys MUST be copied exactly from the input lines\./
+    );
+    assert.match(capturedPrompt, /Only clean the JSON values\./);
+    assert.match(capturedPrompt, /Example Store, 800-5550100 Us/);
+    assert.match(
+        capturedPrompt,
+        /"Example Store, 800-5550100 Us": "Example Store"/
+    );
+});
+
 test('transformPayees returns null on API errors', async () => {
     const logger = makeLogger();
     const transformer = new PayeeTransformer(
@@ -242,6 +378,29 @@ test('transformPayees matches AI response keys case-insensitively', async () => 
         'NETFLIX.COM': 'Netflix',
         'Amzn Mktp': 'Amazon',
         Spotify: 'Spotify',
+    });
+});
+
+test('transformPayees accepts unambiguous normalized-prefix AI response keys', async () => {
+    const logger = makeLogger();
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: {
+                'Example Store': 'Example Store',
+            },
+        })
+    );
+
+    const result = await transformer.transformPayees(
+        ['Example Store, 800-5550100 Us'],
+        ['Example Store']
+    );
+
+    assert.equal(logger.errorMessages.length, 0);
+    assert.deepEqual(result, {
+        'Example Store, 800-5550100 Us': 'Example Store',
     });
 });
 

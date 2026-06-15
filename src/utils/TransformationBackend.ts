@@ -149,6 +149,11 @@ Output:
 {"mappings": [{"rawPayee": "AMZN Mktp US*1234567890", "cleanedPayee": "Amazon"}]}
 
 Input:
+Example Store, 800-5550100 Us
+Output:
+{"mappings": [{"rawPayee": "Example Store, 800-5550100 Us", "cleanedPayee": "Example Store"}]}
+
+Input:
 AMAZON.COM/BILLWA
 AMAZON.COM
 Output:
@@ -307,6 +312,11 @@ Input:
 AMZN Mktp US*1234567890
 Output:
 {"AMZN Mktp US*1234567890": "Amazon"}
+
+Input:
+Example Store, 800-5550100 Us
+Output:
+{"Example Store, 800-5550100 Us": "Example Store"}
 
 Input:
 AMAZON.COM/BILLWA
