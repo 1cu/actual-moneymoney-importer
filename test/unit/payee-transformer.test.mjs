@@ -99,6 +99,57 @@ test('transformPayees skips AI for local existing-payee matches', async () => {
     assert.equal(createCalls, 0);
 });
 
+test('transformPayees matches leading canonical existing payee names locally', async () => {
+    const logger = makeLogger();
+    let createCalls = 0;
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            onCreate: () => {
+                createCalls++;
+            },
+        })
+    );
+
+    const result = await transformer.transformPayees(
+        ['PayPal Europe S.A.R.L. ET C IE S.C.A'],
+        ['Paypal']
+    );
+
+    assert.deepEqual(result, {
+        'PayPal Europe S.A.R.L. ET C IE S.C.A': 'Paypal',
+    });
+    assert.equal(createCalls, 0);
+});
+
+test('transformPayees does not match short leading fragments as existing payees', async () => {
+    const logger = makeLogger();
+    let capturedPayees;
+    const transformer = new PayeeTransformer(
+        makeConfig(),
+        logger,
+        makeBackendStub({
+            mappings: {
+                'Abcdef Market': 'Abcdef Market',
+            },
+            onCreate: (_prompt, payees) => {
+                capturedPayees = payees;
+            },
+        })
+    );
+
+    const result = await transformer.transformPayees(
+        ['Abcdef Market'],
+        ['Abc']
+    );
+
+    assert.deepEqual(capturedPayees, ['Abcdef Market']);
+    assert.deepEqual(result, {
+        'Abcdef Market': 'Abcdef Market',
+    });
+});
+
 test('transformPayees bounds the relevant existing-payee shortlist', async () => {
     const logger = makeLogger();
     let capturedPrompt;
@@ -178,14 +229,14 @@ test('transformPayees logs raw backend request and response', async () => {
         logger,
         makeBackendStub({
             mappings: {
-                'Example Store, 800-5550100 Us': 'Example Store',
+                'Coffee Kiosk, 800-5550100 Us': 'Coffee Kiosk',
             },
         })
     );
 
     await transformer.transformPayees(
-        ['Example Store, 800-5550100 Us'],
-        ['Example Store']
+        ['Coffee Kiosk, 800-5550100 Us'],
+        ['Unrelated Store']
     );
 
     const requestLog = logger.debugMessages.find(
@@ -199,20 +250,20 @@ test('transformPayees logs raw backend request and response', async () => {
     assert.ok(responseLog, 'Expected raw response debug log');
     assert.match(
         requestLog[1].join('\n'),
-        /User message \(1 payees\): Example Store, 800-5550100 Us/
+        /User message \(1 payees\): Coffee Kiosk, 800-5550100 Us/
     );
-    assert.match(responseLog[1].join('\n'), /"Example Store"/);
+    assert.match(responseLog[1].join('\n'), /"Coffee Kiosk"/);
 });
 
 test('transformPayees raw logs shorten existing payees but keep raw payees and response complete', async () => {
     const logger = makeLogger();
     const rawPayees = Array.from(
         { length: 6 },
-        (_, index) => `Example Store ${index + 1}, 800-555010${index} Us`
+        (_, index) => `Coffee Kiosk ${index + 1}, 800-555010${index} Us`
     );
     const existingPayees = Array.from(
         { length: 12 },
-        (_, index) => `Example Store ${index + 1}`
+        (_, index) => `Coffee Stand ${index + 1}`
     );
     const mappings = Object.fromEntries(
         rawPayees.map((payee) => [payee, payee.split(',')[0]])
@@ -262,9 +313,9 @@ Output:
     );
     assert.match(requestDetails, /Examples \(input separated/);
     assert.match(requestDetails, /User message \(6 payees\):/);
-    assert.match(requestDetails, /Example Store 6, 800-5550105 Us/);
+    assert.match(requestDetails, /Coffee Kiosk 6, 800-5550105 Us/);
     assert.match(responseDetails, /Response JSON \(6 mappings\):/);
-    assert.match(responseDetails, /Example Store 6, 800-5550105 Us/);
+    assert.match(responseDetails, /Coffee Kiosk 6, 800-5550105 Us/);
 });
 
 test('transformPayees prompt requires exact raw keys and includes noisy suffix example', async () => {

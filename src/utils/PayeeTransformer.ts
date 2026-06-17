@@ -12,6 +12,14 @@ const normalizePayee = (value: string) =>
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '');
 
+const normalizePayeeTokens = (value: string) =>
+    value
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((token) => token.length > 0);
+
 const buildBigramCounts = (value: string) => {
     const normalized = normalizePayee(value);
     const counts = new Map<string, number>();
@@ -57,11 +65,39 @@ const diceCoefficient = (left: string, right: string) => {
     return total > 0 ? (2 * intersection) / total : 0;
 };
 
+const scoreExistingPayeeMatch = (payee: string, existingPayeeName: string) => {
+    const normalizedPayee = normalizePayee(payee);
+    const normalizedExistingPayee = normalizePayee(existingPayeeName);
+    const payeeTokens = normalizePayeeTokens(payee);
+    const existingPayeeTokens = normalizePayeeTokens(existingPayeeName);
+
+    if (!normalizedPayee || !normalizedExistingPayee) {
+        return diceCoefficient(payee, existingPayeeName);
+    }
+
+    if (normalizedPayee === normalizedExistingPayee) {
+        return 1;
+    }
+
+    if (
+        normalizedExistingPayee.length >= 5 &&
+        existingPayeeTokens.length > 0 &&
+        existingPayeeTokens.length <= payeeTokens.length &&
+        existingPayeeTokens.every(
+            (token, index) => payeeTokens[index] === token
+        )
+    ) {
+        return 1;
+    }
+
+    return diceCoefficient(payee, existingPayeeName);
+};
+
 const findBestExistingPayee = (payee: string, existingPayeeNames: string[]) => {
     let bestMatch: { payeeName: string; score: number } | null = null;
 
     for (const existingPayeeName of existingPayeeNames) {
-        const score = diceCoefficient(payee, existingPayeeName);
+        const score = scoreExistingPayeeMatch(payee, existingPayeeName);
 
         if (
             !bestMatch ||

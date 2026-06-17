@@ -282,7 +282,7 @@ Two backends are available:
 | `openai` (default)   | Cloud      | Yes              | OpenAI account ([api keys](https://platform.openai.com/api-keys)) |
 | `apple-intelligence` | On-device  | No               | macOS 26+ (Tahoe), Apple Silicon, Apple Intelligence enabled      |
 
-With `apple-intelligence`, all payee data is processed locally on your Mac. Nothing is sent to any cloud service. You need the `tsfm-sdk` npm package installed (`npm install tsfm-sdk`). No API key or network access is required beyond the initial package install.
+With `apple-intelligence`, all payee data is processed locally on your Mac. Nothing is sent to any cloud service. You need the `tsfm-sdk` npm package installed (`npm install tsfm-sdk`). No API key or network access is required beyond the initial package install. Treat this backend as best-effort cleanup: it can miss obvious canonical matches from the existing-payee list (for example, leaving `PayPal Europe...` unchanged instead of choosing existing `Paypal`). The importer therefore relies on deterministic local matching before and after AI responses; Apple Intelligence should not be considered the source of truth for avoiding duplicate payees.
 
 With `openai`, raw payee names and a shortlist of existing budget payees are sent to OpenAI for transformation.
 
