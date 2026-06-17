@@ -44,6 +44,9 @@ enabled = false
 #                     # via Apple's Foundation Models. Requires macOS 26+ (Tahoe),
 #                     # Apple Silicon, and Apple Intelligence enabled in System Settings.
 #                     # No API key needed; all data stays local.
+#                     # Best-effort cleanup only: it may miss obvious existing-payee
+#                     # matches, so deterministic local matching remains the source
+#                     # of truth for avoiding duplicate payees.
 # openAiApiKey = "\${MMI_OPENAI_KEY}"  # Required only with backend = "openai"
 #                                    # Use an env var (\${MMI_OPENAI_KEY})
 #                                    # or a literal key string
