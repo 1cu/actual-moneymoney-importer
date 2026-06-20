@@ -14,6 +14,54 @@ import { ActualServerConfig } from './config.js';
 import Logger, { LogLevel } from './Logger.js';
 import { DEFAULT_DATA_DIR } from './shared.js';
 
+/**
+ * Detect whether an unknown thrown value represents an Actual API
+ * `file-has-reset` error.  Checks both the structured shape
+ * (`reason === 'file-has-reset'`) and a message string fallback.
+ */
+function isActualFileHasResetError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) return false;
+
+    const record = error as Record<string, unknown>;
+
+    if (record.reason === 'file-has-reset') {
+        return true;
+    }
+
+    if (
+        typeof record.message === 'string' &&
+        record.message.toLowerCase().includes('file-has-reset')
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Build a user-facing Error for `file-has-reset` with actionable guidance.
+ * The original error is preserved as `.cause` for diagnosis.
+ */
+function buildFileHasResetError(error: unknown): Error {
+    const message = [
+        'Syncing has been reset on this cloud file (reason: file-has-reset).',
+        '',
+        `Local cached budget data at: ${DEFAULT_DATA_DIR}`,
+        "This directory is the tool's Actual cache and may contain cached data for",
+        'multiple budgets. It is out of sync with the server because sync was reset',
+        'from another device.',
+        '',
+        'Recommended action: quit this command, delete or move this cache directory,',
+        'then rerun this command. The tool will download a fresh copy of the budget.',
+        '',
+        'Alternative: if you intentionally want the local data to become canonical,',
+        "use Actual's desktop/web UI to upload that file, then rerun this command.",
+        'The CLI will not upload data automatically.',
+    ].join('\n');
+
+    return new Error(message, { cause: error });
+}
+
 type UserFile = {
     deleted: number;
     encryptKeyId: null;
@@ -119,16 +167,24 @@ class ActualApi {
 
         this.logger.debug(`Loading budget with syncId ${budgetId}...`);
 
-        await this.withLogControl(async () => {
-            await this.actualApi.downloadBudget(
-                budgetConfig.syncId,
-                budgetConfig.e2eEncryption.enabled
-                    ? {
-                          password: budgetConfig.e2eEncryption.password ?? '',
-                      }
-                    : undefined
-            );
-        });
+        try {
+            await this.withLogControl(async () => {
+                await this.actualApi.downloadBudget(
+                    budgetConfig.syncId,
+                    budgetConfig.e2eEncryption.enabled
+                        ? {
+                              password:
+                                  budgetConfig.e2eEncryption.password ?? '',
+                          }
+                        : undefined
+                );
+            });
+        } catch (error) {
+            if (isActualFileHasResetError(error)) {
+                throw buildFileHasResetError(error);
+            }
+            throw error;
+        }
     }
 
     async importTransactions(
