@@ -120,5 +120,9 @@
     },
     "optionalDependencies": {
         "tsfm-sdk": "^0.3.1"
+    },
+    "overrides": {
+        "js-yaml": "4.2.0",
+        "markdown-it": "14.2.0"
     }
 }
