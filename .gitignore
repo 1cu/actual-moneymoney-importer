@@ -1,3 +1,11 @@
 dist/
 node_modules/
+
+# Ignore dot-directories by default. Whitelist project dot-directories that are
+# intentionally tracked.
+.*/
+!.github/
+!.github/**
+!.husky/
+!.husky/**
 .husky/_
