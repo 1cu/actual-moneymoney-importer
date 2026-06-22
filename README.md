@@ -282,7 +282,22 @@ Two backends are available:
 | `openai` (default)   | Cloud      | Yes              | OpenAI account ([api keys](https://platform.openai.com/api-keys)) |
 | `apple-intelligence` | On-device  | No               | macOS 26+ (Tahoe), Apple Silicon, Apple Intelligence enabled      |
 
-With `apple-intelligence`, all payee data is processed locally on your Mac. Nothing is sent to any cloud service. You need the `tsfm-sdk` npm package installed (`npm install tsfm-sdk`). No API key or network access is required beyond the initial package install. Treat this backend as best-effort cleanup: it can miss obvious canonical matches from the existing-payee list (for example, leaving `PayPal Europe...` unchanged instead of choosing existing `Paypal`). The importer therefore relies on deterministic local matching before and after AI responses; Apple Intelligence should not be considered the source of truth for avoiding duplicate payees.
+With `apple-intelligence`, all payee data is processed locally on your Mac. Nothing is sent to any cloud service. You need the `tsfm-sdk` npm package installed (`npm install tsfm-sdk`). No API key or network access is required beyond the initial package install. See [Apple Intelligence limitations](#apple-intelligence-limitations) below.
+
+### Apple Intelligence limitations
+
+The on-device Apple Foundation Model is smaller and less capable than cloud-based models. It may return payee names unchanged (identity mappings) for subtle cleaning tasks, and can miss obvious matches against the existing-payee list even when those payees are included in the prompt. The deterministic local Dice coefficient matching runs independently of the AI backend and remains the primary defense against creating duplicate payees.
+
+### Recommended: Actual's built-in payee rules
+
+Actual Budget has its own payee rules system that runs automatically during import. Rules can match the raw `imported_payee` field (exact or "contains") and set the canonical payee, category, and more. This is the recommended approach for reliable, persistent payee cleanup — it's user-configurable, doesn't depend on AI quality, and survives across import runs.
+
+To set up payee rules, open Actual's UI and go to **More → Rules** or **More → Payees**. Create a rule like:
+
+- **Condition**: `imported_payee` contains `Lidl`
+- **Action**: set payee to `Lidl`
+
+The rules fire automatically whenever transactions are imported, including when this tool calls `importTransactions`.
 
 With `openai`, raw payee names and a shortlist of existing budget payees are sent to OpenAI for transformation.
 
