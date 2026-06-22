@@ -82,6 +82,9 @@ export interface TransformationBackend {
      */
     getPromptExamples(): string;
 
+    /** Backend-specific system instruction for the AI model (core instruction only, no existing payees or examples) */
+    getSystemInstruction(): string;
+
     /** Check if error indicates the model is unavailable / doesn't exist */
     isModelUnavailableError(error: Error): boolean;
 
@@ -128,6 +131,28 @@ export class OpenAIBackend implements TransformationBackend {
         }
 
         return mappingsToRecord(parsed.mappings);
+    }
+
+    getSystemInstruction(): string {
+        return `You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings from MoneyMoney. Return only a valid JSON object.
+
+Critical JSON rules:
+- The JSON object keys MUST be copied exactly from the input lines.
+- Copy each key character-for-character, including punctuation, spaces, casing, numbers, country codes, and suffixes.
+- Do not clean, normalize, shorten, reorder, or modify JSON keys.
+- Return exactly one JSON property for each input line.
+- Only clean the JSON values.
+
+Value-cleaning rules:
+- The JSON value is the cleaned payee name.
+- Prefer an existing payee name exactly when it clearly matches.
+- Remove terminal IDs, phone numbers, POS metadata, country codes, and payment noise from the value.
+- Favor concise, canonical merchant names (e.g., Amazon, Netflix, IKEA).
+- Never return "Unknown", "unknown", or any placeholder.
+- If you cannot identify a distinct merchant, use a lightly normalized version of the raw input as the JSON value.
+- Some raw payee strings may contain corrupted characters from encoding issues (e.g., '?' replacing German umlauts like 'ä', 'ö', 'ü'). When you see '?' in an unusual position, infer the intended word from context and use the corrected spelling in the JSON value.
+
+Do not include explanations, metadata, or anything outside the JSON object.`;
     }
 
     getLabel(): string {
@@ -293,6 +318,21 @@ export class AppleIntelligenceBackend implements TransformationBackend {
         } finally {
             session.dispose();
         }
+    }
+
+    getSystemInstruction(): string {
+        return `You are a payee name cleaner. You receive raw bank transaction payee names, one per line. Clean each name by stripping receipt noise and legal suffixes. Return only a JSON object.
+
+Rules:
+- JSON keys: copy each input line exactly, character-for-character.
+- JSON values: the cleaned payee name.
+- Prefer an existing payee name exactly when it clearly matches the same merchant.
+- Remove noise: thank-you tags, location suffixes, legal form suffixes (AG, GmbH, Ltd, Inc), terminal/receipt IDs, phone numbers.
+- Keep the core merchant or bank name.
+- Never return "Unknown", empty, or placeholder values.
+- When you cannot identify a distinct merchant, lightly normalize the raw input.
+
+Do not include explanations, metadata, or anything outside the JSON object.`;
     }
 
     getLabel(): string {

@@ -9,6 +9,10 @@ enabled = false
 #                     # Best-effort cleanup only: it may miss obvious existing-payee
 #                     # matches, so deterministic local matching remains the source
 #                     # of truth for avoiding duplicate payees.
+#                     # For reliable cleaning of recurring payees, prefer
+#                     # Actual's built-in payee rules (More → Rules in Actual's UI).
+#                     # Rules match imported_payee with "contains" conditions
+#                     # and run automatically during import.
 # openAiApiKey = "${MMI_OPENAI_KEY}"  # Required only with backend = "openai"
 #                                    # Use an env var (${MMI_OPENAI_KEY})
 #                                    # or a literal key string

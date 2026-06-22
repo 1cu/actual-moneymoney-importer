@@ -36,6 +36,14 @@ const makeBackendStub = ({
     },
     getLabel: () => 'test-model',
     getPromptExamples: () => promptExamples ?? '',
+    getSystemInstruction: () =>
+        'You are a transaction-classification specialist. You will receive a newline-separated list of raw payee strings from MoneyMoney. Return only a valid JSON object.\n' +
+        '\n' +
+        'Critical JSON rules:\n' +
+        '- The JSON object keys MUST be copied exactly from the input lines.\n' +
+        '- Only clean the JSON values.\n' +
+        '\n' +
+        'Do not include explanations, metadata, or anything outside the JSON object.',
     isModelUnavailableError: (error) =>
         error.message.toLowerCase().includes('model') &&
         (error.message.toLowerCase().includes('does not exist') ||
