@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import PayeeTransformer from '../../dist/utils/PayeeTransformer.js';
 import {
+    AppleIntelligenceBackend,
     OpenAIBackend,
     PayeeMapSchema,
 } from '../../dist/utils/TransformationBackend.js';
@@ -580,5 +581,33 @@ test('OpenAIBackend throws when parsed content is null', async () => {
     await assert.rejects(
         () => backend.transformPayees('prompt', ['Netflix.com'], 0.5),
         { message: 'OpenAI returned no payee transformation result' }
+    );
+});
+
+test('AppleIntelligenceBackend recognizes model service failures as unavailable', () => {
+    const backend = new AppleIntelligenceBackend(makeConfig());
+
+    assert.equal(
+        backend.isModelUnavailableError(
+            new Error('Unknown error (code 255): ModelManagerError Code=1008')
+        ),
+        true
+    );
+    assert.equal(
+        backend.isModelUnavailableError(
+            new Error('Unknown error (code 255): ModelManagerError Code=1013')
+        ),
+        true
+    );
+});
+
+test('AppleIntelligenceBackend preserves non-availability generation errors', () => {
+    const backend = new AppleIntelligenceBackend(makeConfig());
+
+    assert.equal(
+        backend.isModelUnavailableError(
+            new Error('The on-device model rejected the schema')
+        ),
+        false
     );
 });

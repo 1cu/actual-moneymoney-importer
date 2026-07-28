@@ -379,7 +379,12 @@ Output:
     }
 
     isModelUnavailableError(error: Error): boolean {
-        if (error.constructor?.name === 'ModelNotReadyError') {
+        const unavailableErrorNames = new Set([
+            'AssetsUnavailableError',
+            'ModelNotReadyError',
+            'ServiceCrashedError',
+        ]);
+        if (unavailableErrorNames.has(error.constructor?.name)) {
             return true;
         }
         const message = error.message.toLowerCase();
@@ -388,7 +393,9 @@ Output:
                 (message.includes('not available') ||
                     message.includes('not ready') ||
                     message.includes('not enabled'))) ||
-            message.includes('unavailable')
+            message.includes('unavailable') ||
+            message.includes('modelmanagererror code=1008') ||
+            message.includes('modelmanagererror code=1013')
         );
     }
 

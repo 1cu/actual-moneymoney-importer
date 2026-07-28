@@ -7,7 +7,7 @@
  * Gates:
  *   1. macOS + Apple Silicon (skips otherwise)
  *   2. tsfm-sdk installed (skips otherwise)
- *   3. Model throw falls through to 'unavailable' skip
+ *   3. Model availability failures skip with a diagnostic
  *
  * Known limitation: Apple doesn't document the on-device context window
  * size. Production payloads (> 100 payees) need empirical validation.
@@ -65,11 +65,7 @@ test(
             );
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            if (
-                msg.includes('unavailable') ||
-                msg.includes('not installed') ||
-                e?.constructor?.name === 'ModelNotReadyError'
-            ) {
+            if (e instanceof Error && backend.isModelUnavailableError(e)) {
                 t.skip(`Apple Intelligence not available: ${msg}`);
                 return;
             }
