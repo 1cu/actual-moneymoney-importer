@@ -3,6 +3,7 @@ import test from 'node:test';
 import PayeeTransformer from '../../dist/utils/PayeeTransformer.js';
 import {
     AppleIntelligenceBackend,
+    buildApplePayeeMapJsonSchema,
     OpenAIBackend,
     PayeeMapSchema,
 } from '../../dist/utils/TransformationBackend.js';
@@ -599,6 +600,20 @@ test('AppleIntelligenceBackend recognizes model service failures as unavailable'
         ),
         true
     );
+});
+
+test('buildApplePayeeMapJsonSchema creates a closed schema from raw payees', () => {
+    const payees = ['AMZN Mktp US*1234567890', 'Müller & Söhne'];
+
+    assert.deepEqual(buildApplePayeeMapJsonSchema(payees), {
+        type: 'object',
+        properties: {
+            'AMZN Mktp US*1234567890': { type: 'string' },
+            'Müller & Söhne': { type: 'string' },
+        },
+        required: payees,
+        additionalProperties: false,
+    });
 });
 
 test('AppleIntelligenceBackend preserves non-availability generation errors', () => {

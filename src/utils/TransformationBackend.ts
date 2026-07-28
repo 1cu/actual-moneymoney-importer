@@ -40,12 +40,23 @@ export const PayeeMapSchema = z.object({
 const FlatPayeeMapSchema = z.record(z.string(), z.string());
 
 /**
- * Flat JSON schema matching FlatPayeeMapSchema. Used as the
- * `jsonSchema` argument for Apple's `respondWithJsonSchema`.
+ * Build the closed JSON schema used by Apple's `respondWithJsonSchema`.
+ *
+ * Foundation Models requires `additionalProperties` to be a boolean. Defining
+ * each raw payee as a property preserves the flat response format while
+ * allowing the model to return only the exact input keys.
  */
-const PAYEE_MAP_JSON_SCHEMA = {
-    type: 'object' as const,
-    additionalProperties: { type: 'string' as const },
+export const buildApplePayeeMapJsonSchema = (payees: string[]) => {
+    const uniquePayees = [...new Set(payees)];
+
+    return {
+        type: 'object' as const,
+        properties: Object.fromEntries(
+            uniquePayees.map((payee) => [payee, { type: 'string' as const }])
+        ),
+        required: uniquePayees,
+        additionalProperties: false,
+    };
 };
 
 // ---------------------------------------------------------------------------
@@ -292,7 +303,7 @@ export class AppleIntelligenceBackend implements TransformationBackend {
         try {
             const content = await session.respondWithJsonSchema(
                 payees.join('\n'),
-                PAYEE_MAP_JSON_SCHEMA,
+                buildApplePayeeMapJsonSchema(payees),
                 { options: { temperature } }
             );
 
