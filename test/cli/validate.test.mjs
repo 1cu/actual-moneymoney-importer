@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +21,7 @@ const runCli = (args = []) => {
     };
 };
 
-const makeValidConfig = (serverUrl) => `
+const makeValidConfig = serverUrl => `
 [payeeTransformation]
 enabled = false
 
@@ -53,7 +53,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('validate creates nested config directories when missing', async (t) => {
+test('validate creates nested config directories when missing', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-validate-')
     );
@@ -78,7 +78,7 @@ test('validate creates nested config directories when missing', async (t) => {
     assert.match(secondRun.output, /Configuration file is valid\./);
 });
 
-test('validate warns on cleartext HTTP Actual URLs but allows localhost', async (t) => {
+test('validate warns on cleartext HTTP Actual URLs but allows localhost', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-validate-http-')
     );

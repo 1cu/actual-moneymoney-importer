@@ -1,23 +1,23 @@
+import type { APIAccountEntity } from '@actual-app/api/models';
+import type { TransactionEntity } from '@actual-app/core/types/models';
 import { differenceInCalendarDays } from 'date-fns';
-import {
+import type {
     Account as MonMonAccount,
     Transaction as MonMonTransaction,
 } from 'moneymoney';
-import type { APIAccountEntity } from '@actual-app/api/models';
-import type { TransactionEntity } from '@actual-app/core/types/models';
-import CategoryMap from './CategoryMap.js';
-import Logger from './Logger.js';
-import { Config } from './config.js';
-import {
-    buildTransactionNotes,
-    getIdForMoneyMoneyTransaction,
-} from './shared.js';
+import type CategoryMap from './CategoryMap.js';
+import type { Config } from './config.js';
 import type {
     PlannedExistingCounterpartConversion,
     PlannedTransferSeed,
     TransferPlan,
     TransferPlanningCandidate,
 } from './Importer.types.js';
+import type Logger from './Logger.js';
+import {
+    buildTransactionNotes,
+    getIdForMoneyMoneyTransaction,
+} from './shared.js';
 
 type PlannerAccountState = {
     monMonAccount: MonMonAccount;
@@ -104,7 +104,7 @@ export default class TransferPlanner {
                 ([accountUuid, transactions]) => {
                     const requestedImportedIds = new Set(
                         newTransactionsByAccountUuid[accountUuid]?.map(
-                            (transaction) =>
+                            transaction =>
                                 getIdForMoneyMoneyTransaction(transaction)
                         ) ?? []
                     );
@@ -114,16 +114,15 @@ export default class TransferPlanner {
                                 mappedAccountByUuid.get(accountUuid)?.id ?? ''
                             ) ?? []
                         )
-                            .filter((transaction) => !!transaction.imported_id)
+                            .filter(transaction => !!transaction.imported_id)
                             .map(
-                                (transaction) =>
-                                    transaction.imported_id as string
+                                transaction => transaction.imported_id as string
                             )
                     );
 
                     return [
                         accountUuid,
-                        transactions.filter((transaction) => {
+                        transactions.filter(transaction => {
                             const importedId =
                                 getIdForMoneyMoneyTransaction(transaction);
                             return (
@@ -215,7 +214,7 @@ export default class TransferPlanner {
         }
 
         const rankedCandidates = candidates
-            .map((candidate) => ({
+            .map(candidate => ({
                 ...candidate,
                 hasExactDateCounterpart: this.hasExactDateCounterpart({
                     candidate,
@@ -272,8 +271,10 @@ export default class TransferPlanner {
             }
 
             if (preferredMatchingCounterparts.length === 1) {
-                const exactSameRunCounterpart =
-                    preferredMatchingCounterparts[0]!;
+                const [exactSameRunCounterpart] = preferredMatchingCounterparts;
+                if (!exactSameRunCounterpart) {
+                    continue;
+                }
                 const sameRunCounterpartIsExactDate =
                     differenceInCalendarDays(
                         exactSameRunCounterpart.valueDate,
@@ -320,7 +321,7 @@ export default class TransferPlanner {
                         ) ?? [];
                     if (
                         existingTargetTransactions.some(
-                            (transaction) =>
+                            transaction =>
                                 transaction.imported_id ===
                                 counterpartImportedId
                         )
@@ -397,7 +398,7 @@ export default class TransferPlanner {
                 // partial historical conversion, skip re-planning it.
                 if (
                     existingSourceTransactions.some(
-                        (transaction) =>
+                        transaction =>
                             transaction.imported_id === candidate.importedId &&
                             !!transaction.transfer_id
                     )
@@ -410,15 +411,12 @@ export default class TransferPlanner {
 
                 const existingTargetTransaction =
                     existingTargetTransactions.find(
-                        (transaction) =>
+                        transaction =>
                             transaction.imported_id ===
                             existingCounterpartImportedId
                     );
 
-                if (
-                    existingTargetTransaction &&
-                    existingTargetTransaction.transfer_id
-                ) {
+                if (existingTargetTransaction?.transfer_id) {
                     this.logger.debug(
                         `Skipping automatic transfer for '${candidate.importedId}' because historical counterpart '${existingTargetTransaction.id}' is already part of a transfer.`
                     );
@@ -484,7 +482,6 @@ export default class TransferPlanner {
                     this.logger.debug(
                         `Planning conversion of historical counterpart '${existingTargetTransaction.id}' in '${candidate.targetActualAccount.name}' to a transfer for source '${candidate.importedId}'.`
                     );
-                    continue;
                 }
             }
         }
@@ -514,7 +511,7 @@ export default class TransferPlanner {
     }): MonMonTransaction[] {
         const sourceAmount = Math.round(candidate.transaction.amount * 100);
 
-        return targetTransactions.filter((transaction) =>
+        return targetTransactions.filter(transaction =>
             this.isMatchingTransferCounterpart({
                 candidate,
                 transaction,
@@ -537,7 +534,7 @@ export default class TransferPlanner {
     }): MonMonTransaction[] {
         const sourceAmount = Math.round(candidate.transaction.amount * 100);
 
-        return targetTransactions.filter((transaction) =>
+        return targetTransactions.filter(transaction =>
             this.isMatchingTransferCounterpart({
                 candidate,
                 transaction,
@@ -668,7 +665,7 @@ export default class TransferPlanner {
         candidateDate: Date;
     }): MonMonTransaction[] {
         const exactDateCounterparts = counterparts.filter(
-            (transaction) =>
+            transaction =>
                 differenceInCalendarDays(
                     transaction.valueDate,
                     candidateDate
@@ -701,7 +698,10 @@ export default class TransferPlanner {
             return undefined;
         }
 
-        const exactHistoricalCounterpart = preferredHistoricalCounterparts[0]!;
+        const [exactHistoricalCounterpart] = preferredHistoricalCounterparts;
+        if (!exactHistoricalCounterpart) {
+            return undefined;
+        }
         const exactHistoricalCounterpartImportedId =
             getIdForMoneyMoneyTransaction(exactHistoricalCounterpart);
         const existingTargetTransactions =
@@ -709,7 +709,7 @@ export default class TransferPlanner {
                 candidate.targetActualAccount.id
             ) ?? [];
         const existingTargetTransaction = existingTargetTransactions.find(
-            (transaction) =>
+            transaction =>
                 transaction.imported_id === exactHistoricalCounterpartImportedId
         );
 

@@ -21,15 +21,15 @@ Build output is written to `dist/` (generated). Static assets are in `assets/`. 
 - `npm run test`: compile TypeScript and run the full automated suite (`test/cli` + `test/unit`).
 - `npm run test:cli`: compile TypeScript and run CLI integration tests.
 - `npm run test:unit`: compile TypeScript and run unit tests.
-- `npm run lint:eslint`: run ESLint on `src/`.
-- `npm run lint:prettier`: check formatting for `src/**/*.ts`, `test/**/*.mjs`, `*.md`, `.github/**/*.md`, and `package.json`.
-- `npm run lint:fix`: auto-fix lint and formatting issues in the same file sets.
+- `npm run lint:biome`: check supported source and JSON files with Biome.
+- `npm run lint:markdownlint`: lint Markdown files.
+- `npm run lint:fix`: apply Biome's safe fixes and formatting to supported files.
 
 Example local validation flow:
 
 ```bash
-npm run lint:eslint
-npm run lint:prettier
+npm run lint:biome
+npm run lint:markdownlint
 npm run build
 npm run test
 ```
@@ -43,14 +43,14 @@ npm run test
 
 ## Coding Style & Naming Conventions
 
-Use strict TypeScript with ES modules. Formatting is enforced by Prettier (`.prettierrc.json`): 4 spaces, single quotes, semicolons, trailing commas (`es5`), `printWidth: 80`.
+Use strict TypeScript with ES modules. Formatting is enforced by Biome: 4 spaces, single quotes, semicolons, trailing commas (`es5`), `printWidth: 80`.
 
 Follow existing naming patterns:
 
 - Files: lower-case with domain suffixes (e.g., `import.command.ts`, `ActualApi.ts` where class-centric).
 - Types/classes: `PascalCase`.
 - Variables/functions: `camelCase`.
-- Unused parameters intentionally ignored should be prefixed with `_` (ESLint rule).
+- Unused parameters intentionally ignored should be prefixed with `_` (TypeScript/Biome convention).
 
 ## Testing Guidelines
 

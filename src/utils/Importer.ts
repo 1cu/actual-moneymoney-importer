@@ -1,3 +1,8 @@
+import type {
+    ImportTransactionEntity,
+    TransactionEntity,
+} from '@actual-app/core/types/models';
+import chalk from 'chalk';
 import {
     addDays,
     differenceInCalendarDays,
@@ -6,27 +11,19 @@ import {
     subDays,
     subMonths,
 } from 'date-fns';
-import chalk from 'chalk';
 import {
-    Account as MonMonAccount,
-    Transaction as MonMonTransaction,
     getTransactions,
+    type Account as MonMonAccount,
+    type Transaction as MonMonTransaction,
 } from 'moneymoney';
-import { AccountMap } from './AccountMap.js';
-import ActualApi from './ActualApi.js';
-import CategoryMap from './CategoryMap.js';
+import type { AccountMap } from './AccountMap.js';
+import type ActualApi from './ActualApi.js';
+import type CategoryMap from './CategoryMap.js';
 import {
-    ActualBudgetConfig,
-    Config,
+    type ActualBudgetConfig,
+    type Config,
     resolveCategorySyncPolicy,
 } from './config.js';
-import Logger from './Logger.js';
-import PayeeTransformer from './PayeeTransformer.js';
-import TransferPlanner from './TransferPlanner.js';
-import type {
-    TransactionEntity,
-    ImportTransactionEntity,
-} from '@actual-app/core/types/models';
 import type {
     CategoryUpdateClassification,
     CategoryUpdatePlan,
@@ -38,11 +35,14 @@ import type {
     PromptDecision,
     TransferPlan,
 } from './Importer.types.js';
+import type Logger from './Logger.js';
+import type PayeeTransformer from './PayeeTransformer.js';
 import {
-    DATE_FORMAT,
     buildTransactionNotes,
+    DATE_FORMAT,
     getIdForMoneyMoneyTransaction,
 } from './shared.js';
+import TransferPlanner from './TransferPlanner.js';
 
 export const classifyCategoryUpdate = ({
     currentCategoryId,
@@ -227,7 +227,7 @@ export const filterTransactionsForRequestedImportRange = ({
     importDate: Date;
     toDate?: Date;
 }): MonMonTransaction[] =>
-    transactions.filter((transaction) =>
+    transactions.filter(transaction =>
         isWithinRequestedImportRange({
             transactionDate: transaction.valueDate,
             importDate,
@@ -242,10 +242,15 @@ export const getLatestTransactionValueDate = (
         return null;
     }
 
+    const [firstTransaction] = transactions;
+    if (!firstTransaction) {
+        return null;
+    }
+
     return transactions.reduce(
         (latest, transaction) =>
             transaction.valueDate > latest ? transaction.valueDate : latest,
-        transactions[0]!.valueDate
+        firstTransaction.valueDate
     );
 };
 
@@ -443,23 +448,23 @@ class Importer {
         }
 
         if (!this.config.import.importUncheckedTransactions) {
-            monMonTransactions = monMonTransactions.filter((t) => t.booked);
+            monMonTransactions = monMonTransactions.filter(t => t.booked);
         }
 
         if (this.config.import.ignorePatterns !== undefined) {
             const ignorePatterns = this.config.import.ignorePatterns;
 
-            monMonTransactions = monMonTransactions.filter((t) => {
+            monMonTransactions = monMonTransactions.filter(t => {
                 let isIgnored = (ignorePatterns.commentPatterns ?? []).some(
-                    (pattern) => t.comment?.includes(pattern)
+                    pattern => t.comment?.includes(pattern)
                 );
 
                 isIgnored ||= (ignorePatterns.payeePatterns ?? []).some(
-                    (pattern) => t.name.includes(pattern)
+                    pattern => t.name.includes(pattern)
                 );
 
                 isIgnored ||= (ignorePatterns.purposePatterns ?? []).some(
-                    (pattern) => t.purpose?.includes(pattern)
+                    pattern => t.purpose?.includes(pattern)
                 );
 
                 if (isIgnored) {
@@ -561,8 +566,8 @@ class Importer {
 
         const transferPayeeIdByAccountId = new Map(
             existingPayees
-                .filter((payee) => payee.transfer_acct)
-                .map((payee) => [payee.transfer_acct as string, payee.id])
+                .filter(payee => payee.transfer_acct)
+                .map(payee => [payee.transfer_acct as string, payee.id])
         );
         const shouldSyncCategories = effectiveCategorySync !== 'off';
 
@@ -601,27 +606,36 @@ class Importer {
             }
         );
 
-        const transferPlan = transfersEnabled
-            ? this.transferPlanner.buildTransferPlan({
-                  fullAccountMapping: fullAccountMapping!,
-                  accountStates,
-                  monMonTransactionMap,
-                  existingActualTransactionsByAccountId,
-                  transferPayeeIdByAccountId,
-              })
-            : {
-                  seedByImportedId: new Map<string, PlannedTransferSeed>(),
-                  suppressedImportedIds: new Set<string>(),
-                  existingCounterpartConversionsByImportedId: new Map(),
-                  resolvedTransferCategoryUuids: new Set<string>(),
-              };
+        let transferPlan: TransferPlan;
+        if (transfersEnabled) {
+            if (!fullAccountMapping) {
+                throw new Error(
+                    'Full account mapping is required for transfers.'
+                );
+            }
+
+            transferPlan = this.transferPlanner.buildTransferPlan({
+                fullAccountMapping,
+                accountStates,
+                monMonTransactionMap,
+                existingActualTransactionsByAccountId,
+                transferPayeeIdByAccountId,
+            });
+        } else {
+            transferPlan = {
+                seedByImportedId: new Map<string, PlannedTransferSeed>(),
+                suppressedImportedIds: new Set<string>(),
+                existingCounterpartConversionsByImportedId: new Map(),
+                resolvedTransferCategoryUuids: new Set<string>(),
+            };
+        }
 
         // Sort account states so seed accounts process first — this ensures
         // counterpart accounts import after transfer creation and can stamp
         // auto-created counterparts in the same run.
         const seedImportedIds = new Set(transferPlan.seedByImportedId.keys());
         const isSeedAccount = (state: (typeof accountStates)[number]) =>
-            state.newMonMonTransactions.some((tx) =>
+            state.newMonMonTransactions.some(tx =>
                 seedImportedIds.has(getIdForMoneyMoneyTransaction(tx))
             );
         accountStates.sort((a, b) => {
@@ -813,7 +827,7 @@ class Importer {
                     `Considering ${createTransactions.length} new transactions for Actual account '${actualAccount.name}'...`
                 );
 
-                createTransactions.forEach((t) => {
+                createTransactions.forEach(t => {
                     if (t.payee) {
                         return;
                     }
@@ -1054,7 +1068,7 @@ class Importer {
         intendedCategoryByImportedId: Map<string, string>;
     }): Promise<number> {
         const addedIdSet = new Set(addedIds);
-        const freshTransactions = importedTransactions.filter((transaction) =>
+        const freshTransactions = importedTransactions.filter(transaction =>
             addedIdSet.has(transaction.id)
         );
 
@@ -1190,7 +1204,7 @@ class Importer {
 
         // Deterministic winner policy for duplicate imported_id values: latest by (date, id) wins.
         const sortedExistingTransactions = [...existingActualTransactions]
-            .filter((transaction) => !!transaction.imported_id)
+            .filter(transaction => !!transaction.imported_id)
             .sort((a, b) => {
                 if (a.date === b.date) {
                     return a.id.localeCompare(b.id);
@@ -1214,7 +1228,7 @@ class Importer {
         // range (e.g. a 2025 duplicate in a 2026 import run).
         const duplicateImportedIds = new Set<string>();
         const scanTransactions = duplicateScanWindow
-            ? sortedExistingTransactions.filter((tx) => {
+            ? sortedExistingTransactions.filter(tx => {
                   return (
                       tx.date >= duplicateScanWindow.from &&
                       (!duplicateScanWindow.to ||
@@ -1240,17 +1254,17 @@ class Importer {
                 duplicateImportedIds
             );
             const likelySplitGroups = duplicateGroups.filter(
-                (group) => group.isLikelySplit
+                group => group.isLikelySplit
             );
             const suspiciousGroups = duplicateGroups.filter(
-                (group) => !group.isLikelySplit
+                group => !group.isLikelySplit
             );
             const sampledGroups = [
                 ...suspiciousGroups,
                 ...likelySplitGroups,
             ].slice(0, 5);
 
-            const duplicateDetails = sampledGroups.map((group) => {
+            const duplicateDetails = sampledGroups.map(group => {
                 const { monMonAccountUuid, monMonTransactionId } =
                     this.parseImportedId(group.importedId);
                 const amount = this.formatMinorUnitsAsMajor(
@@ -1280,9 +1294,9 @@ class Importer {
                 this.logger.warn(
                     `Detected ${duplicateGroups.length} duplicate imported_id group(s) in Actual account '${actualAccountName}'; ${suspiciousGroups.length} group(s) need review.`,
                     sampledGroups
-                        .filter((group) => !group.isLikelySplit)
+                        .filter(group => !group.isLikelySplit)
                         .slice(0, 5)
-                        .map((group) => {
+                        .map(group => {
                             const { monMonAccountUuid, monMonTransactionId } =
                                 this.parseImportedId(group.importedId);
                             const amount = this.formatMinorUnitsAsMajor(
@@ -1384,7 +1398,6 @@ class Importer {
                     fromCategoryId: classification.currentCategoryId,
                 })
             );
-            continue;
         }
 
         return {
@@ -1406,7 +1419,7 @@ class Importer {
         isDryRun: boolean;
     }) {
         if (isDryRun) {
-            const preview = pendingUpdates.slice(0, 5).map((update) => {
+            const preview = pendingUpdates.slice(0, 5).map(update => {
                 const fromPath = update.fromCategoryId
                     ? this.categoryMap.getActualCategoryPath(
                           update.fromCategoryId
@@ -1586,7 +1599,7 @@ class Importer {
 
             while (convertAttempt < 5 && !transferId) {
                 if (convertAttempt > 0) {
-                    await new Promise((resolve) => setTimeout(resolve, 250));
+                    await new Promise(resolve => setTimeout(resolve, 250));
                 }
 
                 try {
@@ -1717,7 +1730,7 @@ class Importer {
 
         for (const importedId of duplicateImportedIds) {
             const transactions = sortedExistingTransactions.filter(
-                (transaction) => transaction.imported_id === importedId
+                transaction => transaction.imported_id === importedId
             );
             const representativeTransaction = transactions.at(-1);
             const firstTransaction = transactions[0];
@@ -1734,7 +1747,7 @@ class Importer {
             const firstNormalizedPayee =
                 this.getNormalizedImportedPayee(firstTransaction);
             const isLikelySplit = transactions.every(
-                (transaction) =>
+                transaction =>
                     transaction.date === firstDate &&
                     this.getNormalizedImportedPayee(transaction) ===
                         firstNormalizedPayee

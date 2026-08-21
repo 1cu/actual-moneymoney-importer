@@ -7,7 +7,7 @@ const releaseConfig = JSON.parse(
 );
 
 test('semantic-release keeps release rules focused on conventional SemVer gaps', () => {
-    const commitAnalyzer = releaseConfig.plugins.find((plugin) => {
+    const commitAnalyzer = releaseConfig.plugins.find(plugin => {
         return (
             Array.isArray(plugin) &&
             plugin[0] === '@semantic-release/commit-analyzer'

@@ -14,8 +14,8 @@ Brief description of the changes and why they're needed.
     - `npm test`
     - `npm run test:cli`
     - `npm run test:unit`
-    - `npm run lint:eslint`
-    - `npm run lint:prettier`
+    - `npm run lint:biome`
+    - `npm run lint:markdownlint`
 - [ ] Manual verification (if applicable)
 
 ## Release / Config Impact

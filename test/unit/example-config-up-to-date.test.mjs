@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..', '..');
@@ -14,7 +14,7 @@ describe('assets/config.example.toml', () => {
             join(repoRoot, 'dist', 'utils', 'shared.js')
         );
 
-        const expected = EXAMPLE_CONFIG.trimStart() + '\n';
+        const expected = `${EXAMPLE_CONFIG.trimStart()}\n`;
         const actual = readFileSync(generatedPath, 'utf-8');
 
         assert.equal(

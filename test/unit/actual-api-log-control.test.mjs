@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { withApiNoiseFilter } from '../../dist/utils/ActualApiLogControl.js';
 
-test('withApiNoiseFilter suppresses known Actual noise from console.log', async (t) => {
+test('withApiNoiseFilter suppresses known Actual noise from console.log', async t => {
     const calls = [];
     const originalLog = console.log;
 
@@ -24,7 +24,7 @@ test('withApiNoiseFilter suppresses known Actual noise from console.log', async 
     assert.deepEqual(calls, ['keep this']);
 });
 
-test('withApiNoiseFilter passes console.log through when no match', async (t) => {
+test('withApiNoiseFilter passes console.log through when no match', async t => {
     const calls = [];
     const originalLog = console.log;
 
@@ -43,7 +43,7 @@ test('withApiNoiseFilter passes console.log through when no match', async (t) =>
     assert.deepEqual(calls, ['regular message', 'Syncing… but not since']);
 });
 
-test('withApiNoiseFilter does not affect console.info, warn, or error', async (t) => {
+test('withApiNoiseFilter does not affect console.info, warn, or error', async t => {
     const calls = { info: [], warn: [], error: [] };
     const originals = {
         info: console.info,
@@ -77,7 +77,7 @@ test('withApiNoiseFilter does not affect console.info, warn, or error', async (t
     assert.deepEqual(calls.error, ['error: [Breadcrumb] trace']);
 });
 
-test('withApiNoiseFilter restores console.log after errors', async (t) => {
+test('withApiNoiseFilter restores console.log after errors', async t => {
     const calls = [];
     const originalLog = console.log;
 
@@ -102,7 +102,7 @@ test('withApiNoiseFilter restores console.log after errors', async (t) => {
     assert.deepEqual(calls, ['post-restore']);
 });
 
-test('withApiNoiseFilter supports nested calls', async (t) => {
+test('withApiNoiseFilter supports nested calls', async t => {
     const calls = [];
     const originalLog = console.log;
 
@@ -123,7 +123,7 @@ test('withApiNoiseFilter supports nested calls', async (t) => {
     assert.deepEqual(calls, ['outer keep']);
 });
 
-test('withApiNoiseFilter recovers after nested error', async (t) => {
+test('withApiNoiseFilter recovers after nested error', async t => {
     const calls = [];
     const originalLog = console.log;
 
@@ -157,11 +157,11 @@ test('withApiNoiseFilter recovers after nested error', async (t) => {
     assert.deepEqual(calls, ['keep outer', 'keep post recovery']);
 });
 
-test('withApiNoiseFilter suppresses known Actual noise from stdout.write', async (t) => {
+test('withApiNoiseFilter suppresses known Actual noise from stdout.write', async t => {
     const calls = [];
     const originalWrite = process.stdout.write;
 
-    process.stdout.write = (data) => {
+    process.stdout.write = data => {
         calls.push(
             typeof data === 'string'
                 ? data
@@ -197,7 +197,7 @@ test('withApiNoiseFilter restores stdout.write after errors', async () => {
     assert.equal(process.stdout.write, originalWrite);
 });
 
-test('withApiNoiseFilter restores globals after overlapping calls where outer finishes first', async (t) => {
+test('withApiNoiseFilter restores globals after overlapping calls where outer finishes first', async t => {
     const calls = [];
     const originalLog = console.log;
 
@@ -208,7 +208,7 @@ test('withApiNoiseFilter restores globals after overlapping calls where outer fi
         console.log = originalLog;
     });
 
-    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     // Outer starts first, inner starts second, outer finishes first
     const outer = withApiNoiseFilter(async () => {
@@ -230,7 +230,7 @@ test('withApiNoiseFilter restores globals after overlapping calls where outer fi
     assert.deepEqual(calls, ['outer before', 'outer after', 'post-restore']);
 });
 
-test('withApiNoiseFilter suppresses Loaded spreadsheet from cache noise', async (t) => {
+test('withApiNoiseFilter suppresses Loaded spreadsheet from cache noise', async t => {
     const calls = [];
     const originalLog = console.log;
 
@@ -249,7 +249,7 @@ test('withApiNoiseFilter suppresses Loaded spreadsheet from cache noise', async 
     assert.deepEqual(calls, ['keep this']);
 });
 
-test('withApiNoiseFilter does not suppress standalone newline after a noise pattern on stdout (known gap)', async (t) => {
+test('withApiNoiseFilter does not suppress standalone newline after a noise pattern on stdout (known gap)', async t => {
     // When Actual splits "Syncing since ..." and "\n" across separate
     // process.stdout.write calls, the standalone "\n" does not match a
     // noise pattern and leaks as a blank line. Documenting this rather
@@ -257,7 +257,7 @@ test('withApiNoiseFilter does not suppress standalone newline after a noise patt
     const calls = [];
     const originalWrite = process.stdout.write;
 
-    process.stdout.write = (data) => {
+    process.stdout.write = data => {
         calls.push(
             typeof data === 'string'
                 ? data
@@ -278,14 +278,14 @@ test('withApiNoiseFilter does not suppress standalone newline after a noise patt
     assert.deepEqual(calls, ['\n']);
 });
 
-test('withApiNoiseFilter suppresses whole stdout chunk when it starts with noise', async (t) => {
+test('withApiNoiseFilter suppresses whole stdout chunk when it starts with noise', async t => {
     // When a single write contains multiple newline-separated lines and
     // the trimmed chunk starts with a noise pattern, the entire chunk
     // is suppressed — including any non-noise lines after the first.
     const calls = [];
     const originalWrite = process.stdout.write;
 
-    process.stdout.write = (data) => {
+    process.stdout.write = data => {
         calls.push(
             typeof data === 'string'
                 ? data

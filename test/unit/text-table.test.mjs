@@ -17,9 +17,9 @@ test('renderTextTable aligns emoji content using display width', () => {
         ],
     });
 
-    const bodyRows = lines.filter((line) => line.startsWith('║'));
+    const bodyRows = lines.filter(line => line.startsWith('║'));
     assert.equal(bodyRows.length >= 3, true);
-    const rowWidths = bodyRows.map((line) => stringWidth(line));
+    const rowWidths = bodyRows.map(line => stringWidth(line));
     assert.equal(new Set(rowWidths).size, 1);
 });
 test('renderTextTable truncates with ellipsis when max width is exceeded', () => {

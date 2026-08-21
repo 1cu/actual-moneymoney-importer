@@ -13,11 +13,10 @@
         "test:unit": "npm run build && node --test \"test/unit/**/*.test.mjs\"",
         "test:coverage": "npm run build && node --test --experimental-test-coverage \"test/cli/**/*.test.mjs\" \"test/unit/**/*.test.mjs\"",
         "test:apple-intelligence": "npm run build && node --test test/unit/apple-intelligence.test.mjs",
-        "lint:eslint": "eslint src test eslint.config.mjs commitlint.config.js",
-        "lint:prettier": "prettier --check 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js'",
+        "lint:biome": "biome check .",
+        "lint:biome:ci": "biome ci .",
         "lint:markdownlint": "markdownlint-cli2 '*.md' '.github/**/*.md'",
-        "lint:fix": "eslint src test eslint.config.mjs commitlint.config.js --fix && prettier --write 'src/**/*.ts' 'test/**/*.mjs' '*.md' '.github/**/*.md' '.github/**/*.yml' 'package.json' 'tsconfig.json' '.releaserc.json' 'eslint.config.mjs' 'commitlint.config.js' && markdownlint-cli2 --fix '*.md' '.github/**/*.md'",
-        "prepare": "husky"
+        "lint:fix": "biome check --write ."
     },
     "type": "module",
     "keywords": [
@@ -34,7 +33,8 @@
     },
     "allowScripts": {
         "better-sqlite3@12.11.1": true,
-        "koffi@2.16.3": true
+        "koffi@2.16.3": true,
+        "koffi@3.1.6": true
     },
     "publishConfig": {
         "access": "public"
@@ -54,81 +54,31 @@
         "url": "https://github.com/1cu/actual-moneymoney-importer/issues"
     },
     "dependencies": {
-        "@actual-app/api": "^26.8.0",
-        "@actual-app/core": "^26.8.0",
+        "@actual-app/api": "^26.8.1",
         "chalk": "^6.0.0",
         "date-fns": "^4.4.0",
         "moneymoney": "^1.3.0",
-        "openai": "^7.3.0",
+        "openai": "^7.5.0",
         "string-width": "^8.2.1",
         "toml": "^5.0.0",
         "yargs": "^18.0.0",
         "zod": "^4.4.3"
     },
     "engines": {
-        "node": ">=22"
+        "node": ">=24"
     },
     "devDependencies": {
-        "@commitlint/cli": "^21.2.0",
-        "@commitlint/config-conventional": "^21.2.0",
-        "@eslint/js": "^10.0.1",
-        "@types/node": "^26.1.0",
+        "@biomejs/biome": "^2.5.10",
+        "@actual-app/core": "^26.8.1",
+        "@commitlint/cli": "^21.2.2",
+        "@commitlint/config-conventional": "^21.2.2",
+        "@types/node": "^26.2.0",
         "@types/yargs": "^17.0.35",
-        "@typescript/native": "npm:typescript@^7.0.2",
-        "eslint": "^10.6.0",
-        "globals": "^17.9.0",
-        "husky": "^9.1.7",
-        "lint-staged": "^17.3.0",
         "markdownlint-cli2": "^0.23.2",
-        "prettier": "^3.9.4",
-        "semantic-release": "^25.0.8",
-        "typescript": "npm:@typescript/typescript6@^6.0.2",
-        "typescript-eslint": "^8.62.1"
-    },
-    "lint-staged": {
-        "src/**/*.ts": [
-            "eslint --fix",
-            "prettier --write"
-        ],
-        "test/**/*.mjs": [
-            "eslint --fix",
-            "prettier --write"
-        ],
-        "*.md": [
-            "prettier --write",
-            "markdownlint-cli2 --fix"
-        ],
-        ".github/**/*.md": [
-            "prettier --write",
-            "markdownlint-cli2 --fix"
-        ],
-        ".github/**/*.yml": [
-            "prettier --write"
-        ],
-        "package.json": [
-            "prettier --write"
-        ],
-        "tsconfig.json": [
-            "prettier --write"
-        ],
-        ".releaserc.json": [
-            "prettier --write"
-        ],
-        "eslint.config.mjs": [
-            "eslint --fix",
-            "prettier --write"
-        ],
-        "commitlint.config.js": [
-            "eslint --fix",
-            "prettier --write"
-        ]
+        "semantic-release": "^25.0.9",
+        "typescript": "^7.0.2"
     },
     "optionalDependencies": {
-        "tsfm-sdk": "^0.3.1"
-    },
-    "overrides": {
-        "adm-zip": "0.6.0",
-        "brace-expansion": "5.0.8",
-        "tar": "7.5.22"
+        "tsfm-sdk": "^0.4.0"
     }
 }

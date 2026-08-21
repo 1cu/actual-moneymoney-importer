@@ -538,7 +538,7 @@ test('getCanonicalMappingEntries sorts by sourcePath then sourceUuid', () => {
         includeSuggestions: false,
     });
     assert.deepEqual(
-        entries.map((entry) => entry.sourceUuid),
+        entries.map(entry => entry.sourceUuid),
         ['mm-a', 'mm-b']
     );
 });

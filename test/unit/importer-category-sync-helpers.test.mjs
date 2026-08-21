@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildConflictPromptText } from '../../dist/utils/Importer.js';
 
-const stripAnsi = (value) =>
-    value.replace(new RegExp('\\u001B\\[[0-?]*[ -/]*[@-~]', 'gu'), ''); // eslint-disable-line no-control-regex
+const ansiEscapePattern = new RegExp(
+    `${String.fromCharCode(0x1b)}\\[[0-?]*[ -/]*[@-~]`,
+    'gu'
+);
+
+const stripAnsi = value => value.replace(ansiEscapePattern, '');
 
 test('buildConflictPromptText groups transaction details, choices, and prompt label', () => {
     const prompt = stripAnsi(

@@ -38,7 +38,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig surfaces detailed validation errors', async (t) => {
+test('getConfig surfaces detailed validation errors', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -52,7 +52,7 @@ test('getConfig surfaces detailed validation errors', async (t) => {
 
     await assert.rejects(
         () => getConfig({ config: configPath }),
-        (error) =>
+        error =>
             error instanceof Error &&
             error.message.includes('Invalid configuration file:') &&
             error.message.includes(
@@ -95,7 +95,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig rejects when payeeTransformation enabled without openAiApiKey key', async (t) => {
+test('getConfig rejects when payeeTransformation enabled without openAiApiKey key', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -109,7 +109,7 @@ test('getConfig rejects when payeeTransformation enabled without openAiApiKey ke
 
     await assert.rejects(
         () => getConfig({ config: configPath }),
-        (error) =>
+        error =>
             error instanceof Error &&
             error.message.includes('Invalid configuration file:') &&
             error.message.includes('OpenAI key must not be empty')
@@ -150,7 +150,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig rejects when payeeTransformation enabled with empty openAiApiKey', async (t) => {
+test('getConfig rejects when payeeTransformation enabled with empty openAiApiKey', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -164,7 +164,7 @@ test('getConfig rejects when payeeTransformation enabled with empty openAiApiKey
 
     await assert.rejects(
         () => getConfig({ config: configPath }),
-        (error) =>
+        error =>
             error instanceof Error &&
             error.message.includes('Invalid configuration file:') &&
             error.message.includes('OpenAI key must not be empty')
@@ -205,7 +205,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig accepts apple-intelligence backend without openAiApiKey', async (t) => {
+test('getConfig accepts apple-intelligence backend without openAiApiKey', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -258,7 +258,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig accepts apple-intelligence backend with empty openAiApiKey', async (t) => {
+test('getConfig accepts apple-intelligence backend with empty openAiApiKey', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -314,7 +314,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig resolves env var in openAiApiKey', async (t) => {
+test('getConfig resolves env var in openAiApiKey', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -343,7 +343,7 @@ test('getConfig resolves env var in openAiApiKey', async (t) => {
     }
 });
 
-test('getConfig rejects when env var is not set', async (t) => {
+test('getConfig rejects when env var is not set', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -361,7 +361,7 @@ test('getConfig rejects when env var is not set', async (t) => {
     try {
         await assert.rejects(
             () => getConfig({ config: configPath }),
-            (error) =>
+            error =>
                 error instanceof Error &&
                 error.message.includes(
                     "Environment variable 'MMI_OPENAI_KEY' referenced in config but not set"
@@ -408,7 +408,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig rejects invalid backend value', async (t) => {
+test('getConfig rejects invalid backend value', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -422,7 +422,7 @@ test('getConfig rejects invalid backend value', async (t) => {
 
     await assert.rejects(
         () => getConfig({ config: configPath }),
-        (error) =>
+        error =>
             error instanceof Error &&
             error.message.includes('Invalid configuration file:') &&
             error.message.includes('backend')
@@ -464,7 +464,7 @@ password = ""
 "Account" = "actual-account"
 `;
 
-test('getConfig rejects whitespace-only openAiApiKey with OpenAI backend', async (t) => {
+test('getConfig rejects whitespace-only openAiApiKey with OpenAI backend', async t => {
     const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), 'actual-mmi-config-load-')
     );
@@ -478,7 +478,7 @@ test('getConfig rejects whitespace-only openAiApiKey with OpenAI backend', async
 
     await assert.rejects(
         () => getConfig({ config: configPath }),
-        (error) =>
+        error =>
             error instanceof Error &&
             error.message.includes('OpenAI key must not be empty')
     );

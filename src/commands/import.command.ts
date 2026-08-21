@@ -1,15 +1,15 @@
 import { parse } from 'date-fns';
 import { checkDatabaseUnlocked } from 'moneymoney';
-import { ArgumentsCamelCase, CommandModule } from 'yargs';
+import type { ArgumentsCamelCase, CommandModule } from 'yargs';
 import { AccountMap } from '../utils/AccountMap.js';
 import ActualApi from '../utils/ActualApi.js';
-import { includesRef, toRefList, CommonArgs } from '../utils/cliArgs.js';
+import { withApiNoiseFilter } from '../utils/ActualApiLogControl.js';
 import CategoryMap from '../utils/CategoryMap.js';
+import { type CommonArgs, includesRef, toRefList } from '../utils/cliArgs.js';
+import { getConfig, resolveCategorySyncPolicy } from '../utils/config.js';
 import Importer from '../utils/Importer.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
 import PayeeTransformer from '../utils/PayeeTransformer.js';
-import { withApiNoiseFilter } from '../utils/ActualApiLogControl.js';
-import { getConfig, resolveCategorySyncPolicy } from '../utils/config.js';
 import { DATE_FORMAT } from '../utils/shared.js';
 
 export const buildBudgetNameBySyncIdMap = async (
@@ -19,7 +19,7 @@ export const buildBudgetNameBySyncIdMap = async (
     try {
         const userFiles = await actualApi.getUserFiles();
 
-        return new Map(userFiles.map((file) => [file.fileId, file.name]));
+        return new Map(userFiles.map(file => [file.fileId, file.name]));
     } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
 
@@ -72,13 +72,13 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
     const serverRefs = toRefList(argv.server);
     const budgetRefs = toRefList(argv.budget);
 
-    if (fromDate && isNaN(fromDate.getTime())) {
+    if (fromDate && Number.isNaN(fromDate.getTime())) {
         throw new Error(
             `Invalid 'from' date: '${argv.from}'. Expected a date in the format: ${DATE_FORMAT}`
         );
     }
 
-    if (toDate && isNaN(toDate.getTime())) {
+    if (toDate && Number.isNaN(toDate.getTime())) {
         throw new Error(
             `Invalid 'to' date: '${argv.to}'. Expected a date in the format: ${DATE_FORMAT}`
         );
@@ -90,11 +90,9 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
         );
     }
 
-    const selectedServerConfigs = config.actualServers.filter(
-        (serverConfig) => {
-            return includesRef(serverRefs, serverConfig.serverUrl);
-        }
-    );
+    const selectedServerConfigs = config.actualServers.filter(serverConfig => {
+        return includesRef(serverRefs, serverConfig.serverUrl);
+    });
 
     if (selectedServerConfigs.length === 0) {
         throw new Error(
@@ -117,7 +115,7 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
 
         for (const serverConfig of selectedServerConfigs) {
             const selectedBudgetConfigs = serverConfig.budgets.filter(
-                (budgetConfig) => includesRef(budgetRefs, budgetConfig.syncId)
+                budgetConfig => includesRef(budgetRefs, budgetConfig.syncId)
             );
 
             if (selectedBudgetConfigs.length === 0) {
@@ -130,7 +128,7 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
             logger.debug(`Creating Actual API instance...`, [
                 `Server URL: ${serverConfig.serverUrl}`,
                 `Budgets: ${selectedBudgetConfigs
-                    .map((budget) => budget.syncId)
+                    .map(budget => budget.syncId)
                     .join(', ')}`,
             ]);
             const actualApi = new ActualApi(serverConfig, logger);
@@ -247,7 +245,7 @@ const handleCommand = async (argv: ArgumentsCamelCase<ImportArgs>) => {
 export default {
     command: 'import',
     describe: 'Import data from MoneyMoney',
-    builder: (yargs) => {
+    builder: yargs => {
         return yargs
             .boolean('dry-run')
             .describe(
@@ -285,5 +283,5 @@ export default {
                 `Import transactions up to this date (${DATE_FORMAT})`
             );
     },
-    handler: (argv) => handleCommand(argv),
+    handler: argv => handleCommand(argv),
 } as CommandModule;

@@ -1,25 +1,27 @@
-import fs from 'fs/promises';
-import toml from 'toml';
+import fs from 'node:fs/promises';
 import { checkDatabaseUnlocked } from 'moneymoney';
-import { ArgumentsCamelCase, CommandModule } from 'yargs';
+import toml from 'toml';
+import type { ArgumentsCamelCase, CommandModule } from 'yargs';
 import ActualApi from '../utils/ActualApi.js';
 import { selectTargets } from '../utils/actualTargets.js';
-import { toRefList, CommonArgs } from '../utils/cliArgs.js';
-import CategoryMap, { CanonicalMappingEntry } from '../utils/CategoryMap.js';
-import Logger, { LogLevel } from '../utils/Logger.js';
-import { renderTextTable, TableColumnConfig } from '../utils/textTable.js';
+import CategoryMap, {
+    type CanonicalMappingEntry,
+} from '../utils/CategoryMap.js';
 import {
     getBudgetBlocks,
     renderAnnotatedCategoryMappingLines,
     replaceCategoryMappingInConfig,
 } from '../utils/categoryMappingConfigPatch.js';
+import { type CommonArgs, toRefList } from '../utils/cliArgs.js';
 import {
-    ActualBudgetConfig,
-    ActualServerConfig,
+    type ActualBudgetConfig,
+    type ActualServerConfig,
     getConfig,
     getConfigFile,
     resolveCategorySyncPolicy,
 } from '../utils/config.js';
+import Logger, { LogLevel } from '../utils/Logger.js';
+import { renderTextTable, type TableColumnConfig } from '../utils/textTable.js';
 
 type MapFormat = 'table' | 'json' | 'toml';
 type CategoryMapItem = {
@@ -215,10 +217,10 @@ const handleMapCommand = async (
                 categoryMapping?: Record<string, string>;
             }>;
         }>
-    ).flatMap((server) => server.budgets);
+    ).flatMap(server => server.budgets);
 
     const selectedBudget = parsedBudgets.find(
-        (budget) => budget.syncId === report.syncId
+        budget => budget.syncId === report.syncId
     );
 
     if (!selectedBudget) {
@@ -236,7 +238,7 @@ const handleMapCommand = async (
         );
     }
 
-    const tempPath = configPath + '.tmp';
+    const tempPath = `${configPath}.tmp`;
     const stat = await fs.stat(configPath);
     await fs.writeFile(tempPath, writeResult.content, 'utf8');
     await fs.chmod(tempPath, stat.mode);
@@ -341,7 +343,7 @@ export const formatConfiguredMappingsSection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
 ) => {
-    const rows = report.configuredMappings.map((mapping) => {
+    const rows = report.configuredMappings.map(mapping => {
         return [
             mapping.sourcePath ?? mapping.sourceRef,
             mapping.targetPath ?? mapping.targetRef,
@@ -368,7 +370,7 @@ export const formatInvalidMappingsSection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
 ) => {
-    const rows = report.invalidMappings.map((mapping) => {
+    const rows = report.invalidMappings.map(mapping => {
         return [
             mapping.sourceRef,
             mapping.targetRef,
@@ -393,7 +395,7 @@ export const formatSafeSuggestionsSection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
 ) => {
-    const rows = report.safeSuggestions.map((suggestion) => {
+    const rows = report.safeSuggestions.map(suggestion => {
         return [
             suggestion.sourcePath,
             suggestion.targetPath,
@@ -418,7 +420,7 @@ export const formatUnresolvedMoneyMoneySection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
 ) => {
-    const rows = report.unresolvedMoneyMoneyCategories.map((category) => {
+    const rows = report.unresolvedMoneyMoneyCategories.map(category => {
         return [category.uuid, category.path];
     });
 
@@ -438,7 +440,7 @@ export const formatIgnoredMoneyMoneySection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
 ) => {
-    const rows = report.ignoredMoneyMoneyCategories.map((category) => {
+    const rows = report.ignoredMoneyMoneyCategories.map(category => {
         return [category.path, category.ref];
     });
 
@@ -458,7 +460,7 @@ export const formatUnusedActualSection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
 ) => {
-    const rows = report.unusedActualCategories.map((category) => {
+    const rows = report.unusedActualCategories.map(category => {
         return [category.id, category.path];
     });
 
@@ -478,7 +480,7 @@ export const formatPlanningWarningsSection = (
     report: ReturnType<CategoryMap['getReport']>,
     maxWidth: number
 ) => {
-    const rows = report.planningWarnings.map((warning) => [warning]);
+    const rows = report.planningWarnings.map(warning => [warning]);
 
     return formatSectionWithRows({
         title: 'Planning Warnings:',
@@ -546,20 +548,14 @@ export const formatStatusBar = (
 
 export const formatSyncOffBanner = (maxWidth: number) => {
     const width = Math.max(maxWidth, 40);
-    const top = '╔' + '═'.repeat(width) + '╗';
-    const bottom = '╚' + '═'.repeat(width) + '╝';
-    const empty = '║' + ' '.repeat(width) + '║';
+    const top = `╔${'═'.repeat(width)}╗`;
+    const bottom = `╚${'═'.repeat(width)}╝`;
+    const empty = `║${' '.repeat(width)}║`;
     const lines = [
-        '║  ⚠️  CATEGORY SYNC IS DISABLED' +
-            ' '.repeat(Math.max(0, width - 32)) +
-            '║',
+        `║  ⚠️  CATEGORY SYNC IS DISABLED${' '.repeat(Math.max(0, width - 32))}║`,
         empty,
-        '║  categorySync is "off" — these mappings will not be applied during import.' +
-            ' '.repeat(Math.max(0, width - 73)) +
-            '║',
-        '║  Set categorySync = "new" or "all" in [import] to enable category sync.' +
-            ' '.repeat(Math.max(0, width - 74)) +
-            '║',
+        `║  categorySync is "off" — these mappings will not be applied during import.${' '.repeat(Math.max(0, width - 73))}║`,
+        `║  Set categorySync = "new" or "all" in [import] to enable category sync.${' '.repeat(Math.max(0, width - 74))}║`,
     ];
     return [top, ...lines, bottom].join('\n');
 };
@@ -716,7 +712,7 @@ export const formatTomlReport = (
 const mapSubcommand: CommandModule = {
     command: 'map',
     describe: 'Validate and suggest MoneyMoney -> Actual category mappings',
-    builder: (yargs) => {
+    builder: yargs => {
         return yargs
             .string('server')
             .alias('server', 's')
@@ -734,13 +730,13 @@ const mapSubcommand: CommandModule = {
                 'Write annotated category mapping (configured + safe suggestions) to config TOML'
             );
     },
-    handler: (argv) => handleMapCommand(argv),
+    handler: argv => handleMapCommand(argv),
 };
 
 export default {
     command: 'categories',
     describe: 'Category mapping tools',
-    builder: (yargs) => {
+    builder: yargs => {
         return yargs.command(mapSubcommand).strictCommands();
     },
     handler: () => {

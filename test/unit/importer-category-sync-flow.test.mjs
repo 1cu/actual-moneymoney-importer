@@ -6,7 +6,7 @@ const makeLogger = () => {
     const infos = [];
     const warnings = [];
     const debugs = [];
-    const toHintArray = (hint) => {
+    const toHintArray = hint => {
         if (!hint) {
             return [];
         }
@@ -40,13 +40,13 @@ const makeImporter = ({
         getMap: () => [],
     };
     const categoryMap = {
-        getMappedActualCategoryId: (uuid) =>
+        getMappedActualCategoryId: uuid =>
             mappingByUuid[uuid] ?? {
                 actualCategoryId: undefined,
                 isUncategorized: false,
                 isMapped: false,
             },
-        getActualCategoryPath: (categoryId) => categoryId,
+        getActualCategoryPath: categoryId => categoryId,
     };
     const config = {
         import: {
@@ -436,7 +436,7 @@ test('emitImportRunSummary omits zero counters inside category sync activity lin
     );
 
     const categorySyncLine =
-        (logger.infos[0]?.hints ?? []).find((hint) =>
+        (logger.infos[0]?.hints ?? []).find(hint =>
             hint.startsWith('Category sync activity:')
         ) ?? '';
     assert.equal(categorySyncLine, 'Category sync activity: backfills=1');

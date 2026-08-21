@@ -3,14 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const cliPath = path.resolve(__dirname, '../../dist/index.js');
 
-const makeValidConfig = (serverUrl) => `
+const makeValidConfig = serverUrl => `
 [payeeTransformation]
 enabled = false
 

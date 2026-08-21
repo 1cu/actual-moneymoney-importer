@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import fs from 'fs';
+import fs from 'node:fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import accountsCommand from './commands/accounts.command.js';

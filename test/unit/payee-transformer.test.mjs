@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { zodResponseFormat } from 'openai/helpers/zod';
 import PayeeTransformer from '../../dist/utils/PayeeTransformer.js';
 import {
     AppleIntelligenceBackend,
@@ -7,7 +8,6 @@ import {
     OpenAIBackend,
     PayeeMapSchema,
 } from '../../dist/utils/TransformationBackend.js';
-import { zodResponseFormat } from 'openai/helpers/zod';
 
 const makeLogger = () => ({
     debugMessages: [],
@@ -46,11 +46,11 @@ const makeBackendStub = ({
         '- Only clean the JSON values.\n' +
         '\n' +
         'Do not include explanations, metadata, or anything outside the JSON object.',
-    isModelUnavailableError: (error) =>
+    isModelUnavailableError: error =>
         error.message.toLowerCase().includes('model') &&
         (error.message.toLowerCase().includes('does not exist') ||
             error.message.toLowerCase().includes('not found')),
-    isTemperatureError: (error) =>
+    isTemperatureError: error =>
         error.message.includes('temperature') &&
         error.message.includes('does not support'),
 });
@@ -197,7 +197,7 @@ test('transformPayees bounds the relevant existing-payee shortlist', async () =>
     assert.equal(
         capturedPrompt
             .split('\n')
-            .filter((line) => line.trim().startsWith('Alpha Market ')).length,
+            .filter(line => line.trim().startsWith('Alpha Market ')).length,
         100
     );
     assert.deepEqual(result, {
@@ -276,7 +276,7 @@ test('transformPayees raw logs shorten existing payees but keep raw payees and r
         (_, index) => `Coffee Stand ${index + 1}`
     );
     const mappings = Object.fromEntries(
-        rawPayees.map((payee) => [payee, payee.split(',')[0]])
+        rawPayees.map(payee => [payee, payee.split(',')[0]])
     );
     const transformer = new PayeeTransformer(
         { ...makeConfig(), payeeMatchThreshold: 1 },
@@ -343,7 +343,7 @@ Input:
 Example Store, 800-5550100 Us
 Output:
 {"Example Store, 800-5550100 Us": "Example Store"}`,
-            onCreate: (prompt) => {
+            onCreate: prompt => {
                 capturedPrompt = prompt;
             },
         })
@@ -490,7 +490,7 @@ test('OpenAIBackend constructs API call correctly', async () => {
     const stubClient = {
         chat: {
             completions: {
-                parse: async (options) => {
+                parse: async options => {
                     capturedOptions.push(options);
                     return {
                         choices: [{ message: { parsed: { mappings: [] } } }],
@@ -586,7 +586,7 @@ test('OpenAIBackend throws when parsed content is null', async () => {
 });
 
 test('AppleIntelligenceBackend recognizes model service failures as unavailable', () => {
-    const backend = new AppleIntelligenceBackend(makeConfig());
+    const backend = new AppleIntelligenceBackend();
 
     assert.equal(
         backend.isModelUnavailableError(
@@ -617,7 +617,7 @@ test('buildApplePayeeMapJsonSchema creates a closed schema from raw payees', () 
 });
 
 test('AppleIntelligenceBackend preserves non-availability generation errors', () => {
-    const backend = new AppleIntelligenceBackend(makeConfig());
+    const backend = new AppleIntelligenceBackend();
 
     assert.equal(
         backend.isModelUnavailableError(

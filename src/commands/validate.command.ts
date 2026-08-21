@@ -1,15 +1,15 @@
-import { ArgumentsCamelCase, CommandModule } from 'yargs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import type { ArgumentsCamelCase, CommandModule } from 'yargs';
+import { ZodError } from 'zod';
+import type { CommonArgs } from '../utils/cliArgs.js';
 import {
     EnvVarResolutionError,
     getConfigFile,
     parseConfigContent,
     resolveCategorySyncPolicy,
 } from '../utils/config.js';
-import { CommonArgs } from '../utils/cliArgs.js';
-import fs from 'fs/promises';
-import path from 'path';
 import Logger, { LogLevel } from '../utils/Logger.js';
-import { ZodError } from 'zod';
 import { EXAMPLE_CONFIG } from '../utils/shared.js';
 
 const handleValidate = async (argv: ArgumentsCamelCase<CommonArgs>) => {
@@ -48,9 +48,9 @@ const handleValidate = async (argv: ArgumentsCamelCase<CommonArgs>) => {
 
             // Soft warning: categorySync is 'off' but mappings exist
             if (resolveCategorySyncPolicy(config.import) === 'off') {
-                const hasMappings = config.actualServers.some((server) =>
+                const hasMappings = config.actualServers.some(server =>
                     server.budgets.some(
-                        (budget) =>
+                        budget =>
                             budget.categoryMapping !== undefined &&
                             Object.keys(budget.categoryMapping).length > 0
                     )

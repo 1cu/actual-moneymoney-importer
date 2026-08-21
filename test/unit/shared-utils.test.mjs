@@ -5,7 +5,7 @@ import {
     getIdForMoneyMoneyTransaction,
 } from '../../dist/utils/shared.js';
 
-const makeTxn = (overrides) => ({
+const makeTxn = overrides => ({
     purpose: undefined,
     comment: undefined,
     ...overrides,

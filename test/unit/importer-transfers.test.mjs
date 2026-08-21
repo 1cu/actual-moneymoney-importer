@@ -42,9 +42,9 @@ const makeActualAccount = ({ id, name }) => ({
     offbudget: false,
 });
 
-const makeFullAccountMapping = (entries) => new Map(entries);
+const makeFullAccountMapping = entries => new Map(entries);
 
-const makeTransaction = (params) => {
+const makeTransaction = params => {
     const {
         id,
         accountUuid,
@@ -68,9 +68,7 @@ const makeTransaction = (params) => {
         bookingDate: new Date(valueDate),
         booked,
         name,
-        purpose: Object.prototype.hasOwnProperty.call(params, 'purpose')
-            ? purpose
-            : 'Purpose',
+        purpose: Object.hasOwn(params, 'purpose') ? purpose : 'Purpose',
         comment,
     };
 };
@@ -98,7 +96,7 @@ const makeImporter = ({
             resolvedUuids: resolvedTransferCategoryUuids,
             invalidRefs: invalidTransferRefs,
         }),
-        getActualCategoryPath: (categoryId) => categoryId,
+        getActualCategoryPath: categoryId => categoryId,
     };
     const config = {
         import: {
@@ -141,7 +139,7 @@ const makeTransferPlanner = ({
             resolvedUuids: resolvedTransferCategoryUuids,
             invalidRefs: invalidTransferRefs,
         }),
-        getActualCategoryPath: (categoryId) => categoryId,
+        getActualCategoryPath: categoryId => categoryId,
     };
     const config = {
         import: {
@@ -204,7 +202,7 @@ test('filterTransactionsForRequestedImportRange keeps only requested range trans
     });
 
     assert.deepEqual(
-        filtered.map((transaction) => transaction.id),
+        filtered.map(transaction => transaction.id),
         ['2']
     );
 });
@@ -2126,7 +2124,7 @@ test('applyExistingCounterpartConversions throws when the auto-created counterpa
     );
     assert.ok(
         logger.debugMessages.some(
-            (message) =>
+            message =>
                 message.includes('actual-counterpart') &&
                 message.includes('actual-target') &&
                 message.includes('attempt 5/5')
