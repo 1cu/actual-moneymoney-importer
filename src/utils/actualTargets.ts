@@ -1,5 +1,5 @@
-import type { ActualServerConfig, ActualBudgetConfig } from './config.js';
 import { includesRef } from './cliArgs.js';
+import type { ActualBudgetConfig, ActualServerConfig } from './config.js';
 
 export type ActualTarget = {
     server: ActualServerConfig;

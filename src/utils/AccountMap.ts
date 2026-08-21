@@ -1,8 +1,8 @@
-import { Account as MonMonAccount, getAccounts } from 'moneymoney';
 import type { APIAccountEntity } from '@actual-app/api/models';
-import ActualApi from './ActualApi.js';
-import { ActualBudgetConfig } from './config.js';
-import Logger from './Logger.js';
+import { getAccounts, type Account as MonMonAccount } from 'moneymoney';
+import type ActualApi from './ActualApi.js';
+import type { ActualBudgetConfig } from './config.js';
+import type Logger from './Logger.js';
 
 export class AccountMap {
     constructor(
@@ -56,7 +56,7 @@ export class AccountMap {
     }
 
     public getMoneyMoneyAccountByRef(ref: string) {
-        const matchingAccounts = this.moneyMoneyAccounts.filter((acc) =>
+        const matchingAccounts = this.moneyMoneyAccounts.filter(acc =>
             this.checkMoneyMoneyAccountRef(acc, ref)
         );
 
@@ -80,7 +80,7 @@ export class AccountMap {
     }
 
     public getActualAccountByRef(ref: string) {
-        const matchingAccounts = this.actualAccounts.filter((acc) =>
+        const matchingAccounts = this.actualAccounts.filter(acc =>
             this.checkActualAccountRef(acc, ref)
         );
 

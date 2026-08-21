@@ -133,31 +133,31 @@ test('formatters include expected headers and rows', () => {
     const ignoredLines = formatIgnoredMoneyMoneySection(report, 120);
 
     assert.equal(
-        configuredLines.some((line) => line.includes('╔')),
+        configuredLines.some(line => line.includes('╔')),
         true
     );
     assert.equal(
-        configuredLines.some((line) => line.includes('MoneyMoney Path')),
+        configuredLines.some(line => line.includes('MoneyMoney Path')),
         true
     );
     assert.equal(
-        invalidLines.some((line) => line.includes('Reason')),
+        invalidLines.some(line => line.includes('Reason')),
         true
     );
     assert.equal(
-        suggestionsLines.some((line) => line.includes('Actual Path')),
+        suggestionsLines.some(line => line.includes('Actual Path')),
         true
     );
     assert.equal(
-        unresolvedLines.some((line) => line.includes('UUID')),
+        unresolvedLines.some(line => line.includes('UUID')),
         true
     );
     assert.equal(
-        unusedLines.some((line) => line.includes('ID')),
+        unusedLines.some(line => line.includes('ID')),
         true
     );
     assert.equal(
-        ignoredLines.some((line) => line.includes('MoneyMoney Path')),
+        ignoredLines.some(line => line.includes('MoneyMoney Path')),
         true
     );
 });
@@ -290,11 +290,9 @@ test('toml formatter includes preamble counts and incompleteness note when neede
         '# Unused Actual categories: 1',
         '# Planning is incomplete (this can be intentional).',
     ]);
-    assert.ok(lines.some((line) => line.includes('# MoneyMoney: A > B')));
-    assert.ok(lines.some((line) => line.includes('# Actual: C > D')));
-    assert.ok(
-        lines.some((line) => line.includes('"path:A > B" = "path:C > D"'))
-    );
+    assert.ok(lines.some(line => line.includes('# MoneyMoney: A > B')));
+    assert.ok(lines.some(line => line.includes('# Actual: C > D')));
+    assert.ok(lines.some(line => line.includes('"path:A > B" = "path:C > D"')));
 });
 
 test('toml formatter includes ignored count when configured', () => {
@@ -319,7 +317,7 @@ test('toml formatter includes ignored count when configured', () => {
     ]);
 
     assert.ok(
-        lines.some((line) =>
+        lines.some(line =>
             line.includes('# Intentionally ignored MoneyMoney categories: 1')
         )
     );

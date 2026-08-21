@@ -1,5 +1,5 @@
-import os from 'os';
-import path from 'path';
+import os from 'node:os';
+import path from 'node:path';
 import type { Transaction as MonMonTransaction } from 'moneymoney';
 
 export const DATE_FORMAT = 'yyyy-MM-dd';

@@ -1,14 +1,14 @@
-import {
-    Category as MonMonCategory,
-    getCategories as getMonMonCategories,
-} from 'moneymoney';
 import type {
     APICategoryEntity,
     APICategoryGroupEntity,
 } from '@actual-app/api/models';
-import ActualApi from './ActualApi.js';
-import { ActualBudgetConfig } from './config.js';
-import Logger from './Logger.js';
+import {
+    getCategories as getMonMonCategories,
+    type Category as MonMonCategory,
+} from 'moneymoney';
+import type ActualApi from './ActualApi.js';
+import type { ActualBudgetConfig } from './config.js';
+import type Logger from './Logger.js';
 
 type MoneyMoneyCategoryInfo = {
     uuid: string;
@@ -270,7 +270,7 @@ class CategoryMap {
     }) {
         return Object.fromEntries(
             this.getCanonicalMappingEntries({ includeSuggestions }).map(
-                (entry) => {
+                entry => {
                     const sourceRef = this.canonicalSourceRef(
                         entry.sourceUuid,
                         entry.sourcePath
@@ -417,9 +417,7 @@ class CategoryMap {
         categories: APICategoryEntity[],
         groups: APICategoryGroupEntity[]
     ) {
-        const groupNames = new Map(
-            groups.map((group) => [group.id, group.name])
-        );
+        const groupNames = new Map(groups.map(group => [group.id, group.name]));
 
         for (const category of categories) {
             const groupName = groupNames.get(category.group_id);
@@ -545,7 +543,7 @@ class CategoryMap {
             const exactNameCandidates = Array.from(
                 this.actualCategoryInfos.values()
             ).filter(
-                (actualCategory) =>
+                actualCategory =>
                     this.normalizeCategoryName(actualCategory.name) ===
                     normalizedSourceName
             );
@@ -575,7 +573,7 @@ class CategoryMap {
             const pathCandidates = Array.from(
                 this.actualCategoryInfos.values()
             ).filter(
-                (actualCategory) =>
+                actualCategory =>
                     actualCategory.path.join(
                         DEFAULT_CATEGORY_PATH_SEPARATOR
                     ) === sourcePath
@@ -601,13 +599,9 @@ class CategoryMap {
 
     private getUnmappedCategories() {
         return Array.from(this.monMonCategoryInfos.values())
-            .filter(
-                (category) => !category.isGroup && !category.isUncategorized
-            )
-            .filter(
-                (category) => !this.mappedMoneyMoneyUuids.has(category.uuid)
-            )
-            .map((category) => ({
+            .filter(category => !category.isGroup && !category.isUncategorized)
+            .filter(category => !this.mappedMoneyMoneyUuids.has(category.uuid))
+            .map(category => ({
                 uuid: category.uuid,
                 path: category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR),
             }));
@@ -633,11 +627,11 @@ class CategoryMap {
             // as invalid and skip adding to mappedMoneyMoneyUuids so the
             // category still appears as unresolved (alerting the user).
             const conflictingMapping = this.validMappings.find(
-                (m) => m.sourceUuid === uuid
+                m => m.sourceUuid === uuid
             );
             if (conflictingMapping) {
                 this.validMappings = this.validMappings.filter(
-                    (m) => m !== conflictingMapping
+                    m => m !== conflictingMapping
                 );
                 this.mappedMoneyMoneyUuids.delete(uuid);
                 this.mappedCategoryBySourceUuid.delete(uuid);
@@ -653,7 +647,7 @@ class CategoryMap {
             }
 
             this.mappedMoneyMoneyUuids.add(uuid);
-            const ref = refs.find((r) => {
+            const ref = refs.find(r => {
                 const res = this.resolveMoneyMoneyCategoryRef(r);
                 return res.info?.uuid === uuid;
             });
@@ -750,7 +744,7 @@ class CategoryMap {
         const normalizedRef = this.normalizeCategoryName(actualRef);
         const categories = Array.from(this.monMonCategoryInfos.values());
 
-        const byPath = categories.filter((category) => {
+        const byPath = categories.filter(category => {
             const normalizedPath = this.normalizeCategoryName(
                 category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR)
             );
@@ -771,7 +765,7 @@ class CategoryMap {
             };
         }
 
-        const byName = categories.filter((category) => {
+        const byName = categories.filter(category => {
             return this.normalizeCategoryName(category.name) === normalizedRef;
         });
 
@@ -816,7 +810,7 @@ class CategoryMap {
         const normalizedRef = this.normalizeCategoryName(actualRef);
         const categories = Array.from(this.actualCategoryInfos.values());
 
-        const byPath = categories.filter((category) => {
+        const byPath = categories.filter(category => {
             const normalizedPath = this.normalizeCategoryName(
                 category.path.join(DEFAULT_CATEGORY_PATH_SEPARATOR)
             );
@@ -837,7 +831,7 @@ class CategoryMap {
             };
         }
 
-        const byName = categories.filter((category) => {
+        const byName = categories.filter(category => {
             return this.normalizeCategoryName(category.name) === normalizedRef;
         });
 

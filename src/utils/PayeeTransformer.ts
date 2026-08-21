@@ -1,8 +1,8 @@
-import Logger from './Logger.js';
-import { PayeeTransformationConfig } from './config.js';
+import type { PayeeTransformationConfig } from './config.js';
+import type Logger from './Logger.js';
 import {
-    TransformationBackend,
     createTransformationBackend,
+    type TransformationBackend,
 } from './TransformationBackend.js';
 
 const normalizePayee = (value: string) =>
@@ -18,7 +18,7 @@ const normalizePayeeTokens = (value: string) =>
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .split(/[^a-z0-9]+/)
-        .filter((token) => token.length > 0);
+        .filter(token => token.length > 0);
 
 const buildBigramCounts = (value: string) => {
     const normalized = normalizePayee(value);
@@ -159,7 +159,7 @@ const selectRelevantExistingPayees = (
     }
 
     return existingPayeeNames
-        .map((existingPayeeName) => {
+        .map(existingPayeeName => {
             const bestScore = unresolvedPayees.reduce((score, payee) => {
                 return Math.max(
                     score,
@@ -203,10 +203,8 @@ class PayeeTransformer {
         payeeList: string[],
         existingPayeeNames: string[] = []
     ) {
-        const uniquePayees = [
-            ...new Set(payeeList.map((payee) => payee.trim())),
-        ]
-            .filter((payee) => payee.length > 0)
+        const uniquePayees = [...new Set(payeeList.map(payee => payee.trim()))]
+            .filter(payee => payee.length > 0)
             .sort((a, b) => a.localeCompare(b));
 
         if (uniquePayees.length === 0) {
@@ -217,7 +215,7 @@ class PayeeTransformer {
         }
 
         const resolvedPayees = new Map<string, string>();
-        const unresolvedPayees = uniquePayees.filter((payee) => {
+        const unresolvedPayees = uniquePayees.filter(payee => {
             const bestExistingPayee = findBestExistingPayee(
                 payee,
                 existingPayeeNames
@@ -322,7 +320,7 @@ class PayeeTransformer {
 
                 const normalizedRawPayee = normalizePayee(rawPayee);
                 const matchingKeys = Object.keys(transformedPayees).filter(
-                    (key) => {
+                    key => {
                         const normalizedKey = normalizePayee(key);
                         return (
                             normalizedKey.length > 0 &&

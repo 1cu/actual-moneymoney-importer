@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import * as actual from '@actual-app/api';
 import type {
     APICategoryEntity,
@@ -8,10 +9,10 @@ import type {
     TransactionEntity,
 } from '@actual-app/core/types/models';
 import { format } from 'date-fns';
-import fs from 'fs/promises';
 import { withApiNoiseFilter } from './ActualApiLogControl.js';
-import { ActualServerConfig } from './config.js';
-import Logger, { LogLevel } from './Logger.js';
+import type { ActualServerConfig } from './config.js';
+import type Logger from './Logger.js';
+import { LogLevel } from './Logger.js';
 import { DEFAULT_DATA_DIR } from './shared.js';
 
 /**
@@ -158,7 +159,7 @@ class ActualApi {
         );
 
         const budgetConfig = this.serverConfig.budgets.find(
-            (b) => b.syncId === budgetId
+            b => b.syncId === budgetId
         );
 
         if (!budgetConfig) {
@@ -218,7 +219,7 @@ class ActualApi {
         }
         const idSet = new Set(ids);
         const all = await this.getTransactions(accountId);
-        return all.filter((t) => idSet.has(t.id));
+        return all.filter(t => idSet.has(t.id));
     }
 
     async getPayees(): Promise<
@@ -350,7 +351,7 @@ class ActualApi {
             'Could not get user files'
         );
 
-        return responseData.data.filter((f) => f.deleted === 0);
+        return responseData.data.filter(f => f.deleted === 0);
     }
 
     private async fetchJson<T>(

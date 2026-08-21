@@ -33,9 +33,9 @@ test('automatic transfers require at least one category ref when enabled', () =>
                     },
                 ],
             }),
-        (error) =>
+        error =>
             error instanceof ZodError &&
-            error.issues.some((issue) =>
+            error.issues.some(issue =>
                 issue.message.includes(
                     'At least one transfer category ref must be configured'
                 )
@@ -70,9 +70,9 @@ test('earliestImportDate rejects impossible calendar dates', () => {
                     },
                 ],
             }),
-        (error) =>
+        error =>
             error instanceof ZodError &&
-            error.issues.some((issue) =>
+            error.issues.some(issue =>
                 issue.message.includes('real calendar date')
             )
     );

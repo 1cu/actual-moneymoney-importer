@@ -98,7 +98,7 @@ export const replaceCategoryMappingInConfig = (
     entries: CanonicalMappingEntry[]
 ): { ok: true; content: string } | { ok: false; reason: string } => {
     const budgetBlocks = getBudgetBlocks(content);
-    const matchingBlocks = budgetBlocks.filter((block) => {
+    const matchingBlocks = budgetBlocks.filter(block => {
         const blockContent = content.slice(block.start, block.end);
         const syncIdMatch = blockContent.match(/(^|\n)syncId\s*=\s*"([^"]+)"/);
         return syncIdMatch?.[2] === syncId;

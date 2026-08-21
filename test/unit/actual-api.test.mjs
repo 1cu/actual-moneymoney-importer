@@ -153,7 +153,7 @@ test('ActualApi.loadBudget translates file-has-reset PostError to actionable mes
 
     await assert.rejects(
         () => api.loadBudget('test-budget'),
-        (err) => {
+        err => {
             assert.ok(
                 err.message.includes('file-has-reset'),
                 'message should mention file-has-reset'
@@ -213,7 +213,7 @@ test('ActualApi.loadBudget preserves unknown downloadBudget errors unchanged', a
 
     await assert.rejects(
         () => api.loadBudget('test-budget'),
-        (err) => {
+        err => {
             assert.equal(
                 err,
                 originalError,
@@ -248,7 +248,7 @@ test('ActualApi.loadBudget detects file-has-reset via Error message fallback', a
 
     await assert.rejects(
         () => api.loadBudget('test-budget'),
-        (err) => {
+        err => {
             assert.ok(
                 err.message.includes('file-has-reset'),
                 'message should still mention file-has-reset'
@@ -378,7 +378,7 @@ test('ActualApi.batchUpdateTransactions sends internal batch update with runTran
     ]);
 });
 
-test('ActualApi.getUserFiles uses globalThis.fetch by default', async (t) => {
+test('ActualApi.getUserFiles uses globalThis.fetch by default', async t => {
     const loginJson = mock.fn(async () => ({
         data: { token: 'token-1' },
     }));

@@ -139,7 +139,7 @@ const shrinkWidthsToFit = (
             index,
             priority: column.truncatePriority ?? Number.POSITIVE_INFINITY,
         }))
-        .filter((entry) => Number.isFinite(entry.priority))
+        .filter(entry => Number.isFinite(entry.priority))
         .sort((a, b) => a.priority - b.priority);
 
     if (priorities.length === 0) {
@@ -177,18 +177,18 @@ const drawHorizontal = (
 ) => {
     if (type === 'top') {
         return `${TABLE_BORDER.topLeft}${totalWidths
-            .map((width) => TABLE_BORDER.topBody.repeat(width))
+            .map(width => TABLE_BORDER.topBody.repeat(width))
             .join(TABLE_BORDER.topJoin)}${TABLE_BORDER.topRight}`;
     }
 
     if (type === 'bottom') {
         return `${TABLE_BORDER.bottomLeft}${totalWidths
-            .map((width) => TABLE_BORDER.bottomBody.repeat(width))
+            .map(width => TABLE_BORDER.bottomBody.repeat(width))
             .join(TABLE_BORDER.bottomJoin)}${TABLE_BORDER.bottomRight}`;
     }
 
     return `${TABLE_BORDER.joinLeft}${totalWidths
-        .map((width) => TABLE_BORDER.joinBody.repeat(width))
+        .map(width => TABLE_BORDER.joinBody.repeat(width))
         .join(TABLE_BORDER.joinJoin)}${TABLE_BORDER.joinRight}`;
 };
 

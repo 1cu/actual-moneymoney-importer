@@ -388,4 +388,4 @@ Please file bugs and feature requests as GitHub issues.
 
 ## Contributing and releases
 
-Stable releases are cut from `main` and published on GitHub and npm under the `actual-moneymoney-importer` package name. See `.github/PULL_REQUEST_TEMPLATE.md` for contribution guidelines.
+Stable releases are cut automatically from `main` by Semantic Release and published on GitHub and npm under the `actual-moneymoney-importer` package name. Use Conventional Commits so Semantic Release can determine the version and release notes. See `.github/PULL_REQUEST_TEMPLATE.md` for contribution guidelines.

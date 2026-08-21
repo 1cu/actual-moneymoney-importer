@@ -1,0 +1,77 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true,
+        "defaultBranch": "main"
+    },
+    "files": {
+        "includes": ["**", "!coverage", "!package-lock.json"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 80,
+        "lineEnding": "lf"
+    },
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended",
+            "complexity": {
+                "noExcessiveCognitiveComplexity": {
+                    "level": "warn",
+                    "options": {
+                        "maxAllowedComplexity": 20
+                    }
+                },
+                "noUselessEscapeInRegex": "warn",
+                "noUselessContinue": "error",
+                "useOptionalChain": "error"
+            },
+            "correctness": {
+                "noUnusedVariables": "error",
+                "useImportExtensions": {
+                    "level": "error",
+                    "options": {
+                        "forceJsExtensions": true
+                    }
+                }
+            },
+            "suspicious": {
+                "noDoubleEquals": "error",
+                "noExplicitAny": "error"
+            },
+            "style": {
+                "noNonNullAssertion": "error",
+                "noExcessiveLinesPerFile": {
+                    "level": "warn",
+                    "options": {
+                        "maxLines": 1000,
+                        "skipBlankLines": true
+                    }
+                },
+                "useNodejsImportProtocol": "error",
+                "useTemplate": "error"
+            }
+        }
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "trailingCommas": "es5",
+            "semicolons": "always",
+            "arrowParentheses": "asNeeded",
+            "bracketSpacing": true
+        }
+    }
+}

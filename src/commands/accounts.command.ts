@@ -1,13 +1,13 @@
-import { checkDatabaseUnlocked, getAccounts } from 'moneymoney';
-import type { Account as MonMonAccount } from 'moneymoney';
 import type { APIAccountEntity } from '@actual-app/api/models';
-import { ArgumentsCamelCase, CommandModule } from 'yargs';
+import type { Account as MonMonAccount } from 'moneymoney';
+import { checkDatabaseUnlocked, getAccounts } from 'moneymoney';
+import type { ArgumentsCamelCase, CommandModule } from 'yargs';
 import ActualApi from '../utils/ActualApi.js';
 import { selectTargets } from '../utils/actualTargets.js';
-import { toRefList, CommonArgs } from '../utils/cliArgs.js';
+import { type CommonArgs, toRefList } from '../utils/cliArgs.js';
 import {
-    ActualServerConfig,
-    ActualBudgetConfig,
+    type ActualBudgetConfig,
+    type ActualServerConfig,
     getConfig,
 } from '../utils/config.js';
 import Logger, { LogLevel } from '../utils/Logger.js';
@@ -47,7 +47,7 @@ type AccountsReport = {
 };
 
 const buildMonMonRows = (accounts: MonMonAccount[]): MonMonAccountRow[] =>
-    accounts.map((a) => ({
+    accounts.map(a => ({
         uuid: a.uuid,
         name: a.name,
         iban: a.accountNumber,
@@ -60,7 +60,7 @@ const buildActualRows = (
     serverUrl: string,
     syncId: string
 ): ActualAccountRow[] =>
-    accounts.map((a) => ({
+    accounts.map(a => ({
         id: a.id,
         name: a.name,
         offbudget: a.offbudget ?? false,
@@ -83,7 +83,7 @@ const formatMoneyMoneyTable = (
         ];
     }
 
-    const dataRows = rows.map((r) => [
+    const dataRows = rows.map(r => [
         r.uuid,
         r.name,
         r.iban,
@@ -117,7 +117,7 @@ const formatActualTable = (
         ];
     }
 
-    const dataRows = rows.map((r) => [
+    const dataRows = rows.map(r => [
         r.id,
         r.name,
         r.offbudget ? 'yes' : 'no',
@@ -283,8 +283,8 @@ const handleListCommand = async (
         }
 
         monMonAccounts = await getAccounts();
-        const groupAccounts = monMonAccounts.filter((a) => a.group);
-        monMonAccounts = monMonAccounts.filter((a) => !a.group);
+        const groupAccounts = monMonAccounts.filter(a => a.group);
+        monMonAccounts = monMonAccounts.filter(a => !a.group);
         logger.debug(
             `Found ${monMonAccounts.length} accounts in MoneyMoney (${groupAccounts.length} account groups excluded).`
         );
@@ -332,7 +332,7 @@ const listSubcommand: CommandModule = {
     command: 'list',
     describe:
         'List MoneyMoney and Actual accounts with IDs for accountMapping config',
-    builder: (yargs) => {
+    builder: yargs => {
         return yargs
             .string('server')
             .alias('server', 's')
@@ -349,13 +349,13 @@ const listSubcommand: CommandModule = {
             .default('format', 'table')
             .describe('format', 'Output format');
     },
-    handler: (argv) => handleListCommand(argv),
+    handler: argv => handleListCommand(argv),
 };
 
 export default {
     command: 'accounts',
     describe: 'Account discovery tools',
-    builder: (yargs) => {
+    builder: yargs => {
         return yargs.command(listSubcommand).strictCommands();
     },
     handler: () => {

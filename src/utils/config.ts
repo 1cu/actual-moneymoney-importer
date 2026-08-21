@@ -1,9 +1,9 @@
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import toml from 'toml';
-import { ArgumentsCamelCase } from 'yargs';
-import { CommonArgs } from './cliArgs.js';
-import { z, ZodError } from 'zod';
+import type { ArgumentsCamelCase } from 'yargs';
+import { ZodError, z } from 'zod';
+import type { CommonArgs } from './cliArgs.js';
 import { DEFAULT_CONFIG_FILE } from './shared.js';
 
 const WHOLE_VALUE_ENV_PATTERN = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
@@ -103,7 +103,7 @@ const budgetSchema = z
          */
         ignoredMoneyMoneyCategoryRefs: z.array(z.string()).default([]),
     })
-    .check((payload) => {
+    .check(payload => {
         if (
             payload.value.e2eEncryption.enabled &&
             !payload.value.e2eEncryption.password
@@ -258,7 +258,7 @@ export const configSchema = z
         import: importSchema,
         actualServers: z.array(actualServerSchema).min(1),
     })
-    .check((payload) => {
+    .check(payload => {
         // Check OpenAI key if payeeTransformation is enabled and using OpenAI backend
         if (
             payload.value.payeeTransformation.enabled &&
@@ -325,9 +325,7 @@ export const warnOnCleartextActualServers = (
                     `WARNING: Actual server '${server.serverUrl}' uses cleartext HTTP. Server passwords will be sent in plain text. Use HTTPS instead.`
                 );
             }
-        } catch {
-            continue;
-        }
+        } catch {}
     }
 };
 
@@ -401,7 +399,7 @@ export const getConfig = async (argv: ArgumentsCamelCase<CommonArgs>) => {
 
         if (e instanceof ZodError) {
             const issues = e.issues
-                .map((issue) => {
+                .map(issue => {
                     const pathLabel =
                         issue.path.length > 0 ? issue.path.join('.') : '(root)';
 

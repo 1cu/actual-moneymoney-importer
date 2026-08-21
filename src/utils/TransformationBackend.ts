@@ -18,7 +18,7 @@
 import OpenAI from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
-import { PayeeTransformationConfig } from './config.js';
+import type { PayeeTransformationConfig } from './config.js';
 
 export const PayeeMapSchema = z.object({
     mappings: z.array(
@@ -52,7 +52,7 @@ export const buildApplePayeeMapJsonSchema = (payees: string[]) => {
     return {
         type: 'object' as const,
         properties: Object.fromEntries(
-            uniquePayees.map((payee) => [payee, { type: 'string' as const }])
+            uniquePayees.map(payee => [payee, { type: 'string' as const }])
         ),
         required: uniquePayees,
         additionalProperties: false,
@@ -66,7 +66,7 @@ export const buildApplePayeeMapJsonSchema = (payees: string[]) => {
 const mappingsToRecord = (
     mappings: Array<{ rawPayee: string; cleanedPayee: string }>
 ): Record<string, string> =>
-    Object.fromEntries(mappings.map((m) => [m.rawPayee, m.cleanedPayee]));
+    Object.fromEntries(mappings.map(m => [m.rawPayee, m.cleanedPayee]));
 
 // ---------------------------------------------------------------------------
 // Backend interface
@@ -219,23 +219,37 @@ Output:
 // Apple Intelligence backend
 // ---------------------------------------------------------------------------
 
+type AppleLanguageModel = {
+    dispose(): void;
+};
+
+type AppleLanguageModelSession = {
+    respondWithJsonSchema(
+        prompt: string,
+        schema: unknown,
+        options: { options: { temperature: number } }
+    ): Promise<{ toJson(): string }>;
+    dispose(): void;
+};
+
+type AppleIntelligenceModule = {
+    SystemLanguageModel: new (options?: {
+        guardrails?: number;
+    }) => AppleLanguageModel;
+    LanguageModelSession: new (options?: {
+        instructions?: string;
+        model?: AppleLanguageModel;
+    }) => AppleLanguageModelSession;
+};
+
+type AppleIntelligenceSdk = AppleIntelligenceModule & {
+    model: AppleLanguageModel;
+};
+
 export class AppleIntelligenceBackend implements TransformationBackend {
     // Lazy-initialised: model is created once and reused across calls.
 
-    private _sdkPromise?:
-        | Promise<{
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              SystemLanguageModel: any;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              LanguageModelSession: any;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              model: any;
-          }>
-        | undefined;
-
-    constructor(_config: PayeeTransformationConfig) {
-        // No API key needed – on-device processing
-    }
+    private _sdkPromise?: Promise<AppleIntelligenceSdk>;
 
     private async _getSdk() {
         if (!this._sdkPromise) {
@@ -244,16 +258,10 @@ export class AppleIntelligenceBackend implements TransformationBackend {
         return this._sdkPromise;
     }
 
-    private async _initSdk() {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let SystemLanguageModel: any;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let LanguageModelSession: any;
-
+    private async _initSdk(): Promise<AppleIntelligenceSdk> {
+        let sdk: AppleIntelligenceModule;
         try {
-            const mod = await import('tsfm-sdk');
-            SystemLanguageModel = mod.SystemLanguageModel;
-            LanguageModelSession = mod.LanguageModelSession;
+            sdk = (await import('tsfm-sdk')) as AppleIntelligenceModule;
         } catch (importError) {
             const cause =
                 importError instanceof Error
@@ -267,11 +275,9 @@ export class AppleIntelligenceBackend implements TransformationBackend {
             );
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let model: any;
-
         try {
-            model = new SystemLanguageModel({ guardrails: 1 });
+            const model = new sdk.SystemLanguageModel({ guardrails: 1 });
+            return { ...sdk, model };
         } catch (clientError) {
             const cause =
                 clientError instanceof Error
@@ -284,8 +290,6 @@ export class AppleIntelligenceBackend implements TransformationBackend {
                 { cause: clientError }
             );
         }
-
-        return { SystemLanguageModel, LanguageModelSession, model };
     }
 
     async transformPayees(
@@ -385,7 +389,7 @@ Output:
             } catch {
                 // Best effort — the model may already be gone
             }
-            this._sdkPromise = undefined;
+            delete this._sdkPromise;
         }
     }
 
@@ -424,7 +428,7 @@ export const createTransformationBackend = (
     config: PayeeTransformationConfig
 ): TransformationBackend => {
     if (config.backend === 'apple-intelligence') {
-        return new AppleIntelligenceBackend(config);
+        return new AppleIntelligenceBackend();
     }
 
     return new OpenAIBackend(config);

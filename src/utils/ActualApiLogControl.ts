@@ -8,7 +8,7 @@ const API_NOISE_PATTERNS = [
 ];
 
 const isApiNoiseLine = (line: string): boolean =>
-    API_NOISE_PATTERNS.some((pattern) => pattern.test(line.trim()));
+    API_NOISE_PATTERNS.some(pattern => pattern.test(line.trim()));
 
 type ConsoleLog = typeof console.log;
 
@@ -27,7 +27,7 @@ function ensurePatched() {
             if (typeof firstArg === 'string' && isApiNoiseLine(firstArg)) {
                 return;
             }
-            savedConsoleLog!(...args);
+            savedConsoleLog?.(...args);
         }) as ConsoleLog;
 
         process.stdout.write = ((
@@ -68,9 +68,13 @@ function ensurePatched() {
 
 function ensureRestored() {
     noiseFilterDepth--;
-    if (noiseFilterDepth === 0 && savedConsoleLog !== null) {
+    if (
+        noiseFilterDepth === 0 &&
+        savedConsoleLog !== null &&
+        savedStdoutWrite !== null
+    ) {
         console.log = savedConsoleLog;
-        process.stdout.write = savedStdoutWrite!;
+        process.stdout.write = savedStdoutWrite;
         savedConsoleLog = null;
         savedStdoutWrite = null;
     }
