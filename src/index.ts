@@ -42,9 +42,15 @@ yargs(hideBin(process.argv))
     .fail((msg, err, yargsInstance) => {
         const logger = new Logger();
         const isMissingCommand = !err && msg === 'Please specify a command.';
+        // Command handlers report runtime failures as `fail(null, error)`.
+        // Those are not usage errors, so printing the help text is noise that
+        // buries the actual problem.
+        const isRuntimeError = !msg && Boolean(err);
 
-        yargsInstance.showHelp();
-        console.log('');
+        if (!isRuntimeError) {
+            yargsInstance.showHelp();
+            console.log('');
+        }
 
         if (isMissingCommand) {
             process.exit(0);

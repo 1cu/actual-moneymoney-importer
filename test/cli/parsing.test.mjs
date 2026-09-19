@@ -105,3 +105,16 @@ test('shows categories base command guidance', () => {
     assert.equal(result.status, 0);
     assert.match(result.output, /categories map --help/i);
 });
+
+test('runtime command errors do not print command usage', () => {
+    const result = runCli([
+        'import',
+        '--config',
+        '/nonexistent/actual-mmi/config.toml',
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.match(result.output, /Config file not found/);
+    assert.doesNotMatch(result.output, /actual-mmi <command>/i);
+    assert.doesNotMatch(result.output, /Commands:/);
+});
