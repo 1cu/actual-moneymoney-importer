@@ -63,6 +63,143 @@ function buildFileHasResetError(error: unknown): Error {
     return new Error(message, { cause: error });
 }
 
+/**
+ * Node.js network error codes that indicate the host cannot be reached at
+ * the IP layer. These are the codes macOS reports when the Local Network
+ * privacy setting blocks a process from reaching a host on the LAN.
+ */
+const UNREACHABLE_NETWORK_ERROR_CODES = new Set([
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+]);
+
+/** Timeout for the reachability probe run when Actual login fails. */
+const SERVER_PROBE_TIMEOUT_MS = 5_000;
+
+export type ActualServerProbeResult =
+    | { reachable: true }
+    | { reachable: false; code: string | null };
+
+/**
+ * Detect whether an error thrown by `@actual-app/api` represents a failed
+ * login caused by the server being unreachable.
+ *
+ * `@actual-app/api` collapses every transport-level failure during `init()`
+ * into `Error('Authentication failed: network-failure')` with
+ * `code === 'network-failure'`, discarding the underlying cause.
+ */
+export function isActualNetworkFailureError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) return false;
+
+    const record = error as Record<string, unknown>;
+
+    if (record.code === 'network-failure') {
+        return true;
+    }
+
+    return (
+        typeof record.message === 'string' &&
+        record.message.toLowerCase().includes('network-failure')
+    );
+}
+
+/**
+ * Extract a machine readable network error code from a thrown fetch error.
+ *
+ * Handles the `error.cause.code` shape used by `node:fetch`/undici and maps
+ * aborted requests to `timeout`.
+ */
+export function extractNetworkErrorCode(error: unknown): string | null {
+    if (typeof error !== 'object' || error === null) return null;
+
+    const record = error as Record<string, unknown>;
+
+    if (typeof record.code === 'string' && record.code.length > 0) {
+        return record.code;
+    }
+
+    if (record.name === 'TimeoutError' || record.name === 'AbortError') {
+        return 'timeout';
+    }
+
+    const cause = record.cause;
+    if (typeof cause === 'object' && cause !== null) {
+        const causeCode = (cause as Record<string, unknown>).code;
+        if (typeof causeCode === 'string' && causeCode.length > 0) {
+            return causeCode;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Build a user-facing Error for a failed Actual login caused by
+ * `network-failure`.
+ *
+ * The message includes concrete diagnostics based on whether the server
+ * answered a follow-up probe: an unreachable host gets connectivity advice
+ * (including the macOS Local Network setting that commonly causes this),
+ * while a reachable host points at the login endpoint or a reverse proxy.
+ * The original error is preserved as `.cause`.
+ */
+export function buildActualNetworkFailureError({
+    serverUrl,
+    probe,
+    platform,
+    error,
+}: {
+    serverUrl: string;
+    probe: ActualServerProbeResult;
+    platform: string;
+    error: unknown;
+}): Error {
+    const lines = ['Authentication failed: network-failure', ''];
+
+    if (probe.reachable) {
+        lines.push(
+            `The Actual server at ${serverUrl} responded, but the login request failed.`,
+            'Check that the server URL points to an Actual sync server and that a',
+            'reverse proxy in front of it forwards POST /account/login instead of',
+            'returning an HTML error page.'
+        );
+    } else {
+        lines.push(
+            `The Actual server at ${serverUrl} is not reachable from this process.`
+        );
+
+        if (probe.code) {
+            lines.push(`Network error: ${probe.code}`);
+        }
+
+        if (
+            platform === 'darwin' &&
+            probe.code !== null &&
+            UNREACHABLE_NETWORK_ERROR_CODES.has(probe.code)
+        ) {
+            lines.push(
+                '',
+                'On macOS this is usually the "Local Network" privacy setting blocking',
+                'the Node.js process from reaching a server on the local network. Grant',
+                'the terminal app access under:',
+                '  System Settings → Privacy & Security → Local Network',
+                'Then quit and reopen the terminal app before rerunning this command.',
+                '',
+                'A browser can still reach the server in this situation, so the server',
+                'itself may be healthy.'
+            );
+        }
+
+        lines.push(
+            '',
+            'Check connectivity from this terminal with:',
+            `  node -e "fetch('${serverUrl}/').then(r => console.log(r.status)).catch(e => console.log(e.cause?.code ?? e.message))"`
+        );
+    }
+
+    return new Error(lines.join('\n'), { cause: error });
+}
+
 type UserFile = {
     deleted: number;
     encryptKeyId: null;
@@ -121,15 +258,44 @@ class ActualApi {
             `Initializing Actual instance for server ${this.serverConfig.serverUrl} with data directory ${actualDataDir}`
         );
 
-        await this.withLogControl(async () => {
-            this.actualInternal = await this.actualApi.init({
-                dataDir: actualDataDir,
-                serverURL: this.serverConfig.serverUrl,
-                password: this.serverConfig.serverPassword,
+        try {
+            await this.withLogControl(async () => {
+                this.actualInternal = await this.actualApi.init({
+                    dataDir: actualDataDir,
+                    serverURL: this.serverConfig.serverUrl,
+                    password: this.serverConfig.serverPassword,
+                });
             });
-        });
+        } catch (error) {
+            if (isActualNetworkFailureError(error)) {
+                throw buildActualNetworkFailureError({
+                    serverUrl: this.serverConfig.serverUrl,
+                    probe: await this.probeServerReachability(),
+                    platform: process.platform,
+                    error,
+                });
+            }
+            throw error;
+        }
 
         this.isInitialized = true;
+    }
+
+    /**
+     * Probe whether the configured Actual server answers at all. Used to tell
+     * a blocked or unreachable host apart from a reachable server that
+     * rejected the login request. Never throws.
+     */
+    private async probeServerReachability(): Promise<ActualServerProbeResult> {
+        try {
+            await this.fetchImpl(this.serverConfig.serverUrl, {
+                method: 'GET',
+                signal: AbortSignal.timeout(SERVER_PROBE_TIMEOUT_MS),
+            });
+            return { reachable: true };
+        } catch (error) {
+            return { reachable: false, code: extractNetworkErrorCode(error) };
+        }
     }
 
     async ensureInitialization() {

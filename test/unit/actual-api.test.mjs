@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import ActualApi from '../../dist/utils/ActualApi.js';
+import ActualApi, {
+    buildActualNetworkFailureError,
+    extractNetworkErrorCode,
+    isActualNetworkFailureError,
+} from '../../dist/utils/ActualApi.js';
 import { DEFAULT_DATA_DIR } from '../../dist/utils/shared.js';
 
 const makeLogger = () => ({
@@ -404,4 +408,233 @@ test('ActualApi.getUserFiles uses globalThis.fetch by default', async t => {
     assert.equal(fetchImpl.mock.callCount(), 2);
     assert.equal(loginJson.mock.callCount(), 1);
     assert.equal(filesJson.mock.callCount(), 1);
+});
+
+test('isActualNetworkFailureError detects the code and the message fallback', () => {
+    assert.equal(
+        isActualNetworkFailureError(
+            Object.assign(new Error('Authentication failed'), {
+                code: 'network-failure',
+            })
+        ),
+        true
+    );
+    assert.equal(
+        isActualNetworkFailureError(
+            new Error('Authentication failed: network-failure')
+        ),
+        true
+    );
+    assert.equal(
+        isActualNetworkFailureError(
+            Object.assign(new Error('invalid password'), {
+                code: 'invalid-password',
+            })
+        ),
+        false
+    );
+    assert.equal(isActualNetworkFailureError('network-failure'), false);
+    assert.equal(isActualNetworkFailureError(null), false);
+});
+
+test('extractNetworkErrorCode reads code, cause.code and abort names', () => {
+    assert.equal(
+        extractNetworkErrorCode(
+            Object.assign(new TypeError('fetch failed'), {
+                cause: { code: 'EHOSTUNREACH' },
+            })
+        ),
+        'EHOSTUNREACH'
+    );
+    assert.equal(
+        extractNetworkErrorCode(
+            Object.assign(new Error('connect ECONNREFUSED'), {
+                code: 'ECONNREFUSED',
+            })
+        ),
+        'ECONNREFUSED'
+    );
+    assert.equal(
+        extractNetworkErrorCode(
+            Object.assign(new Error('The operation was aborted'), {
+                name: 'TimeoutError',
+            })
+        ),
+        'timeout'
+    );
+    assert.equal(extractNetworkErrorCode(new Error('boom')), null);
+    assert.equal(extractNetworkErrorCode(undefined), null);
+});
+
+test('buildActualNetworkFailureError explains macOS Local Network blocking', () => {
+    const originalError = Object.assign(
+        new Error('Authentication failed: network-failure'),
+        { code: 'network-failure' }
+    );
+
+    const error = buildActualNetworkFailureError({
+        serverUrl: 'https://actual.example.test',
+        probe: { reachable: false, code: 'EHOSTUNREACH' },
+        platform: 'darwin',
+        error: originalError,
+    });
+
+    assert.match(error.message, /Authentication failed: network-failure/);
+    assert.match(error.message, /https:\/\/actual\.example\.test/);
+    assert.match(error.message, /Network error: EHOSTUNREACH/);
+    assert.match(error.message, /Local Network/);
+    assert.match(
+        error.message,
+        /System Settings → Privacy & Security → Local Network/
+    );
+    assert.match(
+        error.message,
+        /node -e "fetch\('https:\/\/actual\.example\.test\/'\)/
+    );
+    assert.equal(error.cause, originalError);
+});
+
+test('buildActualNetworkFailureError omits the macOS hint elsewhere', () => {
+    for (const platform of ['linux', 'win32']) {
+        const error = buildActualNetworkFailureError({
+            serverUrl: 'https://actual.example.test',
+            probe: { reachable: false, code: 'EHOSTUNREACH' },
+            platform,
+            error: new Error('Authentication failed: network-failure'),
+        });
+
+        assert.doesNotMatch(error.message, /Local Network/);
+        assert.match(error.message, /Network error: EHOSTUNREACH/);
+    }
+});
+
+test('buildActualNetworkFailureError omits the macOS hint for non-unreachable codes', () => {
+    const error = buildActualNetworkFailureError({
+        serverUrl: 'https://actual.example.test',
+        probe: { reachable: false, code: 'ECONNREFUSED' },
+        platform: 'darwin',
+        error: new Error('Authentication failed: network-failure'),
+    });
+
+    assert.doesNotMatch(error.message, /Local Network/);
+    assert.match(error.message, /Network error: ECONNREFUSED/);
+});
+
+test('buildActualNetworkFailureError reports a reachable server differently', () => {
+    const error = buildActualNetworkFailureError({
+        serverUrl: 'https://actual.example.test',
+        probe: { reachable: true },
+        platform: 'darwin',
+        error: new Error('Authentication failed: network-failure'),
+    });
+
+    assert.match(error.message, /responded, but the login request failed/);
+    assert.match(error.message, /\/account\/login/);
+    assert.doesNotMatch(error.message, /Local Network/);
+    assert.doesNotMatch(error.message, /node -e/);
+});
+
+test('ActualApi.init explains network-failure using a reachability probe', async () => {
+    const originalError = Object.assign(
+        new Error('Authentication failed: network-failure'),
+        { code: 'network-failure' }
+    );
+    const init = mock.fn(async () => {
+        throw originalError;
+    });
+    const fetchImpl = mock.fn(async () => {
+        throw Object.assign(new TypeError('fetch failed'), {
+            cause: { code: 'EHOSTUNREACH' },
+        });
+    });
+    const api = new ActualApi(
+        {
+            serverUrl: 'http://127.0.0.1:5006',
+            serverPassword: 'pw',
+            budgets: [],
+        },
+        makeLogger(),
+        { init },
+        fetchImpl
+    );
+
+    await assert.rejects(
+        () => api.init(),
+        err => {
+            assert.match(err.message, /network-failure/);
+            assert.match(err.message, /http:\/\/127\.0\.0\.1:5006/);
+            assert.match(err.message, /Network error: EHOSTUNREACH/);
+            assert.equal(err.cause, originalError);
+            return true;
+        }
+    );
+
+    assert.equal(init.mock.callCount(), 1);
+    assert.equal(fetchImpl.mock.callCount(), 1);
+    assert.equal(fetchImpl.mock.calls[0].arguments[0], 'http://127.0.0.1:5006');
+    assert.equal(api.isInitialized, false);
+});
+
+test('ActualApi.init reports a reachable server when the probe succeeds', async () => {
+    const init = mock.fn(async () => {
+        throw Object.assign(
+            new Error('Authentication failed: network-failure'),
+            { code: 'network-failure' }
+        );
+    });
+    const fetchImpl = mock.fn(async () => ({ status: 200 }));
+    const api = new ActualApi(
+        {
+            serverUrl: 'http://127.0.0.1:5006',
+            serverPassword: 'pw',
+            budgets: [],
+        },
+        makeLogger(),
+        { init },
+        fetchImpl
+    );
+
+    await assert.rejects(
+        () => api.init(),
+        err => {
+            assert.match(
+                err.message,
+                /responded, but the login request failed/
+            );
+            assert.doesNotMatch(err.message, /Network error/);
+            return true;
+        }
+    );
+
+    assert.equal(fetchImpl.mock.callCount(), 1);
+});
+
+test('ActualApi.init preserves unrelated errors unchanged', async () => {
+    const originalError = new Error('invalid password');
+    const init = mock.fn(async () => {
+        throw originalError;
+    });
+    const fetchImpl = mock.fn(async () => {
+        throw new Error('probe should not run');
+    });
+    const api = new ActualApi(
+        {
+            serverUrl: 'http://127.0.0.1:5006',
+            serverPassword: 'pw',
+            budgets: [],
+        },
+        makeLogger(),
+        { init },
+        fetchImpl
+    );
+
+    await assert.rejects(
+        () => api.init(),
+        err => {
+            assert.equal(err, originalError);
+            return true;
+        }
+    );
+
+    assert.equal(fetchImpl.mock.callCount(), 0);
 });
