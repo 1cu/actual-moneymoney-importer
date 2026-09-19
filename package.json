@@ -33,7 +33,7 @@
     },
     "allowScripts": {
         "better-sqlite3@12.11.1": true,
-        "koffi@3.2.1": true
+        "koffi@3.3.1": true
     },
     "publishConfig": {
         "access": "public"
@@ -78,6 +78,6 @@
         "typescript": "^7.0.2"
     },
     "optionalDependencies": {
-        "tsfm-sdk": "^0.4.0"
+        "tsfm-sdk": "^0.5.1"
     }
 }
