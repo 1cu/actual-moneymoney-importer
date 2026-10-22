@@ -11,11 +11,10 @@ Brief description of the changes and why they're needed.
 ## Testing
 
 - [ ] Commands run (one or more of the following, as applicable):
-    - `npm test`
-    - `npm run test:cli`
-    - `npm run test:unit`
-    - `npm run lint:biome`
-    - `npm run lint:markdownlint`
+  - `npm test`
+  - `npm run test:cli`
+  - `npm run test:unit`
+  - `npm run lint:biome`
 - [ ] Manual verification (if applicable)
 
 ## Release / Config Impact

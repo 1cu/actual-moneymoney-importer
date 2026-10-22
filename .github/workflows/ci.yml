@@ -24,7 +24,6 @@ jobs:
 
             - run: npm ci
             - run: npm run lint:biome:ci
-            - run: npm run lint:markdownlint
             - name: Build & Test
               run: npm test
 

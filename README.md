@@ -26,23 +26,23 @@ Run `actual-mmi --help` at any time for a full list of commands and options. For
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
-    - [Environment variables](#environment-variables)
-    - [Required configuration](#required-configuration)
-    - [Import settings](#import-settings)
-    - [Comment import](#comment-import)
+  - [Environment variables](#environment-variables)
+  - [Required configuration](#required-configuration)
+  - [Import settings](#import-settings)
+  - [Comment import](#comment-import)
 - [Usage](#usage)
-    - [Date ranges](#date-ranges)
-    - [Scoped imports](#scoped-imports)
-    - [Dry run](#dry-run)
-    - [Verbose logging](#verbose-logging)
-    - [Validate command](#validate-command)
+  - [Date ranges](#date-ranges)
+  - [Scoped imports](#scoped-imports)
+  - [Dry run](#dry-run)
+  - [Verbose logging](#verbose-logging)
+  - [Validate command](#validate-command)
 - [Features](#features)
-    - [Category sync](#category-sync)
-    - [Payee transformation](#payee-transformation)
-    - [Automatic transfers](#automatic-transfers)
+  - [Category sync](#category-sync)
+  - [Payee transformation](#payee-transformation)
+  - [Automatic transfers](#automatic-transfers)
 - [Advanced configuration](#advanced-configuration)
-    - [Ignore patterns](#ignore-patterns)
-    - [Earliest import date](#earliest-import-date)
+  - [Ignore patterns](#ignore-patterns)
+  - [Earliest import date](#earliest-import-date)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Support](#support)
@@ -75,38 +75,38 @@ The installed CLI command is `actual-mmi`.
 
 1. Install the CLI:
 
-    ```bash
-    npm i -g actual-moneymoney-importer
-    ```
+   ```bash
+   npm i -g actual-moneymoney-importer
+   ```
 
 2. Generate an example config and print its path:
 
-    ```bash
-    actual-mmi validate
-    ```
+   ```bash
+   actual-mmi validate
+   ```
 
 3. Open the printed config file and fill in:
-    - Actual server URL
-    - Budget sync ID (from Actual → Settings → Advanced)
-    - Account mapping
+   - Actual server URL
+   - Budget sync ID (from Actual → Settings → Advanced)
+   - Account mapping
 
 4. Validate your config:
 
-    ```bash
-    actual-mmi validate
-    ```
+   ```bash
+   actual-mmi validate
+   ```
 
 5. Preview the import:
 
-    ```bash
-    actual-mmi import --dry-run
-    ```
+   ```bash
+   actual-mmi import --dry-run
+   ```
 
 6. Run the import:
 
-    ```bash
-    actual-mmi import
-    ```
+   ```bash
+   actual-mmi import
+   ```
 
 ## Configuration
 
@@ -259,7 +259,6 @@ actual-mmi categories map -s http://localhost:5006 -b <syncId> --format toml
 ```
 
 The audit report includes:
-
 - **Status Bar**: One-line summary (mapped, suggestions, invalid, unresolved, ignored)
 - **Configured Mappings**: Current mappings from your config
 - **Safe Suggestions**: High-confidence matches (identical category names)
@@ -293,7 +292,6 @@ The on-device Apple Foundation Model is smaller and less capable than cloud-base
 Actual Budget has its own payee rules system that runs automatically during import. Rules can match the raw `imported_payee` field (exact or "contains") and set the canonical payee, category, and more. This is the recommended approach for reliable, persistent payee cleanup — it's user-configurable, doesn't depend on AI quality, and survives across import runs.
 
 To set up payee rules, open Actual's UI and go to **More → Rules** or **More → Payees**. Create a rule like:
-
 - **Condition**: `imported_payee` contains `Lidl`
 - **Action**: set payee to `Lidl`
 
@@ -361,7 +359,6 @@ Note that the date is a string, not a TOML date.
 ## Security
 
 The configuration file (default: `~/.actually/config.toml`) may contain Actual passwords and OpenAI API keys in plaintext if you enter literal values. Prefer environment-variable references (`${MY_VAR}`) for secrets. The Apple Intelligence backend keeps all data on-device and requires no secrets. To protect your secrets:
-
 - Keep the config file private: `chmod 600 ~/.actually/config.toml`
 - Prefer `https://` for remote Actual servers. The importer will warn if you use cleartext HTTP to a non-localhost server, since passwords would be sent in plaintext.
 - Avoid committing the config file to version control.
