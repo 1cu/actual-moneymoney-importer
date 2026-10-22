@@ -1,5 +1,5 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+    "$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
     "vcs": {
         "enabled": true,
         "clientKind": "git",
@@ -27,6 +27,10 @@
         "enabled": true,
         "rules": {
             "preset": "recommended",
+            "nursery": {
+                "useConsistentHeadingLevel": "error",
+                "useSingleTopLevelHeading": "error"
+            },
             "complexity": {
                 "noExcessiveCognitiveComplexity": {
                     "level": "warn",
@@ -63,6 +67,16 @@
                 "useNodejsImportProtocol": "error",
                 "useTemplate": "error"
             }
+        }
+    },
+    "yaml": {
+        "formatter": {
+            "quoteStyle": "single"
+        }
+    },
+    "markdown": {
+        "formatter": {
+            "formatEmbeds": false
         }
     },
     "javascript": {
