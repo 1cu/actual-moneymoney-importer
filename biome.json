@@ -87,5 +87,22 @@
             "arrowParentheses": "asNeeded",
             "bracketSpacing": true
         }
-    }
+    },
+    "overrides": [
+        {
+            "includes": ["scripts/*.mjs", "test/unit/*cutover*.mjs"],
+            "linter": {
+                "rules": {
+                    "correctness": {
+                        "useImportExtensions": {
+                            "level": "error",
+                            "options": {
+                                "forceJsExtensions": false
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
 }
